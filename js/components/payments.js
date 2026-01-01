@@ -4,24 +4,45 @@
 
 const PaymentsComponent = {
     state: {
-        balances: null
+        balances: null,
+        activeSyndicationId: null  // Set from Orchestration view
     },
 
     init() {
         this.injectStyles();
         this.fetchBackendData();
         this.render();
+
+        // Listen for syndication selection events from Orchestration
+        window.addEventListener('syndicationSelected', (e) => {
+            this.state.activeSyndicationId = e.detail.syndicationId;
+            this.fetchBackendData();
+            this.render();
+        });
+    },
+
+    setActiveSyndication(syndId) {
+        this.state.activeSyndicationId = syndId;
+        this.fetchBackendData();
+        this.render();
+    },
+
+    getActiveSyndicationId() {
+        // Use explicitly set ID, or fall back to first available
+        return this.state.activeSyndicationId ||
+            (SyndiData.syndications && SyndiData.syndications.length > 0
+                ? SyndiData.syndications[0].id
+                : 'SYND-2025-001');
     },
 
     async fetchBackendData() {
-        // Try getting live x402 data for the active syndication
-        const syndId = 'SYND-2025-001'; // In a real app, this would be dynamic
+        const syndId = this.getActiveSyndicationId();
         const escrow = await API.getEscrowDetails(syndId);
         const originatorBal = await API.getX402Balance('originator_01');
 
         if (escrow || originatorBal) {
             this.state.balances = {
-                escrow: escrow?.balance ? escrow.balance / 1000000 : 256.6, // Convert USDC base units if needed
+                escrow: escrow?.balance ? escrow.balance / 1000000 : 256.6,
                 originator: originatorBal?.balance ? originatorBal.balance / 1000000 : 250,
                 borrower: originatorBal?.balance ? (originatorBal.balance / 1000000) * 0.95 : 237.5
             };
@@ -30,10 +51,38 @@ const PaymentsComponent = {
     },
 
     render() {
+        this.renderSyndicationHeader();
         this.renderPipelineVisual();
         this.renderProgressBars();
         this.renderPaymentTable();
         this.renderTransactionLog();
+    },
+
+    renderSyndicationHeader() {
+        const container = document.getElementById('payment-pipeline-visual');
+        if (!container) return;
+
+        const syndId = this.getActiveSyndicationId();
+        const syndication = SyndiData.syndications.find(s => s.id === syndId);
+
+        // Prepend syndication info if we have a header area, or add visually
+        let headerEl = container.querySelector('.payment-syndication-header');
+        if (!headerEl) {
+            headerEl = document.createElement('div');
+            headerEl.className = 'payment-syndication-header';
+            headerEl.style.cssText = 'padding: 1rem; background: var(--bg-muted); border-radius: var(--radius-md); margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;';
+            container.parentNode?.insertBefore(headerEl, container);
+        }
+
+        headerEl.innerHTML = `
+            <div>
+                <strong style="font-size: 1.25rem;">${syndId}</strong>
+                <span style="color: var(--text-muted); margin-left: 0.5rem;">${syndication?.borrower || 'Unknown Borrower'}</span>
+            </div>
+            <div style="color: var(--text-muted); font-size: 0.875rem;">
+                ${syndication ? `${syndication.originator} • ${syndication.industry}` : ''}
+            </div>
+        `;
     },
 
     injectStyles() {
@@ -498,8 +547,12 @@ const PaymentsComponent = {
         const container = document.getElementById('payment-table-container');
         if (!container) return;
 
-        const payments = SyndiData.payments['SYND-2025-001'];
-        if (!payments) return;
+        const syndId = this.getActiveSyndicationId();
+        const payments = SyndiData.payments[syndId];
+        if (!payments || payments.length === 0) {
+            container.innerHTML = `<div style="padding: 2rem; text-align: center; color: var(--text-muted);">No payment data for ${syndId}</div>`;
+            return;
+        }
 
         container.innerHTML = `
             <table class="payment-table">

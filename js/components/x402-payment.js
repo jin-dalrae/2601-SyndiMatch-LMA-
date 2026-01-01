@@ -20,6 +20,9 @@ const X402Payment = {
         const container = document.getElementById('payment-pipeline-visual');
         if (!container) return;
 
+        // Check if user is a Participant (only they can join/pay)
+        const isParticipant = document.body.classList.contains('role-participant');
+
         const x402Section = document.createElement('div');
         x402Section.className = 'x402-payment-section';
         x402Section.innerHTML = `
@@ -27,6 +30,7 @@ const X402Payment = {
                 <h4>x402 Payment Gateway</h4>
                 <span class="x402-badge">Base L2 • USDC</span>
             </div>
+            ${isParticipant ? `
             <div class="x402-actions">
                 <button class="btn-x402 btn-join" id="btn-join-syndication">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -42,6 +46,11 @@ const X402Payment = {
                     Trigger x402 Payment
                 </button>
             </div>
+            ` : `
+            <div class="x402-info" style="padding: 1rem; color: var(--text-muted); font-size: 0.875rem;">
+                <em>Payment actions are handled by Participant agents automatically.</em>
+            </div>
+            `}
             <div class="x402-status" id="x402-status"></div>
             <div class="x402-receipts" id="x402-receipts"></div>
         `;

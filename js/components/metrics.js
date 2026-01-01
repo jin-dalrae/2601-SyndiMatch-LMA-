@@ -129,15 +129,82 @@ const MetricsComponent = {
     },
 
     startLiveUpdates() {
-        // Simulate real-time metric changes
-        setInterval(() => {
-            const variations = {
-                payments: ['$886M', '$892M', '$895M', '$901M', '$912M']
-            };
-            this.updateMetrics({
-                payments: variations.payments[Math.floor(Math.random() * variations.payments.length)]
-            });
-        }, 8000);
+        // Update immediately
+        this.refreshActiveMetrics();
+
+        // Connect to simulation engine if available
+        if (window.SimulationEngine && typeof SimulationEngine.on === 'function') {
+            SimulationEngine.on('tick', () => this.refreshActiveMetrics());
+            SimulationEngine.on('simulationStart', () => this.refreshActiveMetrics());
+        }
+
+        // Fallback polling for safety
+        setInterval(() => this.refreshActiveMetrics(), 1000);
+    },
+
+    refreshActiveMetrics() {
+        if (typeof SyndiData === 'undefined' || !SyndiData.syndications) return;
+
+        // Active Syndications
+        const activeDeals = SyndiData.syndications.filter(s =>
+            s.status !== 'completed' && s.status !== 'failed' && s.status !== 'settlement_failed'
+        );
+        const activeCount = activeDeals.length;
+
+        // Total Value In Play (Active Deals)
+        const totalValue = activeDeals.reduce((sum, s) => {
+            const amount = s.loan_details ? s.loan_details.total_amount : (s.amount * 1000000);
+            return sum + (amount || 0);
+        }, 0);
+
+        // Closed Today
+        const today = window.SimulationEngine ? SimulationEngine.state.currentDate : new Date();
+        const closedToday = SyndiData.syndications.filter(s => {
+            if (s.status !== 'completed') return false;
+            // Check if closed/updated today (simulated time)
+            const date = new Date(s.updated_at || s.created_at);
+            return date.toDateString() === today.toDateString();
+        }).length;
+
+        // Success Rate
+        // Calculate based on completed vs failed total
+        const completed = SyndiData.syndications.filter(s => s.status === 'completed').length;
+        const failed = SyndiData.syndications.filter(s => s.status === 'failed' || s.status === 'settlement_failed').length;
+        const total = completed + failed;
+        const successRate = total > 0 ? ((completed / total) * 100).toFixed(1) : '100.0';
+
+        // Active Participants
+        // Count unique participants across all active bids
+        const participants = new Set();
+        if (window.SyndiData && SyndiData.bids) {
+            SyndiData.bids.forEach(b => participants.add(b.participant || b.participant_agent_id));
+        }
+        // Also check embedded bids
+        activeDeals.forEach(s => {
+            if (s.bids) {
+                s.bids.forEach(b => participants.add(b.participant || b.participantId));
+            }
+        });
+        const activeParticipants = participants.size || 0;
+
+        // Payments (24h) - Mock for now but tied to value
+        // 0.5% of total value processed recently
+        const recentVolume = totalValue * 0.15;
+
+        this.updateMetrics({
+            active: activeCount.toString(),
+            value: this.formatCurrency(totalValue),
+            closed: closedToday.toString(),
+            success: `${successRate}%`,
+            participants: activeParticipants.toString(),
+            payments: this.formatCurrency(recentVolume) // Estimating flow
+        });
+    },
+
+    formatCurrency(value) {
+        if (value >= 1e9) return `$${(value / 1e9).toFixed(1)}B`;
+        if (value >= 1e6) return `$${(value / 1e6).toFixed(0)}M`;
+        return `$${(value || 0).toLocaleString()}`;
     }
 };
 

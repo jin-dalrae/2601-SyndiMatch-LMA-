@@ -9,7 +9,9 @@ const SyndiData = {
     // Mock syndications
     syndications: [
         {
-            id: 'SYND-2025-001', borrower: 'TechFlow Solutions', industry: 'Software/SaaS', amount: 500, rating: 'BB+', originator: 'JPMorgan', spread: 420, subscription: 94, status: 'negotiating', timeRemaining: '32h 15m', round: 3, maxRounds: 5,
+            id: 'SYND-2025-001', borrower: 'TechFlow Solutions', industry: 'Software/SaaS', amount: 500, rating: 'BB+', originator: 'JPMorgan', spread: 420, subscription: 94, status: 'negotiating',
+            esg_score: 72, geography: 'North America', seniority: 'Senior Secured', tenorYears: 5, amortization: '1% per annum',
+            phase: 'pricing', timeRemaining: '32h 15m', round: 3, maxRounds: 5,
             bids: [
                 { time: '14:32:18', participant: 'MetLife', action: 'PASS', amount: null, spread: null, reason: 'Rating too low' },
                 { time: '14:30:45', participant: 'PNC Bank', action: 'BID', amount: 50, spread: 435 },
@@ -20,13 +22,41 @@ const SyndiData = {
                 { time: '14:15:07', participant: 'MUFG Bank', action: 'BID', amount: 100, spread: 425 }
             ]
         },
-        { id: 'SYND-2025-002', borrower: 'Atlas Manufacturing', industry: 'Industrial', amount: 350, rating: 'BBB-', originator: 'BofA', spread: 385, subscription: 100, status: 'settlement', timeRemaining: '—', round: 5, maxRounds: 5 },
-        { id: 'SYND-2025-003', borrower: 'Meridian Healthcare', industry: 'Healthcare', amount: 275, rating: 'BB', originator: 'Citi', spread: 450, subscription: 45, status: 'open', timeRemaining: '6h 30m', round: 1, maxRounds: 4 },
-        { id: 'SYND-2025-004', borrower: 'Quantum Logistics', industry: 'Transportation', amount: 425, rating: 'BB+', originator: 'JPMorgan', spread: 410, subscription: 78, status: 'negotiating', timeRemaining: '18h 45m', round: 2, maxRounds: 6 },
-        { id: 'SYND-2025-005', borrower: 'Evergreen Energy', industry: 'Utilities', amount: 600, rating: 'BBB', originator: 'Wells Fargo', spread: 340, subscription: 62, status: 'open', timeRemaining: '48h 00m', round: 1, maxRounds: 5 },
-        { id: 'SYND-2025-006', borrower: 'Pinnacle Retail', industry: 'Consumer', amount: 200, rating: 'B+', originator: 'Goldman', spread: 525, subscription: 100, status: 'funding', timeRemaining: '—', round: 4, maxRounds: 4 },
-        { id: 'SYND-2025-007', borrower: 'Horizon Telecom', industry: 'Telecom', amount: 450, rating: 'BB-', originator: 'Citi', spread: 475, subscription: 100, status: 'completed', timeRemaining: '—', round: 5, maxRounds: 5 },
-        { id: 'SYND-2025-008', borrower: 'Summit Aerospace', industry: 'Aerospace', amount: 380, rating: 'BBB-', originator: 'BofA', spread: 365, subscription: 88, status: 'closing', timeRemaining: '4h 20m', round: 4, maxRounds: 4 }
+        {
+            id: 'SYND-2025-002', borrower: 'Atlas Manufacturing', industry: 'Industrial', amount: 350, rating: 'BBB-', originator: 'BofA', spread: 385, subscription: 100, status: 'settlement',
+            esg_score: 65, geography: 'Europe', seniority: 'Senior Secured', tenorYears: 6, amortization: '1% per annum',
+            phase: 'allocation', timeRemaining: '—', round: 5, maxRounds: 5
+        },
+        {
+            id: 'SYND-2025-003', borrower: 'Meridian Healthcare', industry: 'Healthcare', amount: 275, rating: 'BB', originator: 'Citi', spread: 450, subscription: 45, status: 'open',
+            esg_score: 88, geography: 'North America', seniority: 'Unitranche', tenorYears: 5, amortization: 'Bullet',
+            phase: 'bookbuilding', timeRemaining: '6h 30m', round: 1, maxRounds: 4
+        },
+        {
+            id: 'SYND-2025-004', borrower: 'Quantum Logistics', industry: 'Transportation', amount: 425, rating: 'BB+', originator: 'JPMorgan', spread: 410, subscription: 78, status: 'negotiating',
+            esg_score: 55, geography: 'APAC', seniority: 'Senior Secured', tenorYears: 7, amortization: '1% per annum',
+            phase: 'pricing', timeRemaining: '18h 45m', round: 2, maxRounds: 6
+        },
+        {
+            id: 'SYND-2025-005', borrower: 'Evergreen Energy', industry: 'Utilities', amount: 600, rating: 'BBB', originator: 'Wells Fargo', spread: 340, subscription: 62, status: 'open',
+            esg_score: 92, geography: 'Europe', seniority: 'Senior Secured', tenorYears: 10, amortization: '1% per annum',
+            phase: 'bookbuilding', timeRemaining: '48h 00m', round: 1, maxRounds: 5
+        },
+        {
+            id: 'SYND-2025-006', borrower: 'Pinnacle Retail', industry: 'Consumer', amount: 200, rating: 'B+', originator: 'Goldman', spread: 525, subscription: 100, status: 'funding',
+            esg_score: 45, geography: 'North America', seniority: 'Second Lien', tenorYears: 6, amortization: 'Bullet',
+            phase: 'funded', timeRemaining: '—', round: 4, maxRounds: 4
+        },
+        {
+            id: 'SYND-2025-007', borrower: 'Horizon Telecom', industry: 'Telecom', amount: 450, rating: 'BB-', originator: 'Citi', spread: 475, subscription: 100, status: 'completed',
+            esg_score: 60, geography: 'APAC', seniority: 'Senior Secured', tenorYears: 5, amortization: '1% per annum',
+            phase: 'closed', timeRemaining: '—', round: 5, maxRounds: 5
+        },
+        {
+            id: 'SYND-2025-008', borrower: 'Summit Aerospace', industry: 'Aerospace', amount: 380, rating: 'BBB-', originator: 'BofA', spread: 365, subscription: 88, status: 'closing',
+            esg_score: 78, geography: 'Europe', seniority: 'Senior Secured', tenorYears: 7, amortization: '1% per annum',
+            phase: 'allocation', timeRemaining: '4h 20m', round: 4, maxRounds: 4
+        }
     ],
 
     // Participants
@@ -196,3 +226,103 @@ const Utils = {
 
     randomBetween: (min, max) => Math.floor(Math.random() * (max - min + 1)) + min
 };
+
+// SyndiData now supports both mock data and live API sync
+SyndiData.refresh = async function () {
+    if (typeof API === 'undefined' || API.useMockData) {
+        console.log('📦 Using mock data (API unavailable or mock mode)');
+        return false;
+    }
+
+    try {
+        const data = await fetch(`${API.agentUrl}/all-data`);
+        if (!data.ok) throw new Error(`API error: ${data.status}`);
+
+        const json = await data.json();
+
+        // Map backend format to frontend format
+        this.syndications = (json.syndications || []).map(s => ({
+            id: s._id || s.syndication_id,
+            borrower: s.loan_details?.borrower_name || s.borrower || 'Unknown',
+            industry: s.loan_details?.industry || s.industry || 'Unknown',
+            amount: (s.loan_details?.total_amount || 0) / 1000000,
+            rating: s.loan_details?.credit_rating || s.rating || 'NR',
+            originator: s.originator || 'Unknown',
+            spread: s.current_spread || s.pricing?.initial_spread || 0,
+            subscription: Math.round((s.subscription_rate || 0) * 100),
+            status: s.status || 'open',
+            round: s.current_round || 0,
+            maxRounds: 5,
+            bids: s.bids || [],
+            loan_details: s.loan_details,
+            timeline: s.timeline,
+            created_at: s.created_at,
+            updated_at: s.updated_at
+        }));
+
+        // Map participants
+        this.participants = (json.participants || []).map(p => ({
+            id: p._id,
+            name: p.institution?.name || p.entity || 'Unknown',
+            type: p.institution?.type || p.tier || 'Unknown',
+            bids: p.performance_history?.bids_submitted_ytd || 0,
+            winRate: Math.round((p.performance_history?.win_rate || 0) * 100),
+            volume: (p.risk_appetite?.current_deployed || 0) / 1000000,
+            onTime: Math.round((p.performance_history?.on_time_rate || 1) * 100),
+            avgEarly: 0
+        }));
+
+        // Map bids
+        this.bids = (json.bids || []).map(b => ({
+            time: b.submitted_at || b.created_at,
+            participant: b.institution_name || b.participant,
+            action: b.bid_status === 'active' ? 'BID' : 'PASS',
+            amount: (b.bid_amount || 0) / 1000000,
+            spread: b.spread_bid || b.spread,
+            syndication_id: b.syndication_id
+        }));
+
+        // Store raw data for other uses
+        this._raw = json;
+        this._lastSync = new Date();
+
+        console.log(`✅ SyndiData synced: ${this.syndications.length} syndications, ${this.participants.length} participants, ${this.bids.length} bids`);
+
+        // Dispatch event for UI updates
+        window.dispatchEvent(new CustomEvent('syndiDataRefresh', { detail: this }));
+
+        return true;
+    } catch (e) {
+        console.warn('⚠️ SyndiData sync failed:', e.message);
+        return false;
+    }
+};
+
+// Auto-Refresh Strategy
+SyndiData.startAutoRefresh = function (interval = 30000) {
+    if (this._refreshInterval) clearInterval(this._refreshInterval);
+
+    // Initial load
+    if (typeof API !== 'undefined' && !API.useMockData) {
+        this.refresh();
+    }
+
+    // Periodic refresh
+    this._refreshInterval = setInterval(() => {
+        if (!document.hidden && typeof API !== 'undefined' && !API.useMockData) {
+            this.refresh();
+        }
+    }, interval);
+
+    console.log(`🔄 SyndiData auto-refresh started (${interval / 1000}s)`);
+};
+
+// Initialize
+SyndiData.init = function () {
+    this.startAutoRefresh(Config?.UPDATE_INTERVAL || 10000);
+};
+
+// Initial sync on load (if API available)
+if (typeof API !== 'undefined' && !API.useMockData) {
+    SyndiData.refresh();
+}

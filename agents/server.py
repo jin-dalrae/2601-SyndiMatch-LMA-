@@ -22,6 +22,33 @@ import db
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+def serialize_doc(doc):
+    """Convert MongoDB document to JSON-serializable dict"""
+    if doc is None:
+        return None
+    if isinstance(doc, list):
+        return [serialize_doc(d) for d in doc]
+    if not isinstance(doc, dict):
+        return doc
+    
+    result = {}
+    for key, value in doc.items():
+        if hasattr(value, '__str__') and type(value).__name__ == 'ObjectId':
+            result[key] = str(value)
+        elif isinstance(value, datetime):
+            result[key] = value.isoformat()
+        elif isinstance(value, dict):
+            result[key] = serialize_doc(value)
+        elif isinstance(value, list):
+            result[key] = [serialize_doc(v) if isinstance(v, (dict, list)) else 
+                          str(v) if hasattr(v, '__str__') and type(v).__name__ == 'ObjectId' else v 
+                          for v in value]
+        else:
+            result[key] = value
+    return result
+
+
 app = FastAPI(title="SyndiMatch Agent API", version="1.0.0")
 
 # CORS middleware
@@ -157,6 +184,18 @@ async def get_participants():
     return participants
 
 
+@app.get("/api/syndications")
+async def get_syndications():
+    """Get all syndications"""
+    syndications = list(db.syndications().find({}))
+    
+    # Enrich with bids
+    for synd in syndications:
+        synd["bids"] = list(db.bids().find({"syndication_id": synd["_id"]}))
+        synd["payments"] = list(db.payments().find({"syndication_id": synd["_id"]}))
+        
+    return syndications
+
 @app.get("/api/agents/originators")
 async def get_originators():
     """Get all originator agents"""
@@ -171,6 +210,13 @@ async def get_bids(syndication_id: str):
     return bids_list
 
 
+@app.get("/api/bids")
+async def get_all_bids():
+    """Get all bids across all syndications"""
+    bids_list = list(db.bids().find({}))
+    return bids_list
+
+
 @app.get("/api/allocations/{syndication_id}")
 async def get_allocations(syndication_id: str):
     """Get allocations for a syndication"""
@@ -178,10 +224,70 @@ async def get_allocations(syndication_id: str):
     return alloc or {}
 
 
+@app.get("/api/allocations")
+async def get_all_allocations():
+    """Get all allocations"""
+    allocations = list(db.allocations().find({}))
+    return allocations
+
+
 @app.get("/api/payments/{syndication_id}")
 async def get_payments(syndication_id: str):
     """Get payment history for a syndication"""
-    return payments
+    payments_list = list(db.payments().find({"syndication_id": syndication_id}))
+    return payments_list
+
+
+@app.get("/api/payments")
+async def get_all_payments():
+    """Get all payments"""
+    payments_list = list(db.payments().find({}))
+    return payments_list
+
+
+@app.get("/api/transactions")
+async def get_transactions():
+    """Get all transaction records"""
+    # Combine different transaction types
+    transactions = []
+    
+    # Add payment transactions
+    for payment in db.payments().find({}):
+        transactions.append({
+            "type": payment.get("payment_type", "payment"),
+            "amount": payment.get("amount_paid", 0),
+            "participant": payment.get("payer_institution", "Unknown"),
+            "syndication_id": payment.get("syndication_id"),
+            "status": payment.get("payment_status", "pending"),
+            "timestamp": payment.get("created_at", payment.get("due_date")),
+            "tx_hash": payment.get("transaction_hash")
+        })
+    
+    # Sort by timestamp descending
+    transactions.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+    return transactions[:100]  # Limit to 100 most recent
+
+
+@app.get("/api/all-data")
+async def get_all_data():
+    """Get all data in a single request for frontend sync"""
+    syndications = list(db.syndications().find({}))
+    
+    # Enrich syndications
+    for synd in syndications:
+        synd["bids"] = list(db.bids().find({"syndication_id": synd["_id"]}))
+        synd["payments"] = list(db.payments().find({"syndication_id": synd["_id"]}))
+    
+    return serialize_doc({
+        "syndications": syndications,
+        "participants": list(db.participant_agents().find({})),
+        "originators": list(db.originator_agents().find({})),
+        "bids": list(db.bids().find({})),
+        "allocations": list(db.allocations().find({})),
+        "payments": list(db.payments().find({})),
+        "timestamp": datetime.utcnow().isoformat()
+    })
+
 
 
 @app.post("/api/agents/bid")

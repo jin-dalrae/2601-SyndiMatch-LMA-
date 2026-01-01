@@ -79,41 +79,8 @@
         </div>
     </header>
 
-    <!-- Top Metrics Bar -->
-    <section class="metrics-bar" id="metrics-bar">
-        <div class="metric-card">
-            <div class="metric-label">Active Syndications</div>
-            <div class="metric-value" id="metric-active">8</div>
-            <div class="metric-change positive">+2 today</div>
-        </div>
-        <div class="metric-card">
-            <div class="metric-label">Total Value in Play</div>
-            <div class="metric-value" id="metric-value">$2.4B</div>
-            <div class="metric-change positive">+$340M</div>
-        </div>
-        <div class="metric-card">
-            <div class="metric-label">Closed Today</div>
-            <div class="metric-value" id="metric-closed">3</div>
-            <div class="metric-change positive">Target: 4</div>
-        </div>
-        <div class="metric-card">
-            <div class="metric-label">Success Rate</div>
-            <div class="metric-value" id="metric-success">94.2%</div>
-            <div class="metric-change positive">+1.2%</div>
-        </div>
-        <div class="metric-card">
-            <div class="metric-label">Active Participants</div>
-            <div class="metric-value" id="metric-participants">47</div>
-            <div class="metric-change neutral">steady</div>
-        </div>
-        <div class="metric-card">
-            <div class="metric-label">Payments (24h)</div>
-            <div class="metric-value" id="metric-payments">$892M</div>
-            <div class="metric-change positive">+$156M</div>
-        </div>
-    </section>
-
     <!-- Main Content Area -->
+
     <main class="main-content">
         <!-- Overview View -->
         <div class="view active" id="view-overview">
@@ -237,7 +204,11 @@
     </div>
 
     <!-- Scripts -->
+    <script src="js/config.js"></script>
+    <script src="js/api-client.js"></script>
     <script src="js/api.js"></script>
+    <script src="js/app-state.js"></script>
+    <script src="js/router.js"></script>
     <script src="js/data.js"></script>
     <script src="js/role-context.js"></script>
     <script src="js/simulation-engine.js"></script>

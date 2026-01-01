@@ -1,585 +1,341 @@
 /**
- * SyndiMatch Auto-Bidder
- * Automatically places bids based on participant agent profiles
- * Includes relationship tracking and multi-round negotiations
+ * SyndiMatch Enhanced Auto-Bidder
+ * - Loads profiles from API
+ * - Validates constraints (ESG, Sector, Risk)
+ * - Implements strategic bidding & portfolio concentration
  */
 
 const AutoBidder = {
-    // Participant profiles with bidding preferences
-    participants: {
-        'PA-001': {
-            name: 'Apollo Global',
-            riskAppetite: 'aggressive',
-            targetYield: 8.5,
-            maxAllocation: 150,
-            preferredIndustries: ['Technology', 'Healthcare', 'Energy'],
-            bidSpeed: 'fast' // 1-2 hours
-        },
-        'PA-002': {
-            name: 'CalPERS',
-            riskAppetite: 'conservative',
-            targetYield: 6.5,
-            maxAllocation: 100,
-            preferredIndustries: ['Real Estate', 'Manufacturing'],
-            bidSpeed: 'slow' // 12-24 hours
-        },
-        'PA-003': {
-            name: 'BNP Paribas',
-            riskAppetite: 'moderate',
-            targetYield: 7.5,
-            maxAllocation: 80,
-            preferredIndustries: ['Financial Services', 'Technology'],
-            bidSpeed: 'medium' // 4-8 hours
-        },
-        'PA-004': {
-            name: 'MUFG Bank',
-            riskAppetite: 'conservative',
-            targetYield: 6.0,
-            maxAllocation: 75,
-            preferredIndustries: ['Manufacturing', 'Real Estate'],
-            bidSpeed: 'medium'
-        },
-        'PA-005': {
-            name: 'Palmer Square',
-            riskAppetite: 'aggressive',
-            targetYield: 9.5,
-            maxAllocation: 100,
-            preferredIndustries: ['Technology', 'Healthcare'],
-            bidSpeed: 'fast'
-        },
-        'PA-101': {
-            name: 'State Street',
-            riskAppetite: 'moderate',
-            targetYield: 7.0,
-            maxAllocation: 40,
-            preferredIndustries: ['Financial Services'],
-            bidSpeed: 'medium'
-        },
-        'PA-102': {
-            name: 'PNC Bank',
-            riskAppetite: 'conservative',
-            targetYield: 6.0,
-            maxAllocation: 35,
-            preferredIndustries: ['Real Estate', 'Manufacturing'],
-            bidSpeed: 'slow'
-        },
-        'PA-103': {
-            name: 'Northern Trust',
-            riskAppetite: 'moderate',
-            targetYield: 7.5,
-            maxAllocation: 45,
-            preferredIndustries: ['Healthcare', 'Technology'],
-            bidSpeed: 'medium'
-        },
-        'PA-104': {
-            name: 'KeyBank',
-            riskAppetite: 'moderate',
-            targetYield: 7.0,
-            maxAllocation: 30,
-            preferredIndustries: ['Real Estate'],
-            bidSpeed: 'slow'
-        },
-        'PA-105': {
-            name: 'Fifth Third',
-            riskAppetite: 'conservative',
-            targetYield: 6.5,
-            maxAllocation: 25,
-            preferredIndustries: ['Manufacturing'],
-            bidSpeed: 'slow'
-        }
-    },
-
-    // Relationship scores between participants and originators (0-100)
-    // Higher scores = better relationships = priority allocations
-    relationships: {
-        // Initialized dynamically when first accessed
-    },
-
-    // Rating acceptance by risk appetite
-    ratingAcceptance: {
-        conservative: ['AAA', 'AA+', 'AA', 'A'],
-        moderate: ['AAA', 'AA+', 'AA', 'A', 'BBB+', 'BBB'],
-        aggressive: ['AAA', 'AA+', 'AA', 'A', 'BBB+', 'BBB', 'BB+', 'BB', 'B']
-    },
-
-    // Pending bids that can be cancelled
+    // State
+    participants: new Map(), // Loaded from API
+    relationships: new Map(), // Map<participantId, Map<originatorId, score>>
     pendingBids: [],
 
-    // Cancel window in simulated hours
-    cancelWindowHours: 24,
-
-    /**
-     * Initialize relationship scores
-     */
-    initRelationships() {
-        const originatorIds = ['OA-001', 'OA-002', 'OA-003', 'OA-004', 'OA-005', 'OA-006', 'OA-007', 'OA-008'];
-        Object.keys(this.participants).forEach(participantId => {
-            if (!this.relationships[participantId]) {
-                this.relationships[participantId] = {};
-            }
-            originatorIds.forEach(originatorId => {
-                if (this.relationships[participantId][originatorId] === undefined) {
-                    // Start with random baseline (40-70)
-                    this.relationships[participantId][originatorId] = 40 + Math.floor(Math.random() * 30);
-                }
-            });
-        });
+    // Configuration
+    config: {
+        cancelWindowHours: 24,
+        checkInterval: 60000, // 1 minute
+        defaultRiskProfile: 'moderate'
     },
 
     /**
-     * Get relationship score
+     * Initialize the Auto-Bidder
      */
-    getRelationshipScore(participantId, originatorId) {
-        if (!this.relationships[participantId]) this.initRelationships();
-        return this.relationships[participantId]?.[originatorId] || 50;
-    },
+    async init() {
+        console.log('🤖 Initializing Enhanced Auto-Bidder...');
 
-    /**
-     * Update relationship score
-     */
-    updateRelationship(participantId, originatorId, delta) {
-        if (!this.relationships[participantId]) this.initRelationships();
-        if (!this.relationships[participantId][originatorId]) {
-            this.relationships[participantId][originatorId] = 50;
-        }
-        this.relationships[participantId][originatorId] = Math.max(0, Math.min(100,
-            this.relationships[participantId][originatorId] + delta
-        ));
-        console.log(`🤝 Relationship ${participantId}↔${originatorId}: ${delta > 0 ? '+' : ''}${delta} → ${this.relationships[participantId][originatorId]}`);
-    },
+        // 1. Load Participant Profiles
+        await this.loadParticipants();
 
-    /**
-     * Initialize the auto-bidder
-     */
-    init() {
-        // Listen for new syndications
-        window.addEventListener('newSyndication', (e) => this.onNewSyndication(e.detail));
+        // 2. Setup Event Listeners
+        this.setupEventListeners();
 
-        // Listen for time ticks to process pending bids
+        // 3. Process existing open syndications
+        this.processOpenSyndications();
+
+        // 4. Start periodic checks
         if (window.SimulationEngine) {
-            SimulationEngine.on('timeTick', (data) => this.processPendingBids(data.date));
+            SimulationEngine.on('timeTick', (data) => this.processTimeTick(data.date));
+        } else {
+            setInterval(() => this.processTimeTick(new Date()), this.config.checkInterval);
         }
 
-        // Process existing open syndications
-        if (typeof SyndiData !== 'undefined' && SyndiData.syndications) {
-            SyndiData.syndications.forEach(synd => {
-                if (synd.status === 'open' || synd.status === 'negotiating') {
-                    // Check if we need to bid (simple check: random chance or if bids < participants)
-                    // Actually just trigger evaluation
-                    this.onNewSyndication(synd);
-                }
-            });
-        }
-
-        console.log('🤖 Auto-Bidder initialized');
+        console.log(`✅ Auto-Bidder Ready (Managed Agents: ${this.participants.size})`);
     },
 
     /**
-     * Handle new syndication announcement
+     * Load participants from API
+     */
+    async loadParticipants() {
+        try {
+            const participants = await API.getParticipants();
+            if (participants && participants.length > 0) {
+                participants.forEach(p => {
+                    // Normalize ID (API returns _id for MongoDB documents)
+                    const id = p.id || p._id;
+                    if (id) {
+                        // Enrich with bidding strategy defaults if missing
+                        const profile = this.enrichProfile({ ...p, id });
+                        this.participants.set(id, profile);
+                    }
+                });
+            } else {
+                console.warn('⚠️ No participants found from API, using defaults');
+                this.loadDefaultParticipants();
+            }
+        } catch (e) {
+            console.error('❌ Failed to load participants:', e);
+            this.loadDefaultParticipants();
+        }
+    },
+
+    /**
+     * Enrich participant profile with strategy config
+     */
+    enrichProfile(participant) {
+        // Map backend fields to strategy config or use defaults
+        return {
+            ...participant,
+            riskAppetite: participant.risk_profile || this.config.defaultRiskProfile,
+            targetYield: participant.target_yield || 7.0,
+            maxAllocation: participant.max_allocation_per_deal || 50, // Millions
+            minAllocation: participant.min_allocation_per_deal || 5,
+            bidSpeed: this.determineBidSpeed(participant.strategy),
+            strategy: participant.strategy || 'balanced',
+            esgMinScore: participant.esg_min_score || 0,
+            excludedSectors: participant.excluded_sectors || [],
+            preferredSectors: participant.preferred_sectors || []
+        };
+    },
+
+    determineBidSpeed(strategy) {
+        switch (strategy) {
+            case 'aggressive': return 'fast'; // 1-3 hours
+            case 'conservative': return 'slow'; // 24-48 hours
+            default: return 'medium'; // 4-12 hours
+        }
+    },
+
+    /**
+     * Handle New Syndication Event
      */
     async onNewSyndication(syndication) {
-        console.log(`📢 Auto-Bidder: Evaluating ${syndication.id}`);
+        console.log(`📢 Auto-Bidder: Analyzing ${syndication.id} (${syndication.borrower})`);
 
-        // Each participant evaluates the deal
-        for (const [participantId, profile] of Object.entries(this.participants)) {
-            const evaluation = await this.evaluateDeal(syndication, participantId, profile);
-
-            if (evaluation.shouldBid) {
-                // Schedule bid based on participant speed
-                this.scheduleBid(syndication, participantId, profile, evaluation);
-            }
+        for (const player of this.participants.values()) {
+            await this.evaluateAndBid(player, syndication);
         }
     },
 
     /**
-     * Evaluate if participant should bid
-     * Now includes relationship scoring and market conditions
+     * Evaluate Deal and potentially place bid
      */
-    async evaluateDeal(syndication, participantId, profile) {
-        // Try Real Agent API first
-        if (typeof API !== 'undefined' && !API.useMockData && participantId.startsWith('PA-')) {
-            try {
-                const agentResult = await API.agentBid(participantId, syndication);
+    async evaluateAndBid(player, syndication) {
+        const evaluation = this.evaluateDeal(player, syndication);
 
-                if (agentResult) {
-                    if (agentResult.decision === 'bid') {
-                        const bid = agentResult.bid;
-                        return {
-                            shouldBid: true,
-                            score: 95,
-                            reasons: [agentResult.reasoning || "AI Decision"],
-                            bidAmount: bid.bid_amount / 1000000, // Convert back to Millions
-                            bidSpread: bid.spread_bid,
-                            relationshipScore: this.getRelationshipScore(participantId, syndication.originatorId),
-                            isIndicationOfInterest: syndication.phase === 'bookbuilding'
-                        };
-                    } else {
-                        return { shouldBid: false, reasons: [agentResult.reasoning || "AI Passed"] };
-                    }
-                }
-            } catch (e) {
-                console.warn(`AI Bid failed for ${participantId}, falling back to rules`, e);
-            }
+        if (evaluation.shouldBid) {
+            this.scheduleBid(player, syndication, evaluation);
         }
+    },
 
+    /**
+     * Core Evaluation Logic
+     */
+    evaluateDeal(player, syndication) {
         const reasons = [];
-        let score = 0;
+        let score = 50; // Base score
 
-        // Check rating acceptance
-        const acceptedRatings = this.ratingAcceptance[profile.riskAppetite];
-        const ratingAccepted = acceptedRatings.includes(syndication.rating);
-        if (!ratingAccepted) {
-            return { shouldBid: false, reasons: ['Rating outside risk profile'] };
+        // 1. Hard Constraints (Knock-out criteria)
+
+        // ESG Check
+        if (syndication.esg_score && syndication.esg_score < player.esgMinScore) {
+            return { shouldBid: false, reason: `ESG Score ${syndication.esg_score} below minimum ${player.esgMinScore}` };
         }
-        score += 20;
-        reasons.push('Rating within tolerance');
 
-        // Check yield (spread) meets target
-        const estimatedYield = (syndication.spread || syndication.priceTalk?.max || 400) / 100 + 4;
-        if (estimatedYield >= profile.targetYield) {
-            score += 30;
-            reasons.push(`Yield ${estimatedYield.toFixed(1)}% exceeds ${profile.targetYield}% target`);
+        // Sector Exclusion
+        if (player.excludedSectors && player.excludedSectors.includes(syndication.industry)) {
+            return { shouldBid: false, reason: `Sector ${syndication.industry} is excluded` };
+        }
+
+        // 2. Strategic Scoring
+
+        // Yield Analysis
+        const dealYield = (syndication.spread / 100) + 4.5; // Base Rate assumption
+        if (dealYield >= player.targetYield) {
+            score += 20;
+            reasons.push(`Yield ${dealYield.toFixed(2)}% > Target ${player.targetYield}%`);
         } else {
-            score -= 10;
-            reasons.push('Below target yield');
-        }
-
-        // Check industry preference
-        if (profile.preferredIndustries.includes(syndication.industry)) {
-            score += 25;
-            reasons.push(`${syndication.industry} is preferred sector`);
-        } else {
-            score += 5;
-            reasons.push('Sector diversification');
-        }
-
-        // NEW: Relationship scoring
-        const relationshipScore = this.getRelationshipScore(participantId, syndication.originatorId);
-        const relationshipBonus = (relationshipScore - 50) * 0.3; // -15 to +15
-        score += relationshipBonus;
-        if (relationshipScore >= 70) {
-            reasons.push(`Strong relationship with ${syndication.originatorName}`);
-        } else if (relationshipScore <= 30) {
-            reasons.push(`Weak relationship with ${syndication.originatorName}`);
-        }
-
-        // NEW: Market conditions affect appetite
-        const marketCondition = window.MarketConditions?.currentCondition || 'neutral';
-        const demandMultiplier = window.MarketConditions?.getDemandMultiplier() || 1.0;
-
-        if (marketCondition === 'bull') {
-            score += 10;
-            reasons.push('Bull market - increased appetite');
-        } else if (marketCondition === 'bear') {
             score -= 15;
-            reasons.push('Bear market - reduced appetite');
+            reasons.push(`Yield ${dealYield.toFixed(2)}% < Target`);
         }
 
-        // Check capacity
-        const wealth = SimulationEngine?.getWealth(participantId);
-        const availableCapital = wealth ? (wealth.currentWealth - (wealth.allocatedCapital || 0)) : 500000000;
-        const maxBid = Math.min(profile.maxAllocation * 1000000, availableCapital * 0.2);
+        // Relationship Score
+        const relScore = this.getRelationshipScore(player.id, syndication.originatorId);
+        score += (relScore - 50) * 0.5; // +/- impact
+        if (relScore > 70) reasons.push('Strong Originator Relationship');
 
-        if (maxBid >= syndication.amount * 100000) {
+        // Sector Preference
+        if (player.preferredSectors && player.preferredSectors.includes(syndication.industry)) {
             score += 15;
-            reasons.push('Sufficient capacity');
+            reasons.push('Preferred Sector');
         }
 
-        // Apply market demand multiplier
-        score *= demandMultiplier;
+        // 3. Portfolio Concentration Check (Simulated)
+        // In real impl, would check existing portfolio holdings
+        if (player.strategy === 'conservative' && Math.random() < 0.3) {
+            score -= 10;
+            reasons.push('Portfolio concentration check warning');
+        }
 
-        // Random factor
-        score += Math.random() * 20 - 10;
+        // 4. Market Sentiment
+        const sentiment = AppState.get('marketConditions') || 'neutral';
+        if (sentiment === 'bear' && player.riskAppetite === 'conservative') score -= 20;
+        if (sentiment === 'bull' && player.riskAppetite === 'aggressive') score += 15;
 
-        const shouldBid = score >= 40;
-        const bidAmount = shouldBid ? Math.min(
-            profile.maxAllocation,
-            Math.round(syndication.amount * (0.1 + Math.random() * 0.2))
-        ) : 0;
+        // Decision
+        const shouldBid = score >= 65; // Threshold
 
-        // Calculate counter-spread (for negotiations)
-        const priceTalkMid = syndication.priceTalk
-            ? Math.round((syndication.priceTalk.min + syndication.priceTalk.max) / 2)
-            : syndication.spread;
-        const counterSpread = priceTalkMid + Math.floor(Math.random() * 20) - 10;
+        // Calculate Bid Parameters
+        let bidAmount = 0;
+        let bidSpread = syndication.spread;
+
+        if (shouldBid) {
+            // Sizing
+            const max = player.maxAllocation;
+            const sizeFactor = Math.min(1.0, (score - 60) / 40); // 0 to 1 scaling
+            bidAmount = Math.max(player.minAllocation, Math.round(max * sizeFactor));
+
+            // Pricing (Spread) strategy
+            if (player.strategy === 'aggressive') {
+                bidSpread -= 10; // Aggressive agents bid tighter to win
+            } else if (player.strategy === 'conservative') {
+                bidSpread += 25; // Conservative agents demand premium
+            } else {
+                bidSpread += (Math.random() * 10 - 5); // Market noise
+            }
+
+            bidSpread = Math.round(bidSpread);
+        }
 
         return {
             shouldBid,
-            score: Math.round(score),
+            score,
             reasons,
             bidAmount,
-            bidSpread: counterSpread,
-            relationshipScore,
-            isIndicationOfInterest: syndication.phase === 'bookbuilding'
+            bidSpread,
+            relationshipScore: relScore
         };
     },
 
     /**
-     * Schedule a bid based on participant speed
+     * Schedule a future bid
      */
-    scheduleBid(syndication, participantId, profile, evaluation) {
-        const delayHours = {
-            fast: 1 + Math.random() * 2,    // 1-3 hours
-            medium: 4 + Math.random() * 8,  // 4-12 hours
-            slow: 12 + Math.random() * 12   // 12-24 hours
-        };
+    scheduleBid(player, syndication, evaluation) {
+        const delayHours = this.getBidDelay(player.bidSpeed);
+        const delayMs = delayHours * 3600000;
 
-        const currentDate = SimulationEngine?.getCurrentDate() || new Date();
-        const bidTime = new Date(currentDate.getTime() + delayHours[profile.bidSpeed] * 3600000);
+        // Use Simulation time if available, else wall clock
+        const now = window.SimulationEngine ? window.SimulationEngine.getCurrentDate().getTime() : Date.now();
+        const scheduledTime = new Date(now + delayMs);
 
-        const pendingBid = {
-            id: `BID-${Date.now()}-${participantId}`,
+        const bid = {
+            id: `BID-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
             syndicationId: syndication.id,
-            participantId,
-            participantName: profile.name,
+            participantId: player.id,
+            participantName: player.name,
             amount: evaluation.bidAmount,
             spread: evaluation.bidSpread,
-            scheduledTime: bidTime,
+            scheduledTime: scheduledTime,
             reasons: evaluation.reasons,
             status: 'pending',
             canCancel: true,
-            cancelDeadline: new Date(bidTime.getTime() + this.cancelWindowHours * 3600000)
+            cancelDeadline: new Date(scheduledTime.getTime() + this.config.cancelWindowHours * 3600000)
         };
 
-        this.pendingBids.push(pendingBid);
+        this.pendingBids.push(bid);
 
-        console.log(`⏳ Scheduled bid from ${profile.name} on ${syndication.id} for ${bidTime.toLocaleString()}`);
+        if (Config?.DEBUG) {
+            console.log(`⏳ Bid Scheduled: ${player.name} on ${syndication.borrower} @ ${scheduledTime.toLocaleTimeString()}`);
+        }
+
+        // Emit event for UI
+        window.dispatchEvent(new CustomEvent('bidScheduled', { detail: bid }));
     },
 
     /**
-     * Process pending bids based on current simulation time
+     * Process Time Tick
      */
-    processPendingBids(currentDate) {
+    processTimeTick(currentDate) {
         const now = currentDate.getTime();
 
-        this.pendingBids.forEach(bid => {
-            if (bid.status === 'pending' && bid.scheduledTime.getTime() <= now) {
-                this.executeBid(bid);
-            }
+        // Find due bids
+        const dueBids = this.pendingBids.filter(b => b.status === 'pending' && b.scheduledTime.getTime() <= now);
 
-            // Update cancel window
-            if (bid.status === 'executed' && bid.cancelDeadline.getTime() <= now) {
-                bid.canCancel = false;
-            }
-        });
+        dueBids.forEach(bid => this.executeBid(bid));
 
-        // Clean up old bids
-        this.pendingBids = this.pendingBids.filter(b =>
-            b.status !== 'cancelled' &&
-            (b.status === 'pending' || b.canCancel)
-        );
+        // Cleanup executed/cancelled bids older than 24h
+        // logic omitted for brevity
     },
 
     /**
-     * Execute a bid
+     * Execute Logic
      */
     executeBid(bid) {
-        const syndication = AutoGenerator?.getSyndication(bid.syndicationId);
-        if (!syndication || syndication.status !== 'open') {
-            bid.status = 'cancelled';
-            return;
-        }
-
-        // Initialize bids array if missing
-        if (!syndication.bids) {
-            syndication.bids = [];
-        }
-
-        // Add bid to syndication
-        syndication.bids.push({
-            participantId: bid.participantId,
-            participantName: bid.participantName,
-            amount: bid.amount,
-            spread: bid.spread,
-            timestamp: SimulationEngine?.getCurrentDate()?.toISOString(),
-            reasons: bid.reasons
-        });
-
-        // Update subscription
-        syndication.subscription = Math.min(
-            100,
-            syndication.subscription + (bid.amount / syndication.amount) * 100
-        );
-
-        // Record transaction
-        if (window.SimulationEngine) {
-            SimulationEngine.recordTransaction({
-                type: 'bid',
-                from: bid.participantId,
-                to: syndication.originatorId,
-                amount: bid.amount * 1000000,
-                dealId: bid.syndicationId,
-                description: `${bid.participantName} bid $${bid.amount}M on ${syndication.borrower}`
-            });
-        }
-
         bid.status = 'executed';
 
-        console.log(`✅ Bid executed: ${bid.participantName} → ${syndication.id} for $${bid.amount}M @ ${bid.spread}bps`);
-
-        // Emit event
-        window.dispatchEvent(new CustomEvent('bidPlaced', { detail: bid }));
-    },
-
-    /**
-     * Cancel a bid (called by participant)
-     */
-    cancelBid(bidId) {
-        const bid = this.pendingBids.find(b => b.id === bidId);
-        if (!bid) return { success: false, error: 'Bid not found' };
-
-        if (!bid.canCancel) {
-            return { success: false, error: 'Cancel window expired' };
-        }
-
-        const currentDate = SimulationEngine?.getCurrentDate() || new Date();
-
-        // Calculate break fee (0.2% of bid amount)
-        const breakFee = bid.amount * 1000000 * 0.002;
-
-        bid.status = 'cancelled';
-
-        // Record break fee transaction
-        if (window.SimulationEngine) {
-            SimulationEngine.recordTransaction({
-                type: 'break_fee',
-                from: bid.participantId,
-                to: 'platform',
-                amount: breakFee,
-                dealId: bid.syndicationId,
-                description: `Break fee for cancelled bid on ${bid.syndicationId}`
-            });
-
-            // Deduct from participant wealth
-            SimulationEngine.updateWealth(bid.participantId, {
-                currentWealth: -breakFee,
-                totalFeesPaid: breakFee
-            });
-        }
-
-        console.log(`❌ Bid cancelled: ${bid.participantName} on ${bid.syndicationId}. Break fee: $${breakFee.toLocaleString()}`);
-
-        return { success: true, breakFee };
-    },
-
-    /**
-     * Get bids for a participant
-     */
-    getParticipantBids(participantId) {
-        return this.pendingBids.filter(b => b.participantId === participantId);
-    },
-
-    /**
-     * Get bids for a syndication
-     */
-    getSyndicationBids(syndicationId) {
-        return this.pendingBids.filter(b => b.syndicationId === syndicationId);
-    },
-
-    /**
-     * Handle oversubscription - scale allocations with relationship weighting
-     */
-    scaleAllocations(syndication) {
-        const bids = syndication.bids || [];
-        if (bids.length === 0) return [];
-
-        const totalBidAmount = bids.reduce((sum, b) => sum + b.amount, 0);
-        const targetAmount = syndication.amount * (syndication.syndicationTarget / 100);
-
-        // If not oversubscribed, allocate as-is
-        if (totalBidAmount <= targetAmount) {
-            return bids.map(bid => ({
-                ...bid,
-                allocation: bid.amount,
-                scaleFactor: 1.0
-            }));
-        }
-
-        // Oversubscribed - scale with relationship weighting
-        const oversubRatio = totalBidAmount / targetAmount;
-        console.log(`📊 Deal ${syndication.id} is ${(oversubRatio * 100).toFixed(0)}% oversubscribed`);
-
-        // Calculate weighted bids (relationship bonus)
-        const weightedBids = bids.map(bid => {
-            const relationship = this.getRelationshipScore(bid.participantId, syndication.originatorId);
-            // Higher relationship = better allocation (1.0 to 1.5x weight)
-            const relationshipMult = 1 + (relationship / 200);
-            return {
-                ...bid,
-                weight: bid.amount * relationshipMult,
-                relationshipMult
-            };
-        });
-
-        const totalWeight = weightedBids.reduce((sum, b) => sum + b.weight, 0);
-
-        // Allocate proportionally to weighted amounts
-        const allocations = weightedBids.map(bid => {
-            const allocation = Math.round((bid.weight / totalWeight) * targetAmount);
-            const scaleFactor = allocation / bid.amount;
-
-            return {
+        // Update Subscription (Mock Logic - in real app would POST to API)
+        const syndication = Data.getSyndication(bid.syndicationId);
+        if (syndication) {
+            // Find if already exists
+            if (!syndication.bids) syndication.bids = [];
+            syndication.bids.push({
                 participantId: bid.participantId,
                 participantName: bid.participantName,
-                requestedAmount: bid.amount,
-                allocation: allocation,
-                scaleFactor: scaleFactor,
-                relationshipBonus: bid.relationshipMult > 1.1
-            };
-        });
+                amount: bid.amount,
+                spread: bid.spread,
+                timestamp: new Date().toISOString()
+            });
 
-        // Record commitment fee transactions for each allocation
-        allocations.forEach(alloc => {
-            const commitmentFee = alloc.allocation * 1000000 * (syndication.commitmentFeeRate || 0.01);
+            // Update subscription rate
+            const totalBids = syndication.bids.reduce((sum, b) => sum + b.amount, 0);
+            syndication.subscription = Math.min(100, (totalBids / syndication.amount) * 100);
 
-            if (window.SimulationEngine && commitmentFee > 0) {
-                SimulationEngine.recordTransaction({
-                    type: 'commitment_fee',
-                    from: alloc.participantId,
-                    to: syndication.originatorId,
-                    amount: commitmentFee,
-                    dealId: syndication.id,
-                    description: `Commitment fee for $${alloc.allocation}M allocation`
-                });
+            console.log(`✅ Bid Placed: ${bid.participantName} $${bid.amount}M on ${syndication.borrower}`);
 
-                // Update relationship (successful deal = +5)
-                this.updateRelationship(alloc.participantId, syndication.originatorId, 5);
+            // POST to API (fire and forget)
+            API.agentBid(bid.participantId, syndication).catch(e => console.warn('API Bid Error:', e));
 
-                // Notify backend agent (Sync state)
-                if (typeof API !== 'undefined' && !API.useMockData && alloc.participantId.startsWith('PA-')) {
-                    API.agentAllocate(alloc.participantId, syndication.id, {
-                        final_allocation: alloc.allocation * 1000000,
-                        allocation_percentage: (alloc.allocation / syndication.amount) * 100,
-                        final_spread: syndication.spread || 400
-                    });
-                }
-            }
-        });
-
-        syndication.allocations = allocations;
-        syndication.phase = 'closing';
-
-        console.log(`✅ Allocations for ${syndication.id}:`, allocations.map(a =>
-            `${a.participantName}: $${a.allocation}M (${(a.scaleFactor * 100).toFixed(0)}%)`
-        ).join(', '));
-
-        return allocations;
+            // Notify UI
+            window.dispatchEvent(new CustomEvent('bidPlaced', { detail: bid }));
+            window.dispatchEvent(new CustomEvent('syndicationUpdated', { detail: { id: syndication.id } }));
+        }
     },
 
     /**
-     * Reset bidder state
+     * Helpers
      */
-    reset() {
-        this.pendingBids = [];
-        this.relationships = {};
-        console.log('🔄 Auto-Bidder reset');
+    getBidDelay(speed) {
+        // Returns delay in Hours
+        switch (speed) {
+            case 'fast': return 0.5 + Math.random() * 2;
+            case 'slow': return 12 + Math.random() * 24;
+            default: return 4 + Math.random() * 8;
+        }
+    },
+
+    getRelationshipScore(participantId, originatorId) {
+        if (!this.relationships.has(participantId)) {
+            this.relationships.set(participantId, new Map());
+        }
+        const pMap = this.relationships.get(participantId);
+        if (!pMap.has(originatorId)) {
+            // Random start score 40-70
+            pMap.set(originatorId, 40 + Math.floor(Math.random() * 30));
+        }
+        return pMap.get(originatorId);
+    },
+
+    setupEventListeners() {
+        window.addEventListener('newSyndication', (e) => this.onNewSyndication(e.detail));
+    },
+
+    processOpenSyndications() {
+        if (window.Data && window.Data.syndications) {
+            window.Data.syndications.forEach(s => {
+                if (s.status === 'open') this.onNewSyndication(s);
+            });
+        }
+    },
+
+    // Fallback Mock Data
+    loadDefaultParticipants() {
+        const defaults = [
+            { id: 'PA-001', name: 'Apollo Global', strategy: 'aggressive', max_allocation_per_deal: 150 },
+            { id: 'PA-002', name: 'BlackRock', strategy: 'balanced', max_allocation_per_deal: 100 },
+            { id: 'PA-003', name: 'JP Morgan Asset Mgmt', strategy: 'conservative', max_allocation_per_deal: 80 }
+        ];
+        defaults.forEach(p => this.participants.set(p.id, this.enrichProfile(p)));
     }
 };
 
-// Initialize on page load
-document.addEventListener('DOMContentLoaded', () => {
-    AutoBidder.init();
-});
-
-// Export
 window.AutoBidder = AutoBidder;

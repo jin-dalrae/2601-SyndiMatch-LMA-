@@ -248,6 +248,13 @@ const SimulationEngine = {
         const previousDate = this.state.currentDate;
         this.state.currentDate = newDate;
 
+        // Sync with backend every ~2 seconds (20 ticks)
+        this.syncCounter = (this.syncCounter || 0) + 1;
+        if (this.syncCounter >= 20) {
+            this.syncCounter = 0;
+            this.syncStateWithBackend();
+        }
+
         // Emit time events
         this.emit('timeTick', {
             date: this.state.currentDate,
@@ -268,6 +275,17 @@ const SimulationEngine = {
 
         // Update display
         this.updateTimeDisplay();
+    },
+
+    async syncStateWithBackend() {
+        if (typeof API !== 'undefined' && !API.useMockData && typeof SyndiData !== 'undefined') {
+            const success = await SyndiData.refresh();
+            if (success) {
+                // Trigger UI updates
+                if (window.MetricsComponent) MetricsComponent.refreshActiveMetrics();
+                if (window.PipelineComponent) PipelineComponent.render();
+            }
+        }
     },
 
     /**

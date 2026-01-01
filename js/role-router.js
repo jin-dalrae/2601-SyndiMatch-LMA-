@@ -434,23 +434,41 @@ const RoleRouter = {
     },
 
     /**
-     * Cancel a bid
+     * Cancel a bid (from Available Deals view)
      */
     cancelBid(dealId) {
-        if (confirm(`Cancel bid on ${dealId}? A 0.2% break fee may apply.`)) {
-            // Record break fee transaction
-            if (window.SimulationEngine) {
-                SimulationEngine.recordTransaction({
-                    type: 'break_fee',
-                    from: this.currentAgentId,
-                    to: 'platform',
-                    amount: 10000, // Placeholder
-                    dealId
-                });
+        if (!confirm(`Cancel bid on ${dealId}? A 0.2% break fee may apply.`)) {
+            return;
+        }
+
+        // Find the bid for this deal
+        let result = { success: false };
+
+        if (window.AutoBidder) {
+            // Get participant's bids for this deal
+            const bids = AutoBidder.getParticipantBids(this.currentAgentId);
+            const bid = bids.find(b => b.syndicationId === dealId && b.status === 'executed');
+
+            if (bid) {
+                result = AutoBidder.cancelBid(bid.id);
+            } else {
+                result = { success: false, error: 'No active bid found for this deal' };
             }
-            alert(`Bid on ${dealId} cancelled. Break fee applied.`);
+        }
+
+        if (result.success) {
+            alert(`Bid on ${dealId} cancelled. Break fee of $${result.breakFee?.toLocaleString() || 'TBD'} applied.`);
+
+            // Refresh the current view
+            const currentView = document.getElementById(`view-${this.currentRoute}`);
+            if (currentView) {
+                this.renderViewContent(this.currentRoute);
+            }
+        } else {
+            alert(`Could not cancel bid: ${result.error || 'Unknown error'}`);
         }
     },
+
 
     /**
      * Render My Bids (Participant)
@@ -515,9 +533,19 @@ const RoleRouter = {
         // Attach handlers
         view.querySelectorAll('.btn-cancel-bid').forEach(btn => {
             btn.addEventListener('click', () => {
+                const bidId = btn.dataset.id;
+
+                // Add confirmation dialog
+                if (!confirm(`Cancel this bid? A 0.2% break fee may apply.`)) {
+                    return;
+                }
+
                 // Call AutoBidder cancel
                 if (window.AutoBidder) {
-                    window.AutoBidder.cancelBid(btn.dataset.id);
+                    const result = AutoBidder.cancelBid(bidId);
+                    if (result && result.success) {
+                        alert(`Bid cancelled. Break fee: $${result.breakFee?.toLocaleString() || 'TBD'}`);
+                    }
                     this.renderMyBids(view); // Re-render
                 }
             });
@@ -544,30 +572,63 @@ const RoleRouter = {
             <div class="portfolio-page">
                 <div class="page-header-flex">
                     <h2 class="page-title">Portfolio Overview</h2>
-                    <div class="last-updated">Last updated: ${new Date().toLocaleTimeString()}</div>
+                    <div class="page-controls">
+                        <button class="btn-refresh" onclick="RoleRouter.refreshPortfolio()">🔄 Refresh</button>
+                        <div class="last-updated">Last updated: <span id="portfolio-time">${new Date().toLocaleTimeString()}</span></div>
+                        <span class="live-indicator" id="portfolio-live">● LIVE</span>
+                    </div>
                 </div>
 
                 <!-- Summary Cards -->
                 <div class="wealth-cards">
                     <div class="wealth-card">
                         <div class="wealth-label">Total Exposure</div>
-                        <div class="wealth-value">$${stats.totalExposure.toFixed(1)}M</div>
-                        <div class="wealth-sub">across ${stats.dealCount} active deals</div>
+                        <div class="wealth-value" id="stat-exposure">$${stats.totalExposure.toFixed(1)}M</div>
+                        <div class="wealth-sub">across <span id="stat-deals">${stats.dealCount}</span> active deals</div>
                     </div>
                     <div class="wealth-card">
                         <div class="wealth-label">Weighted Avg Yield</div>
-                        <div class="wealth-value">${stats.weightedYield.toFixed(2)}%</div>
-                        <div class="wealth-sub">Spread: ${Math.round(stats.weightedSpread)} bps</div>
+                        <div class="wealth-value" id="stat-yield">${stats.weightedYield.toFixed(2)}%</div>
+                        <div class="wealth-sub">Spread: <span id="stat-spread">${Math.round(stats.weightedSpread)}</span> bps</div>
                     </div>
                     <div class="wealth-card highlight">
                         <div class="wealth-label">Available Capacity</div>
-                        <div class="wealth-value">$${stats.availableCapacity.toFixed(1)}M</div>
-                        <div class="wealth-sub">Utilization: ${stats.utilization}%</div>
+                        <div class="wealth-value" id="stat-capacity">$${stats.availableCapacity.toFixed(1)}M</div>
+                        <div class="wealth-sub">Utilization: <span id="stat-util">${stats.utilization}</span>%</div>
                     </div>
                     <div class="wealth-card success">
                         <div class="wealth-label">Net ROI (YTD)</div>
-                        <div class="wealth-value">+${stats.roi.toFixed(1)}%</div>
-                        <div class="wealth-sub">Interest: $${(stats.interestYTD / 1000000).toFixed(1)}M</div>
+                        <div class="wealth-value" id="stat-roi">+${stats.roi.toFixed(1)}%</div>
+                        <div class="wealth-sub">Interest: $<span id="stat-interest">${(stats.interestYTD / 1000000).toFixed(1)}</span>M</div>
+                    </div>
+                </div>
+
+                <!-- ESG & Geography Summary -->
+                <div class="esg-geo-section" style="margin-top: 1.5rem;">
+                    <div class="analytics-grid">
+                        <div class="metric-card">
+                            <h4 class="chart-title">🌱 ESG Composition</h4>
+                            <div class="esg-bar">
+                                <div class="esg-segment high" style="width: ${stats.esgHigh || 40}%;" title="ESG 75+">High (${stats.esgHigh || 40}%)</div>
+                                <div class="esg-segment med" style="width: ${stats.esgMed || 45}%;" title="ESG 50-74">Med (${stats.esgMed || 45}%)</div>
+                                <div class="esg-segment low" style="width: ${stats.esgLow || 15}%;" title="ESG <50">Low (${stats.esgLow || 15}%)</div>
+                            </div>
+                            <div class="esg-avg">Portfolio Avg ESG: <strong>${stats.avgEsg || 72}</strong></div>
+                        </div>
+                        <div class="metric-card">
+                            <h4 class="chart-title">🌍 Geographic Distribution</h4>
+                            <div class="geo-list">
+                                ${(stats.geography || [{ name: 'North America', pct: 75 }, { name: 'Europe', pct: 25 }]).map(g => `
+                                    <div class="geo-row">
+                                        <span class="geo-name">${g.name}</span>
+                                        <div class="geo-bar-track">
+                                            <div class="geo-bar-fill" style="width: ${g.pct}%;"></div>
+                                        </div>
+                                        <span class="geo-pct">${g.pct}%</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -615,19 +676,21 @@ const RoleRouter = {
                                 <th>Borrower</th>
                                 <th>Sector</th>
                                 <th>Rating</th>
+                                <th>ESG</th>
                                 <th>Allocated</th>
                                 <th>Spread</th>
                                 <th>Tenor</th>
                                 <th>Performance</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            ${stats.holdings.length === 0 ? '<tr><td colspan="7" class="text-muted">No active holdings.</td></tr>' : ''}
+                        <tbody id="holdings-body">
+                            ${stats.holdings.length === 0 ? '<tr><td colspan="8" class="text-muted">No active holdings.</td></tr>' : ''}
                             ${stats.holdings.map(h => `
                                 <tr>
                                     <td><strong>${h.borrower}</strong><div class="text-xs text-muted">${h.id}</div></td>
                                     <td>${h.industry}</td>
                                     <td><span class="rating-badge ${h.rating.replace('+', '').replace('-', '').toLowerCase()}">${h.rating}</span></td>
+                                    <td><span class="esg-score ${this.getEsgClass(h.esg)}">${h.esg || 70}</span></td>
                                     <td>$${h.amount.toFixed(1)}M</td>
                                     <td>${h.spread} bps</td>
                                     <td>${h.tenor}</td>
@@ -639,7 +702,117 @@ const RoleRouter = {
                 </div>
             </div>
         `;
+
+        // Start auto-refresh (every 10 seconds)
+        this.startPortfolioAutoRefresh(view);
     },
+
+    // Auto-refresh portfolio data
+    portfolioRefreshInterval: null,
+
+    startPortfolioAutoRefresh(view) {
+        // Clear existing interval
+        if (this.portfolioRefreshInterval) {
+            clearInterval(this.portfolioRefreshInterval);
+        }
+
+        this.portfolioRefreshInterval = setInterval(async () => {
+            if (this.currentRoute !== 'portfolio') {
+                clearInterval(this.portfolioRefreshInterval);
+                return;
+            }
+
+            await this.updatePortfolioStats();
+        }, 10000); // Refresh every 10 seconds
+    },
+
+    async updatePortfolioStats() {
+        const timeEl = document.getElementById('portfolio-time');
+        const liveEl = document.getElementById('portfolio-live');
+
+        if (liveEl) liveEl.style.animation = 'pulse 0.5s';
+
+        try {
+            // Fetch real-time data from API
+            const stats = await this.fetchPortfolioFromAPI();
+
+            // Update DOM elements
+            if (document.getElementById('stat-exposure')) {
+                document.getElementById('stat-exposure').textContent = `$${stats.totalExposure.toFixed(1)}M`;
+                document.getElementById('stat-deals').textContent = stats.dealCount;
+                document.getElementById('stat-yield').textContent = `${stats.weightedYield.toFixed(2)}%`;
+                document.getElementById('stat-spread').textContent = Math.round(stats.weightedSpread);
+                document.getElementById('stat-capacity').textContent = `$${stats.availableCapacity.toFixed(1)}M`;
+                document.getElementById('stat-util').textContent = stats.utilization;
+                document.getElementById('stat-roi').textContent = `+${stats.roi.toFixed(1)}%`;
+                document.getElementById('stat-interest').textContent = (stats.interestYTD / 1000000).toFixed(1);
+            }
+
+            if (timeEl) timeEl.textContent = new Date().toLocaleTimeString();
+        } catch (e) {
+            console.error('Portfolio update failed:', e);
+        }
+    },
+
+    async fetchPortfolioFromAPI() {
+        try {
+            // Try to fetch from backend API using new endpoint
+            const data = await API.getPortfolio(this.currentAgentId);
+            if (data && data.total_exposure !== undefined) {
+                return this.transformAPIPortfolio(data);
+            }
+        } catch (e) {
+            console.log('API not available, using calculated stats', e);
+        }
+
+        // Fallback to calculated stats
+        return this.calculatePortfolioStats(this.currentAgentId);
+    },
+
+    transformAPIPortfolio(data) {
+        return {
+            totalExposure: (data.total_exposure || 0) / 1000000,
+            availableCapacity: (data.available_capacity || 500000000) / 1000000,
+            utilization: data.utilization || 45,
+            dealCount: data.deal_count || 0,
+            weightedYield: data.weighted_yield || 8.0,
+            weightedSpread: data.weighted_spread || 400,
+            roi: data.roi_ytd || 10.0,
+            interestYTD: data.interest_ytd || 0,
+            avgEsg: data.avg_esg || 70,
+            esgHigh: data.esg_high_pct || 40,
+            esgMed: data.esg_med_pct || 45,
+            esgLow: data.esg_low_pct || 15,
+            geography: data.geography || [],
+            sectors: data.sectors || [],
+            ratings: data.ratings || [],
+            holdings: (data.holdings || []).map(h => ({
+                id: h._id || h.id,
+                borrower: h.borrower_name || h.borrower,
+                industry: h.industry,
+                rating: h.credit_rating || h.rating,
+                esg: h.esg_score || h.esg,
+                amount: (h.final_allocation || h.amount * 1000000) / 1000000,
+                spread: h.final_spread || h.spread,
+                tenor: h.tenor || '5Y'
+            }))
+        };
+    },
+
+    refreshPortfolio() {
+        const view = document.getElementById('view-portfolio');
+        if (view) {
+            this.renderPortfolio(view);
+        }
+    },
+
+    getEsgClass(score) {
+        if (!score) return 'med';
+        if (score >= 75) return 'high';
+        if (score >= 50) return 'med';
+        return 'low';
+    },
+
 
     calculatePortfolioStats(agentId) {
         const holdings = [];

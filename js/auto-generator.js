@@ -1,397 +1,258 @@
 /**
- * SyndiMatch Auto-Generator
- * Automatically generates syndications based on simulation time
+ * SyndiMatch Enhanced Auto-Generator
+ * - Loads originators from API
+ * - Generates rich deal structures (ESG, Geography, Capital Structure)
+ * - Syncs generated deals to backend
  */
 
 const AutoGenerator = {
-    // Active syndications in the simulation
     activeSyndications: [],
+    originators: [], // Loaded from API
 
-    // Generation parameters
     config: {
-        minDealsPerMonth: 1,
-        maxDealsPerMonth: 3,
-        minAmount: 50,  // $50M
-        maxAmount: 500, // $500M
-        industries: ['Technology', 'Healthcare', 'Energy', 'Real Estate', 'Manufacturing', 'Financial Services'],
-        ratings: ['AAA', 'AA+', 'AA', 'A', 'BBB+', 'BBB', 'BB+', 'BB', 'B'],
-        ratingWeights: [5, 8, 10, 15, 20, 20, 12, 7, 3], // Probability weights
-        borrowerNames: [
-            'TechFlow Solutions', 'MediCare Group', 'EnergyPlus Corp', 'PropMax Holdings',
-            'IndustrialX Inc', 'FinanceHub Ltd', 'CloudScale Systems', 'BioGenix Pharma',
-            'GreenPower Energy', 'RealtyPrime', 'MetalWorks Industries', 'DataStream Corp',
-            'HealthFirst Network', 'SolarTech Solutions', 'CapitalVest Partners'
-        ]
+        minDealsPerMonth: 2,
+        maxDealsPerMonth: 5,
+        minAmount: 100, // $100M
+        maxAmount: 1200, // $1.2B
+        sectors: ['Technology', 'Healthcare', 'Energy', 'Real Estate', 'Manufacturing', 'Financial Services', 'Telecom', 'Consumer'],
+        geographies: ['North America', 'Europe', 'APAC', 'Latin America'],
+        seniority: ['Senior Secured', 'Unitranche', 'Second Lien', 'Mezzanine'],
+        ratings: ['AAA', 'AA+', 'AA', 'A', 'BBB+', 'BBB', 'BB+', 'BB', 'B', 'CCC+'],
+        ratingWeights: [2, 5, 10, 15, 25, 20, 15, 5, 2, 1],
+        avgDurationDays: 14 // Average deal lifecycle
     },
-
-    // Originator definitions with tier limits
-    originators: {
-        'OA-001': { name: 'JPMorgan Chase', tier: 'mega', maxAmount: 1000, minSpread: 300 },
-        'OA-002': { name: 'Bank of America', tier: 'mega', maxAmount: 800, minSpread: 320 },
-        'OA-003': { name: 'Wells Fargo', tier: 'major', maxAmount: 600, minSpread: 340 },
-        'OA-004': { name: 'Citi', tier: 'major', maxAmount: 600, minSpread: 330 },
-        'OA-005': { name: 'Goldman Sachs', tier: 'mega', maxAmount: 700, minSpread: 350 },
-        'OA-006': { name: 'Morgan Stanley', tier: 'major', maxAmount: 500, minSpread: 360 },
-        'OA-007': { name: 'Credit Suisse', tier: 'regional', maxAmount: 300, minSpread: 380 },
-        'OA-008': { name: 'Deutsche Bank', tier: 'regional', maxAmount: 300, minSpread: 370 }
-    },
-
-    // Track last generation date
-    lastGenerationMonth: null,
-    dealsThisMonth: 0,
 
     /**
-     * Initialize the generator
+     * Initialize Generator
      */
-    init() {
-        // Listen for simulation events
+    async init() {
+        console.log('🏭 Initializing Enhanced Auto-Generator...');
+
+        // 1. Load Originators
+        await this.loadOriginators();
+
+        // 2. Setup Simulation Listeners
         if (window.SimulationEngine) {
-            SimulationEngine.on('monthChange', (data) => this.onMonthChange(data));
             SimulationEngine.on('dayChange', (data) => this.onDayChange(data));
-            SimulationEngine.on('simulationReset', () => this.reset());
         }
 
-        console.log('🏭 Auto-Generator initialized');
+        console.log(`✅ Auto-Generator Ready (Originators: ${this.originators.length})`);
     },
 
     /**
-     * Handle month change - reset deal counter
+     * Load Originators from API
      */
-    onMonthChange(data) {
-        const month = data.date.getMonth();
-        const year = data.date.getFullYear();
-        const monthKey = `${year}-${month}`;
-
-        if (this.lastGenerationMonth !== monthKey) {
-            this.lastGenerationMonth = monthKey;
-            this.dealsThisMonth = 0;
-
-            // Generate deals for this month
-            const numDeals = this.randomInt(this.config.minDealsPerMonth, this.config.maxDealsPerMonth);
-            console.log(`📅 New month ${monthKey}: Planning ${numDeals} syndications`);
+    async loadOriginators() {
+        try {
+            const agents = await API.getAgents();
+            if (agents && agents.originator) {
+                this.originators = agents.originator;
+            } else {
+                this.loadDefaultOriginators();
+            }
+        } catch (e) {
+            console.warn('⚠️ API Originators not found, using defaults');
+            this.loadDefaultOriginators();
         }
     },
 
+    loadDefaultOriginators() {
+        this.originators = [
+            { id: 'OA-001', name: 'JPMorgan Chase', tier: 'mega' },
+            { id: 'OA-002', name: 'Goldman Sachs', tier: 'mega' },
+            { id: 'OA-003', name: 'Bank of America', tier: 'mega' },
+            { id: 'OA-004', name: 'Morgan Stanley', tier: 'major' },
+            { id: 'OA-005', name: 'Citi', tier: 'major' }
+        ];
+    },
+
     /**
-     * Handle day change - potentially generate a deal
+     * Daily Tick Handler
      */
     onDayChange(data) {
-        // Check for phase transitions on existing deals
-        this.checkPhaseTransitions(data.date);
+        // 1. Process existing deal phases
+        this.processDealLifecycles(data.date);
 
-        // Random chance to generate a deal each day
-        const maxDeals = this.config.maxDealsPerMonth;
-        if (this.dealsThisMonth >= maxDeals) return;
+        // 2. Check for new deal generation
+        this.checkForNewDeals(data.date);
+    },
 
-        // 10% chance per day, adjusted by remaining deals needed
-        const remainingDeals = maxDeals - this.dealsThisMonth;
-        const dayOfMonth = data.date.getDate();
-        const daysRemaining = 30 - dayOfMonth;
+    /**
+     * Generate new deal with probabilities
+     */
+    checkForNewDeals(date) {
+        // Market Conditions Handling
+        const condition = AppState.get('marketConditions') || 'neutral';
+        let prob = 0.15; // Base probability 15% per day ~ 4.5 deals/month
 
-        // Increase probability as month progresses
-        const probability = Math.min(0.5, (remainingDeals / Math.max(daysRemaining, 1)) * 0.3);
+        if (condition === 'bull') prob = 0.25;
+        if (condition === 'bear') prob = 0.05;
 
-        if (Math.random() < probability) {
-            this.generateSyndication(data.date);
+        if (Math.random() < prob) {
+            this.generateSyndication(date);
         }
     },
 
     /**
-     * Generate a new syndication with realistic bookbuilding phases
+     * Generate comprehensive syndication record
      */
     generateSyndication(date) {
-        // Check market conditions for deal frequency
-        const marketMult = window.MarketConditions?.conditionEffects[MarketConditions.currentCondition]?.newDealFrequency || 1;
-        if (Math.random() > marketMult) {
-            // Market conditions prevent this deal
-            return null;
-        }
+        const originator = this.getRandomItem(this.originators);
+        const sector = this.getRandomItem(this.config.sectors);
+        const rating = this.checkRating(this.weightedRandom(this.config.ratings, this.config.ratingWeights));
+        const amount = this.roundAmount(this.randomInt(this.config.minAmount, this.config.maxAmount));
 
-        // Pick random originator
-        const originatorIds = Object.keys(this.originators);
-        const originatorId = originatorIds[this.randomInt(0, originatorIds.length - 1)];
-        const originator = this.originators[originatorId];
+        // Pricing Logic
+        const isIG = ['AAA', 'AA', 'A', 'BBB'].some(r => rating.includes(r));
+        const baseSpread = isIG ? 150 : 350;
+        const spread = baseSpread + this.randomInt(0, 200);
 
-        // Generate deal parameters
-        const rating = this.weightedRandom(this.config.ratings, this.config.ratingWeights);
-        const isInvestmentGrade = ['AAA', 'AA+', 'AA', 'A', 'BBB+', 'BBB'].includes(rating);
-
-        // Base spread adjusted for market conditions
-        const marketSpreadAdj = window.MarketConditions?.getSpreadAdjustment() || 0;
-        const spreadFloor = (isInvestmentGrade ? 300 : 400) + marketSpreadAdj;
-        const spreadCeiling = (isInvestmentGrade ? 450 : 600) + marketSpreadAdj;
-
-        // Price talk range (before final pricing)
-        const priceTalkMin = this.randomInt(spreadFloor - 25, spreadFloor);
-        const priceTalkMax = priceTalkMin + this.randomInt(30, 60);
-
-        // Commitment fee rate based on deal size and rating
-        const baseCommitmentFee = isInvestmentGrade ? 0.0075 : 0.0125; // 0.75% or 1.25%
-        const commitmentFeeRate = baseCommitmentFee + (Math.random() * 0.005); // Add 0-0.5% variance
-
-        const amount = Math.round(this.randomInt(this.config.minAmount, Math.min(this.config.maxAmount, originator.maxAmount)) / 10) * 10;
+        // ESG Logic (Random skew towards higher scores)
+        const esgScore = Math.floor(Math.random() * 30) + 65; // 65-95 range
 
         const syndication = {
-            id: `SYND-${date.getFullYear()}-${String(this.activeSyndications.length + 1).padStart(3, '0')}`,
-            borrower: this.config.borrowerNames[this.randomInt(0, this.config.borrowerNames.length - 1)] + ` ${this.randomInt(100, 999)}`,
-            industry: this.config.industries[this.randomInt(0, this.config.industries.length - 1)],
+            id: `SYND-${date.getFullYear()}-${Math.floor(Math.random() * 10000)}`,
+            borrower: this.generateBorrowerName(sector),
+            industry: sector,
             amount: amount,
             rating: rating,
+            originatorId: originator.id,
+            originatorName: originator.name || originator.entity, // Handle different API formats
 
-            // Bookbuilding fields
-            phase: 'bookbuilding', // bookbuilding → pricing → allocation → closing
-            priceTalk: { min: priceTalkMin, max: priceTalkMax },
-            indicationsOfInterest: [],
-            finalSpread: null, // Set after bookbuilding
+            // Deal Structure
+            seniority: this.getRandomItem(this.config.seniority),
+            geography: this.getRandomItem(this.config.geographies),
+            tenorYears: this.randomInt(3, 7),
+            amortization: this.randomInt(0, 1) ? '1% per annum' : 'Bullet',
 
-            // Commitment fee
-            commitmentFeeRate: commitmentFeeRate,
-            totalCommitmentFees: 0,
+            // Pricing
+            spread: spread,
+            priceTalk: {
+                min: spread - 25,
+                max: spread + 25
+            },
 
-            // Legacy spread field (set to priceTalk midpoint initially)
-            spread: Math.round((priceTalkMin + priceTalkMax) / 2),
+            // ESG
+            esg_score: esgScore,
 
-            tenor: ['3Y', '5Y', '7Y'][this.randomInt(0, 2)],
-            loanType: ['Term Loan B', 'Revolver', 'Bridge Loan'][this.randomInt(0, 2)],
-            syndicationTarget: this.randomInt(70, 95),
-            originatorId: originatorId,
-            originatorName: originator.name,
+            // State
             status: 'open',
+            phase: 'bookbuilding',
             subscription: 0,
-
-            // Negotiation tracking
             round: 1,
             maxRounds: 3,
-            negotiationHistory: [],
 
-            // Market context
-            marketCondition: window.MarketConditions?.currentCondition || 'neutral',
-            marketVolatility: window.MarketConditions?.volatilityIndex || 50,
-
+            // Timestamps
             announcedAt: date.toISOString(),
-            bookbuildDeadline: new Date(date.getTime() + 5 * 24 * 3600000).toISOString(), // 5 days for bookbuilding
-            pricingDate: new Date(date.getTime() + 6 * 24 * 3600000).toISOString(), // Day 6
-            closingDate: new Date(date.getTime() + 10 * 24 * 3600000).toISOString(), // Day 10
+            bookbuildDeadline: new Date(date.getTime() + 3 * 24 * 3600000).toISOString(), // +3 days
+            closingDate: new Date(date.getTime() + 10 * 24 * 3600000).toISOString(), // +10 days
+
             bids: []
         };
 
         this.activeSyndications.push(syndication);
 
-        // Sync with global SyndiData for UI components
-        if (typeof SyndiData !== 'undefined' && Array.isArray(SyndiData.syndications)) {
-            SyndiData.syndications.push(syndication);
+        // Update Local Store
+        if (window.Data && window.Data.syndications) {
+            window.Data.syndications.push(syndication);
         }
 
-        this.dealsThisMonth++;
+        // Sync to Backend
+        this.syncToBackend(syndication);
 
-        // Record transaction
-        if (window.SimulationEngine) {
-            SimulationEngine.recordTransaction({
-                type: 'syndication_announcement',
-                from: originatorId,
-                to: null,
-                amount: syndication.amount * 1000000,
-                dealId: syndication.id,
-                description: `${originator.name} announced ${syndication.borrower} $${syndication.amount}M (Price talk: ${priceTalkMin}-${priceTalkMax}bps)`
-            });
-
-            // Update originator stats
-            SimulationEngine.updateWealth(originatorId, {
-                activeDeals: 1
-            });
-        }
-
-        // Emit event for other systems
+        // Notify UI
+        console.log(`🆕 Generated Deal: ${syndication.borrower} ($${amount}M, ${rating}) from ${syndication.originatorName}`);
         window.dispatchEvent(new CustomEvent('newSyndication', { detail: syndication }));
-
-        console.log(`🆕 New syndication: ${syndication.id} - ${syndication.borrower} $${syndication.amount}M | Price talk: ${priceTalkMin}-${priceTalkMax}bps | Fee: ${(commitmentFeeRate * 100).toFixed(2)}%`);
 
         return syndication;
     },
 
     /**
-     * Process bookbuilding phase completion
+     * Process Lifecycle transitions
      */
-    processBookbuilding(syndication) {
-        if (syndication.phase !== 'bookbuilding') return;
+    processDealLifecycles(currentDate) {
+        const now = currentDate.getTime();
 
-        const iois = syndication.indicationsOfInterest;
-        const totalIndicated = iois.reduce((sum, ioi) => sum + ioi.amount, 0);
-        const oversubscriptionRatio = totalIndicated / syndication.amount;
+        this.activeSyndications.forEach(deal => {
+            if (deal.status === 'completed' || deal.status === 'closed') return;
 
-        // Determine final spread based on demand
-        let finalSpread;
-        if (oversubscriptionRatio >= 2.0) {
-            // Very hot deal - price tight
-            finalSpread = syndication.priceTalk.min - 10;
-        } else if (oversubscriptionRatio >= 1.5) {
-            // Good demand - price at tight end
-            finalSpread = syndication.priceTalk.min;
-        } else if (oversubscriptionRatio >= 1.0) {
-            // Adequate demand - price at midpoint
-            finalSpread = Math.round((syndication.priceTalk.min + syndication.priceTalk.max) / 2);
-        } else {
-            // Weak demand - price at wide end or widen further
-            finalSpread = syndication.priceTalk.max + (1 - oversubscriptionRatio) * 25;
-        }
+            const closeTime = new Date(deal.closingDate).getTime();
 
-        syndication.finalSpread = finalSpread;
-        syndication.spread = finalSpread;
-        syndication.phase = 'pricing';
-        syndication.status = 'negotiating';
-
-        // Emit update
-        window.dispatchEvent(new CustomEvent('syndicationUpdate', { detail: syndication }));
-
-        console.log(`📊 ${syndication.id} bookbuilding complete: ${(oversubscriptionRatio * 100).toFixed(0)}% indicated → Final spread: ${finalSpread}bps`);
-
-        return syndication;
-    },
-
-    /**
-     * Calculate commitment fees for allocation
-     */
-    calculateCommitmentFee(syndication, allocationAmount) {
-        const fee = allocationAmount * syndication.commitmentFeeRate;
-        syndication.totalCommitmentFees += fee;
-        return fee;
-    },
-
-    /**
-     * Add a manually created syndication
-     */
-    addSyndication(syndication) {
-        this.activeSyndications.push(syndication);
-
-        // Emit event
-        window.dispatchEvent(new CustomEvent('newSyndication', { detail: syndication }));
-    },
-
-    /**
-     * Get open syndications
-     */
-    getOpenSyndications() {
-        return this.activeSyndications.filter(s => s.status === 'open');
-    },
-
-    /**
-     * Get syndication by ID
-     */
-    getSyndication(id) {
-        return this.activeSyndications.find(s => s.id === id);
-    },
-
-    /**
-     * Update syndication status
-     */
-    updateSyndication(id, updates) {
-        const synd = this.getSyndication(id);
-        if (synd) {
-            Object.assign(synd, updates);
-
-            // If closed, move to completed
-            if (updates.status === 'completed' || updates.status === 'closed') {
-                window.dispatchEvent(new CustomEvent('syndicationClosed', { detail: synd }));
-            }
-        }
-        return synd;
-    },
-
-    /**
-     * Add bid to syndication
-     */
-    addBid(syndicationId, bid) {
-        const synd = this.getSyndication(syndicationId);
-        if (synd) {
-            synd.bids.push(bid);
-            synd.subscription = Math.min(100, synd.subscription + (bid.amount / synd.amount) * 100);
-
-            // Check if fully subscribed
-            if (synd.subscription >= synd.syndicationTarget) {
-                synd.status = 'negotiating';
-            }
-        }
-        return synd;
-    },
-
-    /**
-     * Check for phase transitions based on date
-     */
-    checkPhaseTransitions(currentDate) {
-        this.activeSyndications.forEach(synd => {
-            if (synd.status === 'completed' || synd.status === 'closed') return;
-
-            const now = currentDate.getTime();
-            const bookbuildDeadline = new Date(synd.bookbuildDeadline).getTime();
-            const pricingDate = new Date(synd.pricingDate).getTime();
-            const closingDate = new Date(synd.closingDate).getTime();
-
-            // Transition: Bookbuilding -> Pricing (Negotiating)
-            if (synd.phase === 'bookbuilding' && now >= bookbuildDeadline) {
-                this.processBookbuilding(synd);
-            }
-            // Transition: Pricing -> Allocation (Closing)
-            else if (synd.phase === 'pricing' && now >= pricingDate) {
-                synd.phase = 'allocation';
-                synd.status = 'closing';
-                window.dispatchEvent(new CustomEvent('syndicationUpdate', { detail: synd }));
-            }
-            // Transition: Allocation -> Closed (Completed)
-            else if (synd.phase === 'allocation' && now >= closingDate) {
-                synd.phase = 'closed';
-                synd.status = 'completed';
-
-                // Finalize deal wrapper
-                if (window.SimulationEngine) {
-                    SimulationEngine.updateWealth(synd.originatorId, {
-                        totalFeesEarned: synd.totalCommitmentFees,
-                        completedDeals: 1,
-                        activeDeals: -1
-                    });
-                }
-
-                window.dispatchEvent(new CustomEvent('syndicationClosed', { detail: synd }));
-                window.dispatchEvent(new CustomEvent('syndicationUpdate', { detail: synd }));
+            // Check for closing
+            if (now >= closeTime && deal.status !== 'closed') {
+                this.closeDeal(deal);
             }
         });
     },
 
     /**
-     * Reset generator
+     * Close a deal
      */
-    reset() {
-        this.activeSyndications = [];
-        this.lastGenerationMonth = null;
-        this.dealsThisMonth = 0;
-        console.log('🔄 Auto-Generator reset');
+    closeDeal(deal) {
+        deal.status = 'closed';
+        deal.phase = 'funded';
+
+        console.log(`🏁 Deal Closed: ${deal.borrower}`);
+        window.dispatchEvent(new CustomEvent('syndicationClosed', { detail: deal }));
+
+        // Mock API update
+        // API.updateSyndication(deal.id, { status: 'closed' });
     },
 
     /**
-     * Random integer between min and max (inclusive)
+     * Sync Generated Deal to Backend
      */
+    async syncToBackend(syndication) {
+        // In simulation mode, we might just log this
+        // But if connected to real backend, we should POST
+        if (AppState.get('connected')) {
+            try {
+                // Map to Backend Schema if needed
+                // For now, assume backend accepts flexible schema or ignored keys
+                await API.post('/syndications', syndication);
+            } catch (e) {
+                console.warn('Failed to sync generated deal to backend:', e);
+            }
+        }
+    },
+
+    /**
+     * Utilities
+     */
+    getRandomItem(arr) {
+        return arr[Math.floor(Math.random() * arr.length)];
+    },
+
     randomInt(min, max) {
         return Math.floor(Math.random() * (max - min + 1)) + min;
     },
 
-    /**
-     * Weighted random selection
-     */
-    weightedRandom(items, weights) {
-        const totalWeight = weights.reduce((a, b) => a + b, 0);
-        let random = Math.random() * totalWeight;
+    roundAmount(val) {
+        return Math.round(val / 10) * 10;
+    },
 
+    weightedRandom(items, weights) {
+        const total = weights.reduce((a, b) => a + b, 0);
+        let r = Math.random() * total;
         for (let i = 0; i < items.length; i++) {
-            random -= weights[i];
-            if (random <= 0) return items[i];
+            r -= weights[i];
+            if (r <= 0) return items[i];
         }
-        return items[items.length - 1];
+        return items[0];
+    },
+
+    checkRating(r) { return r || 'BB'; },
+
+    generateBorrowerName(sector) {
+        const prefixes = ['Global', 'Advanced', 'Strategic', 'United', 'First', 'Prime', 'Apex', 'Summit'];
+        const suffixes = ['Holdings', 'Group', 'Partners', 'Corp', 'Inc', 'Solutions', 'Systems', 'Ventures'];
+        return `${this.getRandomItem(prefixes)} ${sector.split(' ')[0]} ${this.getRandomItem(suffixes)}`;
     }
 };
 
-// Initialize on page load
+window.AutoGenerator = AutoGenerator;
+
+// Init on load
 document.addEventListener('DOMContentLoaded', () => {
     AutoGenerator.init();
 });
-
-// Export
-window.AutoGenerator = AutoGenerator;

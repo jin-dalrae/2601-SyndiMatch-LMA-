@@ -11,6 +11,13 @@ const AgentsComponent = {
     setFilter(syndId) {
         this.filterId = syndId;
         this.render();
+
+        // Notify other components (e.g., Payments) about the selection
+        if (syndId !== 'all') {
+            window.dispatchEvent(new CustomEvent('syndicationSelected', {
+                detail: { syndicationId: syndId }
+            }));
+        }
     },
 
     getFilteredData() {

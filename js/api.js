@@ -1,25 +1,32 @@
 // ========================================
-// API Client - Fetch data from MongoDB backend
+// API Client - Backwards Compatible Wrapper
+// Uses new APIClient with legacy method signatures
 // ========================================
 
 const API = {
-    baseUrl: 'http://localhost:3001/api',
-    agentUrl: 'http://localhost:8000/api',
-    useMockData: false, // Connected to MongoDB backend
+    // Legacy properties
+    get baseUrl() { return APIClient.baseUrl; },
+    set baseUrl(val) { APIClient.baseUrl = val; },
 
+    get agentUrl() { return APIClient.agentUrl; },
+    set agentUrl(val) { APIClient.agentUrl = val; },
+
+    get useMockData() { return APIClient.useMockData; },
+    set useMockData(val) { APIClient.useMockData = val; },
+
+    // Core methods - delegate to new client
     async get(endpoint) {
-        if (this.useMockData) return null;
-
-        try {
-            const response = await fetch(`${this.baseUrl}${endpoint}`);
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            return await response.json();
-        } catch (error) {
-            console.warn(`API error (${endpoint}):`, error.message);
-            return null;
-        }
+        const result = await APIClient.get(endpoint);
+        // Return null on error for backwards compatibility
+        return result?.error ? null : result;
     },
 
+    async post(endpoint, data) {
+        const result = await APIClient.post(endpoint, data);
+        return result?.error ? null : result;
+    },
+
+    // Legacy endpoints
     async getSyndications() {
         const data = await this.get('/syndications');
         return data || SyndiData.syndications;
@@ -55,77 +62,61 @@ const API = {
         return data || SyndiData.allocations[syndId];
     },
 
+    async getPortfolio(participantId) {
+        const data = await this.get(`/participants/${participantId}/portfolio`);
+        return data; // No fallback - let role-router handle mock data
+    },
+
     // x402/CDP Data (from Python Agent Server)
     async getX402Balance(address) {
         try {
-            const response = await fetch(`${this.agentUrl}/x402/balance/${address}`);
+            const url = `${this.agentUrl}/x402/balance/${address}`;
+            const response = await fetch(url);
             if (response.ok) return await response.json();
-        } catch (e) { console.warn('x402 API unavailable'); }
-        // Fallback or return logic could go here, for now let caller handle null
+        } catch (e) {
+            console.warn('x402 API unavailable');
+        }
         return null;
     },
 
     async getEscrowDetails(syndId) {
         try {
-            const response = await fetch(`${this.agentUrl}/x402/escrow/${syndId}`);
+            const url = `${this.agentUrl}/x402/escrow/${syndId}`;
+            const response = await fetch(url);
             if (response.ok) return await response.json();
-        } catch (e) { console.warn('x402 API unavailable'); }
+        } catch (e) {
+            console.warn('x402 API unavailable');
+        }
         return null;
     },
 
     // Trigger AI Agent Bid (POST)
     async agentBid(agentId, syndication) {
         if (this.useMockData) return null;
-        try {
-            const response = await fetch(`${this.agentUrl}/agents/bid`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    agent_id: agentId,
-                    syndication: syndication,
-                    currentTime: window.SimulationEngine ? window.SimulationEngine.getCurrentDate().toISOString() : null
-                })
-            });
-            if (response.ok) return await response.json();
-            throw new Error(`Agent bid failed: ${response.status}`);
-        } catch (e) {
-            console.warn(`Agent bid error for ${agentId}:`, e.message);
-            return null;
-        }
+
+        const result = await this.post('/agents/bid', {
+            agent_id: agentId,
+            syndication: syndication,
+            currentTime: window.SimulationEngine ? window.SimulationEngine.getCurrentDate().toISOString() : null
+        });
+
+        return result;
     },
 
     // Notify Agent of Allocation (POST)
     async agentAllocate(agentId, syndId, allocation) {
         if (this.useMockData) return null;
-        try {
-            await fetch(`${this.agentUrl}/agents/allocate`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    agent_id: agentId,
-                    syndication_id: syndId,
-                    allocation: allocation
-                })
-            });
-        } catch (e) {
-            console.warn(`Agent allocation error for ${agentId}:`, e.message);
-        }
+
+        await this.post('/agents/allocate', {
+            agent_id: agentId,
+            syndication_id: syndId,
+            allocation: allocation
+        });
     },
 
     // Check if API is available
     async checkConnection() {
-        try {
-            const response = await fetch(`${this.baseUrl}/health`);
-            if (response.ok) {
-                this.useMockData = false;
-                console.log('✅ Connected to API backend');
-                return true;
-            }
-        } catch (e) {
-            console.log('📋 Using mock data (API not available)');
-        }
-        this.useMockData = true;
-        return false;
+        return await APIClient.checkConnection();
     }
 };
 

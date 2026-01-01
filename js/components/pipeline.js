@@ -29,8 +29,26 @@ const PipelineComponent = {
         const container = document.getElementById('pipeline-columns');
         if (!container) return;
 
+        // Skip re-render if syndication detail modal is open to prevent it from closing
+        const modal = document.getElementById('modal-overlay');
+        if (modal && modal.classList.contains('open')) {
+            return; // Don't re-render pipeline while user is viewing details
+        }
+
+        // Get current simulation date
+        const now = window.SimulationEngine ? SimulationEngine.state.currentDate : new Date();
+        const oneMonthAgo = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
+
+        // Filter syndications - hide completed ones older than 1 month
+        const visibleSyndications = SyndiData.syndications.filter(s => {
+            if (s.status !== 'completed') return true;
+            // Check completion date
+            const completedDate = new Date(s.updated_at || s.created_at);
+            return completedDate > oneMonthAgo;
+        });
+
         container.innerHTML = SyndiData.statuses.map(status => {
-            const items = SyndiData.syndications.filter(s => s.status === status);
+            const items = visibleSyndications.filter(s => s.status === status);
             const config = this.statusConfig[status];
 
             return `
