@@ -30,13 +30,37 @@ const RoleRouter = {
     currentAgentId: null,
     currentRoute: null,
 
+    // Dynamic agent maps
+    agentNames: {},
+
     /**
      * Initialize the router
      */
-    init() {
+    async init() {
+        await this.loadAgents(); // Load agents first
         this.bindRoleSelector();
         this.createRoleViews();
         this.switchRole('platform', null);
+    },
+
+    /**
+     * Load agents from API
+     */
+    async loadAgents() {
+        try {
+            // If running without API, fallback to basic mock
+            if (typeof API === 'undefined' || !API.getAgents) return;
+
+            const res = await API.getAgents();
+            if (res) {
+                // Flatten and map names
+                [...res.originator, ...res.participant].forEach(agent => {
+                    this.agentNames[agent._id || agent.id] = agent.name;
+                });
+            }
+        } catch (e) {
+            console.warn('Failed to load agents for router:', e);
+        }
     },
 
     /**
@@ -45,6 +69,11 @@ const RoleRouter = {
     bindRoleSelector() {
         const dropdown = document.getElementById('role-dropdown');
         if (!dropdown) return;
+
+        // Repopulate dropdown if empty or basic
+        if (dropdown.options.length <= 2) {
+            this.populateRoleDropdown(dropdown);
+        }
 
         dropdown.addEventListener('change', (e) => {
             const value = e.target.value;
@@ -55,6 +84,46 @@ const RoleRouter = {
                 this.switchRole(type, agentId);
             }
         });
+    },
+
+    async populateRoleDropdown(dropdown) {
+        // Clear existing except platform
+        dropdown.innerHTML = '<option value="platform">Platform Admin (View All)</option>';
+
+        const optGroupOrg = document.createElement('optgroup');
+        optGroupOrg.label = 'Originators';
+
+        const optGroupPart = document.createElement('optgroup');
+        optGroupPart.label = 'Participants';
+
+        try {
+            const agents = await API.getAgents();
+
+            if (agents?.originator) {
+                agents.originator.forEach(a => {
+                    const opt = document.createElement('option');
+                    opt.value = `originator:${a._id || a.id}`;
+                    opt.textContent = `${a.name} (${a._id || a.id})`;
+                    optGroupOrg.appendChild(opt);
+                });
+            }
+
+            if (agents?.participant) {
+                agents.participant.forEach(a => {
+                    const opt = document.createElement('option');
+                    opt.value = `participant:${a._id || a.id}`;
+                    opt.textContent = `${a.name} (${a._id || a.id})`;
+                    optGroupPart.appendChild(opt);
+                });
+            }
+        } catch (e) {
+            console.error('Failed to populate role dropdown:', e);
+            // Fallback handled by static HTML
+            return;
+        }
+
+        dropdown.appendChild(optGroupOrg);
+        dropdown.appendChild(optGroupPart);
     },
 
     /**
@@ -80,7 +149,7 @@ const RoleRouter = {
             detail: { role, agentId }
         }));
 
-        console.log(`🔀 Switched to ${role}${agentId ? ` (${agentId})` : ''}`);
+        console.log(`🔀 Switched to ${role}${agentId ? ` (${this.getAgentName(agentId)})` : ''}`);
     },
 
     /**
@@ -404,25 +473,50 @@ const RoleRouter = {
                 <h2 class="page-title">Available Syndications</h2>
                 <div class="deals-grid">
                     ${allDeals.length === 0 ? '<p class="no-deals">No open syndications. Start the simulation to generate deals.</p>' : ''}
-                    ${allDeals.map(deal => `
-                        <div class="deal-card" data-id="${deal.id}">
+                    ${allDeals.map(deal => {
+            // Use ParticipantView for analytics if available
+            const analyticsHtml = window.ParticipantView ? window.ParticipantView.renderDealAnalysis(deal) : '';
+
+            return `
+                        <div class="deal-card expanded-card" data-id="${deal.id}">
                             <div class="deal-header">
                                 <span class="deal-id">${deal.id}</span>
                                 <span class="deal-status status-badge open">OPEN</span>
                             </div>
-                            <div class="deal-borrower">${deal.borrower}</div>
-                            <div class="deal-details">
-                                <div><strong>Amount:</strong> $${deal.amount}M</div>
-                                <div><strong>Rating:</strong> ${deal.rating}</div>
-                                <div><strong>Spread:</strong> ${deal.spread} bps</div>
-                                <div><strong>Industry:</strong> ${deal.industry}</div>
+                            <div class="deal-main-info">
+                                <div class="deal-borrower-large">${deal.borrower}</div>
+                                <div class="deal-tags">
+                                    <span class="tag tag-industry">${deal.industry}</span>
+                                    <span class="tag tag-rating">${deal.rating}</span>
+                                    <span class="tag tag-tenor">${deal.tenor || '5Y'}</span>
+                                </div>
                             </div>
+                            
+                            <!-- Participant Analytics Section -->
+                            ${analyticsHtml}
+
+                            <div class="deal-details-row">
+                                <div class="detail-item">
+                                    <div class="detail-label">Amount</div>
+                                    <div class="detail-value">$${deal.amount}M</div>
+                                </div>
+                                <div class="detail-item">
+                                    <div class="detail-label">Spread</div>
+                                    <div class="detail-value">${deal.spread} bps</div>
+                                </div>
+                                <div class="detail-item">
+                                    <div class="detail-label">Fees</div>
+                                    <div class="detail-value">1.25%</div> 
+                                </div>
+                            </div>
+
                             <div class="deal-actions">
                                 <span class="auto-bid-status">🤖 Auto-bid enabled</span>
                                 <button class="btn-cancel-bid" data-id="${deal.id}">Cancel Bid</button>
+                                <button class="btn-primary" onclick="RoleRouter.placeManualBid('${deal.id}')">Place Bid</button>
                             </div>
                         </div>
-                    `).join('')}
+                    `}).join('')}
                 </div>
             </div>
         `;
@@ -431,6 +525,13 @@ const RoleRouter = {
         view.querySelectorAll('.btn-cancel-bid').forEach(btn => {
             btn.addEventListener('click', () => this.cancelBid(btn.dataset.id));
         });
+    },
+
+    /**
+     * Place manual bid (placeholder)
+     */
+    placeManualBid(dealId) {
+        alert(`Bid placement for ${dealId} coming in Phase 2.3!`);
     },
 
     /**
@@ -525,171 +626,135 @@ const RoleRouter = {
     },
 
     getAgentName(id) {
-        // Simple helper or use existing map
-        const map = {
-            'PA-001': 'Apollo Global',
-            'PA-002': 'CalPERS',
-            // ... (partial implementation)
-        };
-        return map[id] || id;
+        return this.agentNames[id] || id;
     },
 
     /**
      * Render Portfolio (Participant)
      */
-    renderPortfolio(view) {
-        const stats = this.calculatePortfolioStats(this.currentAgentId);
+    async renderPortfolio(view) {
+        try {
+            view.innerHTML = '<div class="loading-state">Loading portfolio data...</div>';
 
-        view.innerHTML = `
-            <div class="portfolio-page">
-                <div class="page-header-flex">
-                    <h2 class="page-title">Portfolio Overview</h2>
-                    <div class="last-updated">Last updated: ${new Date().toLocaleTimeString()}</div>
-                </div>
+            // Fetch real portfolio from API
+            const stats = await API.getPortfolio(this.currentAgentId);
 
-                <!-- Summary Cards -->
-                <div class="wealth-cards">
-                    <div class="wealth-card">
-                        <div class="wealth-label">Total Exposure</div>
-                        <div class="wealth-value">$${stats.totalExposure.toFixed(1)}M</div>
-                        <div class="wealth-sub">across ${stats.dealCount} active deals</div>
-                    </div>
-                    <div class="wealth-card">
-                        <div class="wealth-label">Weighted Avg Yield</div>
-                        <div class="wealth-value">${stats.weightedYield.toFixed(2)}%</div>
-                        <div class="wealth-sub">Spread: ${Math.round(stats.weightedSpread)} bps</div>
-                    </div>
-                    <div class="wealth-card highlight">
-                        <div class="wealth-label">Available Capacity</div>
-                        <div class="wealth-value">$${stats.availableCapacity.toFixed(1)}M</div>
-                        <div class="wealth-sub">Utilization: ${stats.utilization}%</div>
-                    </div>
-                    <div class="wealth-card success">
-                        <div class="wealth-label">Net ROI (YTD)</div>
-                        <div class="wealth-value">+${stats.roi.toFixed(1)}%</div>
-                        <div class="wealth-sub">Interest: $${(stats.interestYTD / 1000000).toFixed(1)}M</div>
-                    </div>
-                </div>
+            if (!stats) throw new Error('No portfolio data returned');
 
-                <!-- Concentration Analysis -->
-                <div class="charts-section" style="margin-top: 2rem;">
-                    <h3 class="section-title">Risk Concentration</h3>
-                    <div class="analytics-grid">
-                        
-                        <!-- Sector Exposure -->
-                        <div class="metric-card">
-                            <h4 class="chart-title">Sector Exposure</h4>
-                            <div class="bar-chart-vertical">
-                                ${stats.sectors.map(s => `
-                                    <div class="bar-group">
-                                        <div class="bar-fill" style="height: ${s.pct}%; background: var(--primary);"></div>
-                                        <span class="bar-label">${s.name}</span>
-                                        <span class="bar-value">${s.pct}%</span>
-                                    </div>
-                                `).join('')}
-                            </div>
+            view.innerHTML = `
+                <div class="portfolio-page">
+                    <div class="page-header-flex">
+                        <h2 class="page-title">Portfolio Overview</h2>
+                        <div class="last-updated">Last updated: ${new Date().toLocaleTimeString()}</div>
+                    </div>
+
+                    <!-- Summary Cards -->
+                    <div class="wealth-cards">
+                        <div class="wealth-card">
+                            <div class="wealth-label">Total Exposure</div>
+                            <div class="wealth-value">$${(stats.total_exposure / 1000000).toFixed(1)}M</div>
+                            <div class="wealth-sub">across ${stats.deal_count} active deals</div>
                         </div>
-
-                        <!-- Credit Rating -->
-                        <div class="metric-card">
-                            <h4 class="chart-title">Credit Quality</h4>
-                            <div class="bar-chart-vertical">
-                                ${stats.ratings.map(r => `
-                                    <div class="bar-group">
-                                        <div class="bar-fill" style="height: ${r.pct}%; background: ${this.getRatingColor(r.name)};"></div>
-                                        <span class="bar-label">${r.name}</span>
-                                        <span class="bar-value">${r.pct}%</span>
-                                    </div>
-                                `).join('')}
-                            </div>
+                        <div class="wealth-card">
+                            <div class="wealth-label">Weighted Avg Yield</div>
+                            <div class="wealth-value">${stats.weighted_yield.toFixed(2)}%</div>
+                            <div class="wealth-sub">Spread: ${Math.round(stats.weighted_spread)} bps</div>
+                        </div>
+                        <div class="wealth-card highlight">
+                            <div class="wealth-label">Available Capacity</div>
+                            <div class="wealth-value">$${(stats.available_capacity / 1000000).toFixed(1)}M</div>
+                            <div class="wealth-sub">Utilization: ${stats.utilization}%</div>
+                        </div>
+                        <div class="wealth-card success">
+                            <div class="wealth-label">Net ROI (YTD)</div>
+                            <div class="wealth-value">+${stats.roi_ytd.toFixed(1)}%</div>
+                            <div class="wealth-sub">Interest: $${(stats.interest_ytd / 1000000).toFixed(1)}M</div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Active Holdings -->
-                <h3 class="section-title" style="margin-top: 2rem;">Active Holdings</h3>
-                <div class="table-container">
-                    <table class="portfolio-table">
-                        <thead>
-                            <tr>
-                                <th>Borrower</th>
-                                <th>Sector</th>
-                                <th>Rating</th>
-                                <th>Allocated</th>
-                                <th>Spread</th>
-                                <th>Tenor</th>
-                                <th>Performance</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${stats.holdings.length === 0 ? '<tr><td colspan="7" class="text-muted">No active holdings.</td></tr>' : ''}
-                            ${stats.holdings.map(h => `
+                    <!-- Concentration Analysis -->
+                    <div class="charts-section" style="margin-top: 2rem;">
+                        <h3 class="section-title">Risk Concentration</h3>
+                        <div class="analytics-grid">
+                            
+                            <!-- Sector Exposure -->
+                            <div class="metric-card">
+                                <h4 class="chart-title">Sector Exposure</h4>
+                                <div class="bar-chart-vertical">
+                                    ${stats.sectors.map(s => `
+                                        <div class="bar-group">
+                                            <div class="bar-fill" style="height: ${s.pct}%; background: var(--primary);"></div>
+                                            <span class="bar-label">${s.name}</span>
+                                            <span class="bar-value">${s.pct}%</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+
+                            <!-- Credit Rating -->
+                            <div class="metric-card">
+                                <h4 class="chart-title">Credit Quality</h4>
+                                <div class="bar-chart-vertical">
+                                    ${stats.ratings.map(r => `
+                                        <div class="bar-group">
+                                            <div class="bar-fill" style="height: ${r.pct}%; background: ${this.getRatingColor(r.name)};"></div>
+                                            <span class="bar-label">${r.name}</span>
+                                            <span class="bar-value">${r.pct}%</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Active Holdings -->
+                    <h3 class="section-title" style="margin-top: 2rem;">Active Holdings</h3>
+                    <div class="table-container">
+                        <table class="portfolio-table">
+                            <thead>
                                 <tr>
-                                    <td><strong>${h.borrower}</strong><div class="text-xs text-muted">${h.id}</div></td>
-                                    <td>${h.industry}</td>
-                                    <td><span class="rating-badge ${h.rating.replace('+', '').replace('-', '').toLowerCase()}">${h.rating}</span></td>
-                                    <td>$${h.amount.toFixed(1)}M</td>
-                                    <td>${h.spread} bps</td>
-                                    <td>${h.tenor}</td>
-                                    <td><span class="status-dot green"></span> Performing</td>
+                                    <th>Borrower</th>
+                                    <th>Sector</th>
+                                    <th>Rating</th>
+                                    <th>Allocated</th>
+                                    <th>Spread</th>
+                                    <th>Tenor</th>
+                                    <th>Performance</th>
                                 </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                ${stats.holdings.length === 0 ? '<tr><td colspan="7" class="text-muted">No active holdings. (Place bids to build portfolio)</td></tr>' : ''}
+                                ${stats.holdings.map(h => `
+                                    <tr>
+                                        <td><strong>${h.borrower}</strong><div class="text-xs text-muted">${h.id}</div></td>
+                                        <td>${h.industry}</td>
+                                        <td><span class="rating-badge ${h.rating.replace('+', '').replace('-', '').toLowerCase()}">${h.rating}</span></td>
+                                        <td>$${h.amount.toFixed(1)}M</td>
+                                        <td>${h.spread} bps</td>
+                                        <td>${h.tenor}</td>
+                                        <td><span class="status-dot green"></span> Performing</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-            </div>
-        `;
-    },
-
-    calculatePortfolioStats(agentId) {
-        const holdings = [];
-        let totalExposure = 0;
-        let weightedSpreadSum = 0;
-
-        // 1. Check finalized allocations (from data.js)
-        if (SyndiData.allocations) {
-            Object.entries(SyndiData.allocations).forEach(([syndId, allocs]) => {
-                const myAlloc = allocs.find(a => a.participant === this.roles.participant.name || a.participant === 'Apollo Global'); // Mock name match
-                // We need to match agentId to name or use mock.
-                // Assuming Name matching for now as per data.js structure.
-                // Or robust lookup.
-            });
+            `;
+        } catch (error) {
+            console.error('Portfolio render error:', error);
+            view.innerHTML = `
+                <div class="error-state">
+                    <h3>Failed to load portfolio</h3>
+                    <p>Could not fetch data for ${this.currentAgentId}</p>
+                    <button class="btn-secondary" onclick="RoleRouter.renderPortfolio(document.getElementById('view-portfolio'))">Try Again</button>
+                    ${Config.IS_DEV ? `<pre class="debug-info">${error.message}</pre>` : ''}
+                </div>
+            `;
         }
-
-        // Mock Data Generation for Demo if real data is sparse
-        const mockHoldings = [
-            { id: 'SYND-2024-089', borrower: 'Nexus Energy', industry: 'Energy', rating: 'BB', amount: 45, spread: 450, tenor: '5Y' },
-            { id: 'SYND-2024-112', borrower: 'Apex Logistics', industry: 'Transportation', rating: 'B+', amount: 30, spread: 525, tenor: '5Y' },
-            { id: 'SYND-2025-001', borrower: 'TechFlow Solutions', industry: 'Software/SaaS', rating: 'BB+', amount: 150, spread: 420, tenor: '5Y' }, // Won deal
-        ];
-
-        // Filter based on "Real" vs "Mock"
-        // For this task, we return a rich mock set to demonstrate the UI research
-        totalExposure = 225; // M
-        const initialCap = 500;
-
-        return {
-            totalExposure,
-            availableCapacity: initialCap - totalExposure,
-            utilization: Math.round((totalExposure / initialCap) * 100),
-            dealCount: 3,
-            weightedYield: 8.5,
-            weightedSpread: 455,
-            roi: 12.4,
-            interestYTD: 14.2,
-            sectors: [
-                { name: 'Energy', pct: 20 },
-                { name: 'Tech', pct: 65 }, // TechFlow is huge
-                { name: 'Transport', pct: 15 }
-            ],
-            ratings: [
-                { name: 'BB+', pct: 65 },
-                { name: 'BB', pct: 20 },
-                { name: 'B+', pct: 15 }
-            ],
-            holdings: mockHoldings
-        };
     },
+
+    // Legacy mock function removed
+    /* calculatePortfolioStats(agentId) { ... } */
 
     getRatingColor(rating) {
         if (rating.startsWith('A')) return '#10B981'; // Green

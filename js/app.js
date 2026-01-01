@@ -9,7 +9,7 @@ const App = {
         console.log('🚀 SyndiMatch Dashboard initializing...');
 
         // Initialize all components
-        MetricsComponent.init();
+        // MetricsComponent.init(); // Disabled by user request
         PipelineComponent.init();
         SyndicationDetailComponent.init();
         PaymentsComponent.init();
