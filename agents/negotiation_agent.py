@@ -39,9 +39,9 @@ class NegotiationAgent:
             api_key=ANTHROPIC_API_KEY,
             temperature=0.3
         )
-        self.config = self._load_or_create_config()
+        self.config = None
     
-    def _load_or_create_config(self) -> Dict[str, Any]:
+    def _load_or_create_config(self, current_time_str: Optional[str] = None) -> Dict[str, Any]:
         """Load existing config or create new negotiation agent config"""
         existing = db.negotiation_agents().find_one({"_id": self.agent_id})
         if existing:
@@ -52,9 +52,10 @@ class NegotiationAgent:
         if not synd:
             raise ValueError(f"Syndication {self.syndication_id} not found")
         
-        # Calculate urgency
+        # Calculate urgency using simulated time if provided
+        now = datetime.fromisoformat(current_time_str) if current_time_str else datetime.utcnow()
         target_close = datetime.fromisoformat(synd["timeline"]["target_close_date"].replace("Z", ""))
-        hours_remaining = (target_close - datetime.utcnow()).total_seconds() / 3600
+        hours_remaining = (target_close - now).total_seconds() / 3600
         
         if hours_remaining < 48:
             urgency = "high"
@@ -78,7 +79,7 @@ class NegotiationAgent:
             "syndication_id": self.syndication_id,
             "originator_agent_id": synd["originator_agent_id"],
             "originator": synd["originator"],
-            "created_at": datetime.utcnow(),
+            "created_at": now,
             "status": "active",
             "auction_config": {
                 "auction_type": "dutch",
@@ -103,7 +104,7 @@ class NegotiationAgent:
                 "current_spread": starting_spread,
                 "total_committed": 0,
                 "subscription_rate": 0.0,
-                "last_updated": datetime.utcnow()
+                "last_updated": now
             }
         }
         
@@ -115,6 +116,10 @@ class NegotiationAgent:
         Main auction loop. Runs rounds until target is met or max rounds reached.
         """
         logger.info(f"[{self.agent_id}] Starting auction for {self.syndication_id}")
+        
+        # Lazy load config with simulation time
+        if not self.config:
+            self.config = self._load_or_create_config(state.get("current_time"))
         
         state["status"] = "negotiating"
         state["negotiation_agent_id"] = self.agent_id

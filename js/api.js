@@ -5,7 +5,7 @@
 const API = {
     baseUrl: 'http://localhost:3001/api',
     agentUrl: 'http://localhost:8000/api',
-    useMockData: true, // Set to false when backend is running
+    useMockData: false, // Connected to MongoDB backend
 
     async get(endpoint) {
         if (this.useMockData) return null;
@@ -80,7 +80,11 @@ const API = {
             const response = await fetch(`${this.agentUrl}/agents/bid`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ agent_id: agentId, syndication: syndication })
+                body: JSON.stringify({
+                    agent_id: agentId,
+                    syndication: syndication,
+                    currentTime: window.SimulationEngine ? window.SimulationEngine.getCurrentDate().toISOString() : null
+                })
             });
             if (response.ok) return await response.json();
             throw new Error(`Agent bid failed: ${response.status}`);

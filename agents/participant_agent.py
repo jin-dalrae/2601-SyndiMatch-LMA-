@@ -150,8 +150,10 @@ Do not bid more than you have available.
         risk = self.profile.get("risk_appetite", {})
         sector_prefs = self.profile.get("sector_preferences", {})
         
-        # Check available capacity
-        if risk.get("available_capacity", 0) < risk.get("min_ticket", 0):
+        # Check available capacity with 2% buffer for fees
+        available_cap = risk.get("available_capacity", 0)
+        fee_buffer = available_cap * 0.02
+        if (available_cap - fee_buffer) < risk.get("min_ticket", 0):
             return False
         
         # Check if sector is avoided
@@ -213,7 +215,8 @@ Do not bid more than you have available.
             return {"status": "passed", "participant": self.agent_id}
         
         bid_id = f"BID-{state['syndication_id'].split('-')[-1]}-{self.agent_id.split('-')[-1]}"
-        now = datetime.utcnow()
+        now_str = state.get("current_time")
+        now = datetime.fromisoformat(now_str) if now_str else datetime.utcnow()
         
         bid = {
             "_id": bid_id,

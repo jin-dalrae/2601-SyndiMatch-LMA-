@@ -114,7 +114,8 @@ def seed_participant_agents():
 
 def seed_demo_syndications():
     """Seed sample syndications in various states"""
-    now = datetime.utcnow()
+    # Anchor date: Jan 1, 2023
+    now = datetime(2023, 1, 1, 9, 0, 0)
     
     syndications = [
         {

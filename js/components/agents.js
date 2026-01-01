@@ -129,8 +129,9 @@ const AgentsComponent = {
         ).join('');
 
         // Prepend filter UI
-        const currentRole = window.RoleContext ? RoleContext.currentRole : 'platform';
-        const showTrigger = currentRole === 'platform' || currentRole === 'originator';
+        // Use body class for robust role detection
+        const isParticipant = document.body.classList.contains('role-participant');
+        const showTrigger = !isParticipant;
 
         const filterHtml = `
             <div class="agent-filter-toolbar" style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 1rem; background: white; padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">

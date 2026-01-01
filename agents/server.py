@@ -194,6 +194,16 @@ async def agent_bid(request: Dict[str, Any]):
         if not agent_id or not syndication_data:
             raise HTTPException(status_code=400, detail="Missing agent_id or syndication data")
             
+        # Parse simulation time from request
+        current_time_str = request.get("currentTime")
+        if current_time_str:
+            try:
+                current_time = datetime.fromisoformat(current_time_str.replace('Z', '+00:00'))
+            except ValueError:
+                current_time = datetime.utcnow()
+        else:
+            current_time = datetime.utcnow()
+
         # Map frontend data to SyndicationState
         # Note: We construct a partial state sufficient for evaluation
         state = {
@@ -215,8 +225,10 @@ async def agent_bid(request: Dict[str, Any]):
             "subscription_rate": float(syndication_data.get("subscription", 0)) / 100.0,
             "current_round": syndication_data.get("round", 1),
             "timeline": {
-                "target_close_date": datetime.utcnow() # Mock
-            }
+                # Ensure target close is in future relative to simulation time
+                "target_close_date": (current_time + timedelta(hours=48)).isoformat()
+            },
+            "current_time": current_time.isoformat()
         }
         
         # Instantiate agent

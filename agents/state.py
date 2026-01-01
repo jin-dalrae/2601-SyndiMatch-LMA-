@@ -157,6 +157,7 @@ class SyndicationState(TypedDict):
     # Timestamps
     created_at: str
     updated_at: str
+    current_time: Optional[str]  # Simulated time ISO string
     
     # Error handling
     errors: List[str]
