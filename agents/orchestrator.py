@@ -51,48 +51,130 @@ def originator_node(state: SyndicationState) -> SyndicationState:
 
 
 def participants_node(state: SyndicationState) -> SyndicationState:
-    """All participant agents evaluate and submit bids IN PARALLEL"""
+    """
+    All participant agents evaluate and submit bids with REALISTIC TIMING.
+    - Bids arrive at staggered times (simulated delays)
+    - Once syndication target is reached, late bids are cut off
+    - Order is randomized to simulate real-world arrival patterns
+    """
+    import random
+    import time
+    
     logger.info(f"=== PARTICIPANTS NODE: {state['syndication_id']} ===")
     
-    # Get all active participants
-    participants = db.get_collection("participant_agents").find({"status": "active"})
-    participant_ids = [p["_id"] for p in participants]
+    # Get syndication target for cutoff logic
+    syndication_target = state["loan_details"]["syndication_target"]
     
-    logger.info(f"Evaluating {len(participant_ids)} participants in parallel...")
+    # Get all active participants - convert cursor to list FIRST
+    participants_cursor = db.get_collection("participant_agents").find({"status": "active"})
+    participants_list = list(participants_cursor)
     
-    # Parallel evaluation with timeout
+    # Shuffle participants to randomize bid arrival order
+    random.shuffle(participants_list)
+    
+    logger.info(f"Found {len(participants_list)} active participants in database")
+    logger.info(f"Syndication target: ${syndication_target:,}")
+    logger.info(f"Participants will bid in randomized order with realistic timing delays...")
+    
+    # Track bids and cumulative committed amount
     bids = []
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = []
-        for participant_id in participant_ids:
-            agent = ParticipantAgent(participant_id)
-            future = executor.submit(agent.evaluate_opportunity, state)
-            futures.append((participant_id, future))
+    total_committed = 0
+    rejected_late_bids = []
+    bid_start_time = datetime.utcnow()
+    
+    # Process participants sequentially with realistic delays
+    for idx, participant in enumerate(participants_list):
+        participant_id = participant["_id"]
+        inst_name = participant.get("institution", {}).get("name", participant.get("entity", "Unknown"))
         
-        # Collect results with timeout
-        for participant_id, future in futures:
-            try:
-                bid = future.result(timeout=30)  # 30s timeout per participant
-                if bid:
-                    bids.append(bid)
+        # Simulate realistic delay between bids (3-10 seconds)
+        if idx > 0:
+            delay = random.randint(3, 10)
+            time.sleep(delay)
+        
+        # Calculate simulated "bid time" offset (in minutes, for logging)
+        elapsed_time = (datetime.utcnow() - bid_start_time).total_seconds()
+        simulated_minutes = int(elapsed_time * 10)  # Scale for realism in logs
+        
+        # Check if syndication is already fully subscribed
+        if total_committed >= syndication_target:
+            logger.warning(f"  ⏰ LATE BID CUTOFF: {inst_name} ({participant_id}) - Syndication already at 100%")
+            rejected_late_bids.append({
+                "participant_id": participant_id,
+                "institution_name": inst_name,
+                "reason": "syndication_closed",
+                "time_offset_minutes": simulated_minutes
+            })
+            continue
+        
+        # Evaluate and potentially submit bid
+        try:
+            agent = ParticipantAgent(participant_id)
+            bid = agent.evaluate_opportunity(state)
+            
+            if bid:
+                potential_new_total = total_committed + bid["bid_amount"]
+                
+                # Check if this bid would cause oversubscription beyond 110%
+                max_subscription = syndication_target * 1.10
+                
+                if potential_new_total > max_subscription:
+                    # Reduce bid to fit remaining capacity, or reject if too small
+                    remaining_capacity = max_subscription - total_committed
+                    min_ticket = participant.get("risk_appetite", {}).get("min_ticket", 5000000)
                     
-                    # Real-time bid notification
-                    publish_status_update(state, "BID_RECEIVED", {
-                        "participant": bid["institution_name"],
-                        "amount": bid["bid_amount"],
-                        "spread": bid["spread_bid"],
-                        "timestamp": datetime.utcnow()
-                    })
-            except TimeoutError:
-                logger.warning(f"Participant {participant_id} evaluation timed out")
-            except Exception as e:
-                logger.error(f"Participant {participant_id} evaluation failed: {e}")
+                    if remaining_capacity >= min_ticket:
+                        # Accept partial bid
+                        original_amount = bid["bid_amount"]
+                        bid["bid_amount"] = int(remaining_capacity)
+                        bid["partial_fill"] = True
+                        bid["original_amount"] = original_amount
+                        logger.info(f"  📉 {inst_name}: Reduced bid from ${original_amount:,} to ${bid['bid_amount']:,} (capacity limit)")
+                    else:
+                        # Reject - not enough remaining capacity
+                        logger.warning(f"  ⛔ REJECTED: {inst_name} - Bid ${bid['bid_amount']:,} exceeds remaining capacity ${remaining_capacity:,}")
+                        rejected_late_bids.append({
+                            "participant_id": participant_id,
+                            "institution_name": inst_name,
+                            "bid_amount": bid["bid_amount"],
+                            "reason": "exceeds_capacity",
+                            "time_offset_minutes": simulated_minutes
+                        })
+                        continue
+                
+                # Accept bid
+                total_committed += bid["bid_amount"]
+                subscription_rate = total_committed / syndication_target
+                bids.append(bid)
+                
+                logger.info(f"  ✅ +{simulated_minutes}min: {inst_name} bid ${bid['bid_amount']:,} @ {bid['spread_bid']}bps | Total: ${total_committed:,} ({subscription_rate*100:.1f}%)")
+                
+                # Real-time bid notification (without dashboard update per user request)
+                publish_status_update(state, "BID_RECEIVED", {
+                    "participant": bid["institution_name"],
+                    "amount": bid["bid_amount"],
+                    "spread": bid["spread_bid"],
+                    "timestamp": datetime.utcnow(),
+                    "time_offset_minutes": simulated_minutes,
+                    "cumulative_subscription": subscription_rate
+                })
+            else:
+                logger.info(f"  ⏭️ +{simulated_minutes}min: {inst_name} passed on this opportunity")
+                
+        except Exception as e:
+            logger.error(f"Participant {participant_id} evaluation failed: {e}")
+    
+    # Final summary
+    logger.info(f"\n📊 BIDDING SUMMARY for {state['syndication_id']}:")
+    logger.info(f"   • Total bids accepted: {len(bids)}")
+    logger.info(f"   • Total committed: ${total_committed:,}")
+    logger.info(f"   • Final subscription: {(total_committed/syndication_target)*100:.1f}%")
+    logger.info(f"   • Late/rejected bids: {len(rejected_late_bids)}")
     
     # Update state with bids
     state["bids"] = bids
+    state["rejected_bids"] = rejected_late_bids
     state["bid_statistics"] = calculate_bid_statistics(bids, state)
-    
-    logger.info(f"Received {len(bids)} bids from {len(participant_ids)} participants")
     
     # Check if minimum participation threshold met
     min_bids = 3
@@ -107,6 +189,7 @@ def participants_node(state: SyndicationState) -> SyndicationState:
     # Update dashboard metrics
     publish_status_update(state, "BIDDING_COMPLETE", {
         "total_bids": len(bids),
+        "rejected_bids": len(rejected_late_bids),
         "total_bid_amount": sum(b["bid_amount"] for b in bids),
         "subscription_rate": state["bid_statistics"]["subscription_rate"],
         "spread_range": state["bid_statistics"]["spread_range"]

@@ -392,10 +392,9 @@ const SimulationEngine = {
 
         container.innerHTML = `
             <div class="sim-time-display">
+                <span class="sim-logo">SyndiMatch</span>
+                <span class="sim-divider">|</span>
                 <div class="sim-date" id="sim-date">${this.formatDate(this.state.currentDate)}</div>
-                <div class="sim-progress">
-                    <div class="sim-progress-bar" id="sim-progress-bar"></div>
-                </div>
             </div>
             <div class="sim-market-display" id="sim-market-display">
                 <span class="market-icon">${marketIcon}</span>
@@ -404,8 +403,8 @@ const SimulationEngine = {
             </div>
             <div class="sim-speed-control">
                 <label>Speed:</label>
-                <input type="range" id="sim-speed-slider" min="1" max="50" value="${this.state.speedMultiplier}" step="1">
-                <span class="sim-speed-value" id="sim-speed-value">${(this.state.speedMultiplier / 2.4).toFixed(1)} d/s</span>
+                <input type="range" id="sim-speed-slider" min="5" max="24" value="${Math.max(5, Math.min(24, this.state.speedMultiplier))}" step="1">
+                <span class="sim-speed-value" id="sim-speed-value">${Math.round(this.state.speedMultiplier / 2.4)} Days/s</span>
             </div>
             <div class="sim-buttons">
                 <button class="btn-sim btn-start" id="btn-sim-start" ${this.state.isRunning ? 'disabled' : ''}>▶ Start</button>
@@ -483,10 +482,9 @@ const SimulationEngine = {
     updateSpeedDisplay() {
         const speedValue = document.getElementById('sim-speed-value');
         if (speedValue) {
-            // Calculate days per second: (Speed * 10 ticks/sec * 1 hour/tick) / 24 hours/day
-            // Simplified: Speed / 2.4
-            const daysPerSec = (this.state.speedMultiplier / 2.4).toFixed(1);
-            speedValue.textContent = `${daysPerSec} d/s`;
+            // Calculate days per second: Speed / 2.4, rounded to integer (range 2-10)
+            const daysPerSec = Math.round(this.state.speedMultiplier / 2.4);
+            speedValue.textContent = `${daysPerSec} Days/s`;
         }
     },
 
@@ -537,8 +535,18 @@ simStyles.textContent = `
         display: flex;
         flex-direction: row;
         align-items: center;
-        gap: 1rem;
+        gap: 0.75rem;
         min-width: auto;
+    }
+    .sim-logo {
+        font-size: 1.125rem;
+        font-weight: 800;
+        color: var(--primary);
+        letter-spacing: -0.025em;
+    }
+    .sim-divider {
+        color: var(--border-color);
+        font-weight: 300;
     }
     .sim-date {
         font-size: 0.875rem;
@@ -547,11 +555,6 @@ simStyles.textContent = `
         font-family: monospace;
         line-height: 1;
         white-space: nowrap;
-        min-width: 160px;
-    }
-    .sim-progress,
-    .sim-progress-bar {
-        display: none; 
     }
     .sim-market-display {
         display: flex;

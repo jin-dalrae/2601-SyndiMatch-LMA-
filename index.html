@@ -19,17 +19,6 @@
     <!-- Header -->
     <header class="header">
         <div class="header-left">
-            <div class="logo">
-                <div class="logo-icon">
-                    <svg viewBox="0 0 32 32" fill="none">
-                        <circle cx="16" cy="16" r="14" stroke="currentColor" stroke-width="2" />
-                        <path d="M8 16h16M16 8v16M10 10l12 12M22 10L10 22" stroke="currentColor" stroke-width="1.5"
-                            opacity="0.5" />
-                        <circle cx="16" cy="16" r="4" fill="currentColor" />
-                    </svg>
-                </div>
-                <span class="logo-text">SyndiMatch</span>
-            </div>
             <nav class="nav-tabs">
                 <button class="nav-tab active" data-view="overview">Overview</button>
                 <button class="nav-tab" data-view="orchestration">Orchestration</button>
@@ -40,35 +29,32 @@
         <div class="header-right">
             <!-- Role Selector -->
             <div class="role-selector" id="role-selector">
-                <label class="role-label">Viewing as:</label>
+                <label class="role-label">User</label>
                 <select class="role-dropdown" id="role-dropdown">
                     <option value="platform" selected>Platform Admin</option>
                     <optgroup label="─── Participants ───">
-                        <option value="participant:PA-001">Apollo Global (Private Credit)</option>
-                        <option value="participant:PA-002">CalPERS (Pension Fund)</option>
-                        <option value="participant:PA-003">BNP Paribas AM (European Bank)</option>
-                        <option value="participant:PA-004">MUFG Bank (Japanese Bank)</option>
-                        <option value="participant:PA-005">Palmer Square (CLO Manager)</option>
-                        <option value="participant:PA-101">PNC Bank (Regional)</option>
-                        <option value="participant:PA-102">Ares Management (Private Credit)</option>
-                        <option value="participant:PA-103">MetLife (Insurance)</option>
+                        <option value="participant:PA-001">[Participant] Apollo Global</option>
+                        <option value="participant:PA-002">[Participant] CalPERS</option>
+                        <option value="participant:PA-003">[Participant] BNP Paribas AM</option>
+                        <option value="participant:PA-004">[Participant] MUFG Bank</option>
+                        <option value="participant:PA-005">[Participant] Palmer Square</option>
+                        <option value="participant:PA-101">[Participant] PNC Bank</option>
+                        <option value="participant:PA-102">[Participant] Ares Management</option>
+                        <option value="participant:PA-103">[Participant] MetLife</option>
                     </optgroup>
                     <optgroup label="─── Originators ───">
-                        <option value="originator:OA-001">JPMorgan Chase</option>
-                        <option value="originator:OA-002">Bank of America</option>
-                        <option value="originator:OA-003">Citigroup</option>
-                        <option value="originator:OA-004">Goldman Sachs</option>
-                        <option value="originator:OA-005">Wells Fargo</option>
-                        <option value="originator:OA-006">BNP Paribas</option>
-                        <option value="originator:OA-007">Barclays</option>
-                        <option value="originator:OA-008">MUFG Bank</option>
+                        <option value="originator:OA-001">[Originator] JPMorgan Chase</option>
+                        <option value="originator:OA-002">[Originator] Bank of America</option>
+                        <option value="originator:OA-003">[Originator] Citigroup</option>
+                        <option value="originator:OA-004">[Originator] Goldman Sachs</option>
+                        <option value="originator:OA-005">[Originator] Wells Fargo</option>
+                        <option value="originator:OA-006">[Originator] BNP Paribas</option>
+                        <option value="originator:OA-007">[Originator] Barclays</option>
+                        <option value="originator:OA-008">[Originator] MUFG Bank</option>
                     </optgroup>
                 </select>
             </div>
-            <div class="connection-status">
-                <span class="status-dot live"></span>
-                <span>Live</span>
-            </div>
+
             <button class="btn-icon" id="alerts-toggle">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />

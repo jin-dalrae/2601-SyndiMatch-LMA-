@@ -50,7 +50,8 @@ const PipelineComponent = {
         container.querySelectorAll('.synd-card').forEach(card => {
             card.addEventListener('click', () => {
                 const syndId = card.dataset.syndId;
-                SyndicationDetailComponent.open(syndId);
+                // Navigate to syndication-specific page via hash routing
+                window.location.hash = `${syndId}/orchestration`;
             });
         });
     },

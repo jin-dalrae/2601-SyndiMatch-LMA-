@@ -103,7 +103,7 @@ const RoleRouter = {
                 agents.originator.forEach(a => {
                     const opt = document.createElement('option');
                     opt.value = `originator:${a._id || a.id}`;
-                    opt.textContent = `${a.name} (${a._id || a.id})`;
+                    opt.textContent = `[Originator] ${a.name}`;
                     optGroupOrg.appendChild(opt);
                 });
             }
@@ -112,7 +112,7 @@ const RoleRouter = {
                 agents.participant.forEach(a => {
                     const opt = document.createElement('option');
                     opt.value = `participant:${a._id || a.id}`;
-                    opt.textContent = `${a.name} (${a._id || a.id})`;
+                    opt.textContent = `[Participant] ${a.name}`;
                     optGroupPart.appendChild(opt);
                 });
             }
@@ -181,7 +181,7 @@ const RoleRouter = {
     getRouteLabel(route) {
         const labels = {
             'overview': 'Overview',
-            'orchestration': '🤖 Orchestration',
+            'orchestration': 'Orchestration',
             'payments': 'Payments',
             'analytics': 'Analytics',
             'transactions': 'Transactions',

@@ -81,14 +81,7 @@ const AgentsComponent = {
                 };
             });
 
-            // If no data from API, fallback to mock
-            if (agents.originator.length === 0 && agents.participant.length === 0 && decisions.length === 0) {
-                return {
-                    agents: SyndiData.agents,
-                    decisions: SyndiData.decisions
-                };
-            }
-
+            // Return real data (empty states will be shown if no data)
             return { agents, decisions };
         }
 
@@ -242,48 +235,126 @@ const AgentsComponent = {
         const container = document.getElementById('agents-status-container');
         if (!container) return;
 
-        // Build dropdown options
         const syndications = SyndiData.syndications || [];
-        const options = syndications.map(s =>
-            `<option value="${s.id}" ${this.filterId === s.id ? 'selected' : ''}>${s.id} - ${s.borrower}</option>`
-        ).join('');
 
-        // Prepend filter UI
-        // Use body class for robust role detection
+        // Check role for showing New Syndication button
         const isParticipant = document.body.classList.contains('role-participant');
         const showTrigger = !isParticipant;
 
-        const filterHtml = `
-            <div class="agent-filter-toolbar" style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 1rem; background: white; padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
-                <label style="font-weight: 600; font-size: 0.875rem; color: var(--text-secondary);">Filter by Deal:</label>
-                <select onchange="AgentsComponent.setFilter(this.value)" style="padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border-color); font-size: 0.875rem; min-width: 250px;">
-                    <option value="all" ${this.filterId === 'all' ? 'selected' : ''}>All Operations</option>
-                    ${options}
-                </select>
-                <span style="font-size: 0.75rem; color: var(--text-muted); margin-left: auto;">
-                    ${this.filterId === 'all' ? 'Showing all active agents' : `Focusing on ${this.filterId}`}
-                </span>
+        // Build syndication cards grid
+        const cardsHtml = syndications.length > 0 ? syndications.map(s => `
+            <div class="orch-synd-card" data-synd-id="${s.id}" onclick="window.location.hash='${s.id}/orchestration'">
+                <div class="orch-card-header">
+                    <span class="orch-card-id">${s.id}</span>
+                    <span class="orch-card-status status-${s.status}">${s.status}</span>
+                </div>
+                <div class="orch-card-borrower">${s.borrower}</div>
+                <div class="orch-card-amount">${Utils.formatCurrency(s.amount * 1000000)}</div>
+                <div class="orch-card-progress">
+                    <div class="progress-bar">
+                        <div class="progress-fill ${Utils.getProgressClass(s.subscription)}" style="width: ${s.subscription}%"></div>
+                    </div>
+                    <span class="orch-card-pct">${s.subscription}%</span>
+                </div>
+                <div class="orch-card-footer">
+                    <span>👥 ${s.participantCount || 0} participants</span>
+                    <span>→ View Details</span>
+                </div>
+            </div>
+        `).join('') : '<div class="empty-state">No active syndications. Start a new one!</div>';
+
+        container.innerHTML = `
+            <div class="orch-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <div>
+                    <h2 style="margin: 0; font-size: 1.25rem; font-weight: 700;">Active Syndications</h2>
+                    <p style="margin: 0.25rem 0 0; font-size: 0.875rem; color: var(--text-muted);">Click a syndication to view orchestration details</p>
+                </div>
                 ${showTrigger ? `
-                <button class="btn-primary" onclick="window.AgentOrchestration && window.AgentOrchestration.triggerManualRun()" style="margin-left: 1rem; font-size: 0.8rem; padding: 0.5rem 1rem; background: var(--primary); color: white; border: none; border-radius: 6px; cursor: pointer;">
+                <button class="btn-primary" onclick="window.AgentOrchestration && window.AgentOrchestration.triggerManualRun()" style="font-size: 0.875rem; padding: 0.75rem 1.25rem; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
                     🚀 New Syndication
                 </button>
                 ` : ''}
             </div>
-            <div id="orchestration-view-container" style="display: none; margin-bottom: 2rem;"></div>
+            <div class="orch-cards-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;">
+                ${cardsHtml}
+            </div>
+            <style>
+                .orch-synd-card {
+                    background: var(--bg-card);
+                    border: 1px solid var(--border-color);
+                    border-radius: 12px;
+                    padding: 1.25rem;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                }
+                .orch-synd-card:hover {
+                    border-color: var(--primary);
+                    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+                    transform: translateY(-2px);
+                }
+                .orch-card-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 0.75rem;
+                }
+                .orch-card-id {
+                    font-weight: 700;
+                    font-size: 0.875rem;
+                    color: var(--primary);
+                }
+                .orch-card-status {
+                    font-size: 0.75rem;
+                    padding: 0.25rem 0.5rem;
+                    border-radius: 4px;
+                    font-weight: 600;
+                    text-transform: capitalize;
+                }
+                .orch-card-status.status-open { background: #dcfce7; color: #166534; }
+                .orch-card-status.status-negotiating { background: #fef3c7; color: #92400e; }
+                .orch-card-status.status-closing { background: #dbeafe; color: #1e40af; }
+                .orch-card-status.status-completed { background: #f3e8ff; color: #6b21a8; }
+                .orch-card-borrower {
+                    font-size: 1rem;
+                    font-weight: 600;
+                    color: var(--text-primary);
+                    margin-bottom: 0.25rem;
+                }
+                .orch-card-amount {
+                    font-size: 0.875rem;
+                    color: var(--text-muted);
+                    margin-bottom: 0.75rem;
+                }
+                .orch-card-progress {
+                    display: flex;
+                    align-items: center;
+                    gap: 0.75rem;
+                    margin-bottom: 0.75rem;
+                }
+                .orch-card-progress .progress-bar {
+                    flex: 1;
+                    height: 6px;
+                    background: var(--bg-muted);
+                    border-radius: 3px;
+                    overflow: hidden;
+                }
+                .orch-card-pct {
+                    font-size: 0.875rem;
+                    font-weight: 700;
+                    color: var(--primary);
+                }
+                .orch-card-footer {
+                    display: flex;
+                    justify-content: space-between;
+                    font-size: 0.75rem;
+                    color: var(--text-muted);
+                }
+                .orch-card-footer span:last-child {
+                    color: var(--primary);
+                    font-weight: 600;
+                }
+            </style>
         `;
-
-        container.innerHTML = filterHtml;
-
-        // Render Orchestration View if filtered
-        if (this.filterId !== 'all') {
-            const synd = SyndiData.syndications.find(s => s.id === this.filterId);
-            const orchContainer = document.getElementById('orchestration-view-container');
-            if (synd && orchContainer && window.AgentOrchestration) {
-                orchContainer.style.display = 'block';
-                AgentOrchestration.render(orchContainer);
-                AgentOrchestration.setViewingSyndication(synd);
-            }
-        }
     },
 
     renderAgentStatus() {
@@ -375,6 +446,29 @@ const AgentsComponent = {
                 <div class="decision-result">
                     <strong>Action:</strong> ${decision.result}
                 </div>
+            </div>
+        `).join('');
+    },
+
+    // Build agent cards HTML (for use in syndication detail views)
+    buildAgentCards(data) {
+        const { agents } = data;
+        if (!agents) return '<p class="text-muted">No agent data available.</p>';
+
+        const agentGroups = [
+            { title: 'Originator', data: agents.originator || [], type: 'originator' },
+            { title: 'Participants', data: agents.participant || [], type: 'participant' },
+            { title: 'Negotiation', data: agents.negotiation || [], type: 'negotiation' },
+            { title: 'Settlement', data: agents.settlement || [], type: 'settlement' },
+            { title: 'Payment', data: agents.payment || [], type: 'payment' }
+        ];
+
+        return agentGroups.map(group => `
+            <div class="agent-group">
+                <div class="agent-group-title">${group.title} (${group.data.length})</div>
+                ${group.data.length > 0
+                ? group.data.map(agent => this.renderAgentRow(agent, group.type)).join('')
+                : '<div style="padding: 0.5rem; color: var(--text-muted); font-size: 0.875rem;">No agents</div>'}
             </div>
         `).join('');
     }
