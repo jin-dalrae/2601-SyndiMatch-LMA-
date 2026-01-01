@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SyndiMatch | Loan Syndication Platform</title>
+    <meta name="description"
+        content="Real-time loan syndication dashboard with multi-agent orchestration, transparent bidding, and automated settlement.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/components.css">
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-left">
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 32 32" fill="none">
+                        <circle cx="16" cy="16" r="14" stroke="currentColor" stroke-width="2" />
+                        <path d="M8 16h16M16 8v16M10 10l12 12M22 10L10 22" stroke="currentColor" stroke-width="1.5"
+                            opacity="0.5" />
+                        <circle cx="16" cy="16" r="4" fill="currentColor" />
+                    </svg>
+                </div>
+                <span class="logo-text">SyndiMatch</span>
+            </div>
+            <nav class="nav-tabs">
+                <button class="nav-tab active" data-view="overview">Overview</button>
+                <button class="nav-tab" data-view="orchestration">Orchestration</button>
+                <button class="nav-tab" data-view="payments">Payments</button>
+                <button class="nav-tab" data-view="analytics">Analytics</button>
+            </nav>
+        </div>
+        <div class="header-right">
+            <!-- Role Selector -->
+            <div class="role-selector" id="role-selector">
+                <label class="role-label">Viewing as:</label>
+                <select class="role-dropdown" id="role-dropdown">
+                    <option value="platform" selected>Platform Admin</option>
+                    <optgroup label="─── Participants ───">
+                        <option value="participant:PA-001">Apollo Global (Private Credit)</option>
+                        <option value="participant:PA-002">CalPERS (Pension Fund)</option>
+                        <option value="participant:PA-003">BNP Paribas AM (European Bank)</option>
+                        <option value="participant:PA-004">MUFG Bank (Japanese Bank)</option>
+                        <option value="participant:PA-005">Palmer Square (CLO Manager)</option>
+                        <option value="participant:PA-101">PNC Bank (Regional)</option>
+                        <option value="participant:PA-102">Ares Management (Private Credit)</option>
+                        <option value="participant:PA-103">MetLife (Insurance)</option>
+                    </optgroup>
+                    <optgroup label="─── Originators ───">
+                        <option value="originator:OA-001">JPMorgan Chase</option>
+                        <option value="originator:OA-002">Bank of America</option>
+                        <option value="originator:OA-003">Citigroup</option>
+                        <option value="originator:OA-004">Goldman Sachs</option>
+                        <option value="originator:OA-005">Wells Fargo</option>
+                        <option value="originator:OA-006">BNP Paribas</option>
+                        <option value="originator:OA-007">Barclays</option>
+                        <option value="originator:OA-008">MUFG Bank</option>
+                    </optgroup>
+                </select>
+            </div>
+            <div class="connection-status">
+                <span class="status-dot live"></span>
+                <span>Live</span>
+            </div>
+            <button class="btn-icon" id="alerts-toggle">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                </svg>
+                <span class="alert-badge" id="alert-count">3</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Top Metrics Bar -->
+    <section class="metrics-bar" id="metrics-bar">
+        <div class="metric-card">
+            <div class="metric-label">Active Syndications</div>
+            <div class="metric-value" id="metric-active">8</div>
+            <div class="metric-change positive">+2 today</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Total Value in Play</div>
+            <div class="metric-value" id="metric-value">$2.4B</div>
+            <div class="metric-change positive">+$340M</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Closed Today</div>
+            <div class="metric-value" id="metric-closed">3</div>
+            <div class="metric-change positive">Target: 4</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Success Rate</div>
+            <div class="metric-value" id="metric-success">94.2%</div>
+            <div class="metric-change positive">+1.2%</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Active Participants</div>
+            <div class="metric-value" id="metric-participants">47</div>
+            <div class="metric-change neutral">steady</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Payments (24h)</div>
+            <div class="metric-value" id="metric-payments">$892M</div>
+            <div class="metric-change positive">+$156M</div>
+        </div>
+    </section>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+        <!-- Overview View -->
+        <div class="view active" id="view-overview">
+            <!-- Pipeline Section -->
+            <section class="pipeline-section">
+                <h2 class="section-title">Syndication Pipeline</h2>
+                <div class="pipeline-columns" id="pipeline-columns">
+                    <!-- Columns generated by JS -->
+                </div>
+            </section>
+        </div>
+
+        <!-- Orchestration View (formerly Agents) -->
+        <div class="view" id="view-orchestration">
+            <div class="agents-grid">
+                <section class="agents-status-section">
+                    <h2 class="section-title">Orchestration Dashboard</h2>
+                    <div id="agents-status-container"></div>
+                </section>
+                <section class="agents-log-section">
+                    <h2 class="section-title">Decision Logic</h2>
+                    <div class="decision-log" id="decision-log"></div>
+                </section>
+            </div>
+        </div>
+
+        <!-- Payments View -->
+        <div class="view" id="view-payments">
+            <div class="payments-grid">
+                <section class="payment-pipeline-section">
+                    <h2 class="section-title">Payment Pipeline</h2>
+                    <div id="payment-pipeline-visual"></div>
+                    <div class="payment-progress-bars" id="payment-progress"></div>
+                </section>
+                <section class="payment-table-section">
+                    <h2 class="section-title">Payment Status</h2>
+                    <div class="table-container" id="payment-table-container"></div>
+                </section>
+                <section class="transaction-log-section">
+                    <h2 class="section-title">Transaction Log (x402)</h2>
+                    <div class="transaction-log" id="transaction-log"></div>
+                </section>
+            </div>
+        </div>
+
+        <!-- Analytics View -->
+        <div class="view" id="view-analytics">
+            <div class="analytics-grid">
+                <section class="performance-section">
+                    <h2 class="section-title">Participant Performance</h2>
+                    <div id="performance-matrix"></div>
+                </section>
+                <section class="heatmap-section">
+                    <h2 class="section-title">Market Spread Heatmap</h2>
+                    <div id="spread-heatmap"></div>
+                </section>
+                <section class="charts-section">
+                    <h2 class="section-title">Syndication Volume (30 Days)</h2>
+                    <div id="volume-chart"></div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <!-- Alerts Sidebar -->
+    <aside class="alerts-sidebar" id="alerts-sidebar">
+        <div class="alerts-header">
+            <h3>Alerts & Notifications</h3>
+            <button class="btn-close" id="alerts-close">&times;</button>
+        </div>
+        <div class="alerts-content" id="alerts-content">
+            <!-- Alerts generated by JS -->
+        </div>
+    </aside>
+
+    <!-- Syndication Detail Modal -->
+    <div class="modal-overlay" id="modal-overlay">
+        <div class="modal" id="syndication-modal">
+            <div class="modal-header">
+                <div class="modal-title-section">
+                    <h2 class="modal-title" id="modal-loan-id">SYND-2025-001</h2>
+                    <span class="modal-subtitle" id="modal-borrower">TechFlow Solutions</span>
+                </div>
+                <button class="btn-close modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Header Info -->
+                <div class="detail-header" id="detail-header"></div>
+
+                <!-- Agent Flow -->
+                <section class="detail-section">
+                    <h3 class="detail-section-title">Agent Orchestration Flow</h3>
+                    <div class="agent-flow" id="agent-flow"></div>
+                </section>
+
+                <!-- Bidding & Auction Grid -->
+                <div class="detail-grid">
+                    <section class="detail-section">
+                        <h3 class="detail-section-title">Real-Time Bidding Activity</h3>
+                        <div class="bidding-feed" id="bidding-feed"></div>
+                    </section>
+                    <section class="detail-section">
+                        <h3 class="detail-section-title">Dutch Auction Progress</h3>
+                        <div class="auction-chart" id="auction-chart"></div>
+                    </section>
+                </div>
+
+                <!-- Participant Grid -->
+                <section class="detail-section">
+                    <h3 class="detail-section-title">Participants</h3>
+                    <div class="participant-grid" id="participant-grid"></div>
+                </section>
+
+                <!-- Allocation (post-close) -->
+                <section class="detail-section" id="allocation-section" style="display:none;">
+                    <h3 class="detail-section-title">Final Allocation</h3>
+                    <div class="allocation-chart" id="allocation-chart"></div>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/api.js"></script>
+    <script src="js/data.js"></script>
+    <script src="js/role-context.js"></script>
+    <script src="js/simulation-engine.js"></script>
+    <script src="js/market-conditions.js"></script>
+    <script src="js/auto-generator.js"></script>
+    <script src="js/auto-bidder.js"></script>
+    <script src="js/role-router.js"></script>
+    <script src="js/components/metrics.js"></script>
+    <script src="js/components/pipeline.js"></script>
+    <script src="js/components/syndication-detail.js"></script>
+    <script src="js/components/payments.js"></script>
+    <script src="js/components/x402-payment.js"></script>
+    <script src="js/components/agents.js"></script>
+    <script src="js/components/analytics.js"></script>
+    <script src="js/components/alerts.js"></script>
+    <script src="js/agent-orchestration.js"></script>
+    <script src="js/app.js"></script>
+</body>
+
+</html>
