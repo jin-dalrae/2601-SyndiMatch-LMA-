@@ -611,6 +611,15 @@ def run_syndication(originator_id: str = "OA-001",
     return final_state
 
 
+async def run_syndication_async(originator_id: str = "OA-001", 
+                                 loan_params: Dict[str, Any] = None) -> Dict[str, Any]:
+    """
+    Async wrapper for run_syndication to use from FastAPI.
+    Runs the synchronous workflow in a thread to avoid blocking.
+    """
+    return await asyncio.to_thread(run_syndication, originator_id, loan_params)
+
+
 async def run_multiple_syndications(count: int = 5, originator_ids: List[str] = None):
     """Run multiple syndications concurrently for demo"""
     if not originator_ids:
