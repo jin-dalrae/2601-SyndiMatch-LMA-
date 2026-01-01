@@ -31,12 +31,22 @@ class OriginatorAgent:
     
     def __init__(self, agent_id: str):
         self.agent_id = agent_id
-        self.llm = ChatAnthropic(
-            model=AGENT_MODEL,
-            api_key=ANTHROPIC_API_KEY,
-            temperature=0.3
-        )
-        self.profile = self._load_profile()
+        # Initialize LLM only if valid API key is present
+        if ANTHROPIC_API_KEY and ANTHROPIC_API_KEY.startswith("sk-"):
+            self.llm = ChatAnthropic(
+                model=AGENT_MODEL,
+                api_key=ANTHROPIC_API_KEY,
+                temperature=0.3
+            )
+        else:
+            self.llm = None
+            logger.info(f"[{self.agent_id}] No valid API Key found. Running in Simulation Mode.")
+            
+        try:
+            self.profile = self._load_profile()
+        except:
+             # Create default profile if DB is empty/error
+            self.profile = {"_id": self.agent_id, "active_loans": 0, "completed_syndications_ytd": 0}
     
     def _load_profile(self) -> Dict[str, Any]:
         """Load originator profile from MongoDB"""
@@ -122,7 +132,7 @@ class OriginatorAgent:
             "timestamp": datetime.utcnow().isoformat()
         }
     
-    def complete_syndication(self, syndication_id: str, success: bool) -> None:
+    def complete_syndication(self, syndication_id: str, success: bool, reason: Optional[str] = None) -> None:
         """
         Update originator state when syndication completes.
         """
@@ -144,7 +154,9 @@ class OriginatorAgent:
         update["$set"]["success_rate"] = round(new_success_rate * 100, 1)
         
         db.originator_agents().update_one({"_id": self.agent_id}, update)
-        logger.info(f"[{self.agent_id}] Syndication {syndication_id} marked as {'success' if success else 'failed'}")
+        
+        status_msg = 'success' if success else f'failed ({reason})'
+        logger.info(f"[{self.agent_id}] Syndication {syndication_id} marked as {status_msg}")
 
 
 def generate_syndication(originator_id: str, loan_params: Optional[Dict] = None) -> SyndicationState:

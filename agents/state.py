@@ -162,6 +162,15 @@ class SyndicationState(TypedDict):
     # Error handling
     errors: List[str]
     warnings: List[str]
+    
+    # === Orchestrator Enhanced State ===
+    negotiation_state: Dict[str, Any]
+    bid_statistics: Dict[str, Any]
+    auction_metrics: Dict[str, Any]
+    settlement_metrics: Dict[str, Any]
+    payment_metrics: Dict[str, Any]
+    metrics: Dict[str, Any]
+    failure_reason: Optional[str]
 
 
 # === Agent Decision Models ===

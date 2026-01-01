@@ -273,6 +273,12 @@ const RoleRouter = {
         const view = document.getElementById(`view-${route}`);
         if (!view) return;
 
+        // Platform Admin Dashboard Override
+        if (route === 'overview' && this.currentRole === 'platform' && window.AdminView) {
+            window.AdminView.renderDashboard(view);
+            return;
+        }
+
         switch (route) {
             case 'create-syndication':
                 this.renderCreateSyndication(view);

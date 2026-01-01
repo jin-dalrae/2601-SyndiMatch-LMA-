@@ -65,6 +65,24 @@ const API = {
         return null;
     },
 
+    async getSyndicationEvents(syndId) {
+        if (this.useMockData) return [];
+        try {
+            const response = await fetch(`${this.baseUrl}/syndication-events/${syndId}`);
+            if (response.ok) return await response.json();
+        } catch (e) { console.warn('Events API unavailable'); }
+        return [];
+    },
+
+    async getAllSyndicationEvents(limit = 100) {
+        if (this.useMockData) return [];
+        try {
+            const response = await fetch(`${this.baseUrl}/syndication-events?limit=${limit}`);
+            if (response.ok) return await response.json();
+        } catch (e) { console.warn('Events API unavailable'); }
+        return [];
+    },
+
     async getEscrowDetails(syndId) {
         try {
             const response = await fetch(`${this.agentUrl}/x402/escrow/${syndId}`);

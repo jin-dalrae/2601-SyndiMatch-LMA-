@@ -1,100 +1,456 @@
 """
-SyndiMatch - LangGraph Workflow Orchestrator
-Main entry point for agent orchestration
+SyndiMatch - Enhanced LangGraph Workflow Orchestrator
+Includes real-time metrics, dashboard updates, and robust error handling
 """
 
-from typing import Dict, Any, Literal
-from datetime import datetime
+from typing import Dict, Any, Literal, List
+from datetime import datetime, timedelta
 import logging
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 
 from state import SyndicationState
 from originator_agent import OriginatorAgent, generate_syndication
-from participant_agent import ParticipantAgent, evaluate_all_participants
+from participant_agent import ParticipantAgent
 from negotiation_agent import NegotiationAgent
 from settlement_agent import SettlementAgent
 from payment_agent import PaymentAgent
+from metrics_calculator import MetricsCalculator
+from alert_manager import AlertManager
 import db
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-# === Node Functions ===
+# === Enhanced Node Functions ===
 
 def originator_node(state: SyndicationState) -> SyndicationState:
     """Originator broadcasts the loan opportunity"""
     logger.info(f"=== ORIGINATOR NODE: {state['syndication_id']} ===")
     
     agent = OriginatorAgent(state["originator_agent_id"])
-    return agent.broadcast_loan(state)
+    state = agent.broadcast_loan(state)
+    
+    # Initialize metrics tracking
+    MetricsCalculator.initialize_syndication_metrics(state)
+    
+    # Publish to dashboard
+    publish_status_update(state, "BROADCAST", {
+        "event": "syndication_opened",
+        "syndication_id": state["syndication_id"],
+        "amount": state["loan_details"]["total_amount"],
+        "spread": state["pricing"]["initial_spread"],
+        "target_close": state["timeline"]["target_close_date"]
+    })
+    
+    return state
 
 
 def participants_node(state: SyndicationState) -> SyndicationState:
-    """All participant agents evaluate and submit bids"""
+    """All participant agents evaluate and submit bids IN PARALLEL"""
     logger.info(f"=== PARTICIPANTS NODE: {state['syndication_id']} ===")
     
-    # Evaluate all participants in parallel
-    bids = evaluate_all_participants(state)
+    # Get all active participants
+    participants = db.get_collection("participant_agents").find({"status": "active"})
+    participant_ids = [p["_id"] for p in participants]
+    
+    logger.info(f"Evaluating {len(participant_ids)} participants in parallel...")
+    
+    # Parallel evaluation with timeout
+    bids = []
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = []
+        for participant_id in participant_ids:
+            agent = ParticipantAgent(participant_id)
+            future = executor.submit(agent.evaluate_opportunity, state)
+            futures.append((participant_id, future))
+        
+        # Collect results with timeout
+        for participant_id, future in futures:
+            try:
+                bid = future.result(timeout=30)  # 30s timeout per participant
+                if bid:
+                    bids.append(bid)
+                    
+                    # Real-time bid notification
+                    publish_status_update(state, "BID_RECEIVED", {
+                        "participant": bid["institution_name"],
+                        "amount": bid["bid_amount"],
+                        "spread": bid["spread_bid"],
+                        "timestamp": datetime.utcnow()
+                    })
+            except TimeoutError:
+                logger.warning(f"Participant {participant_id} evaluation timed out")
+            except Exception as e:
+                logger.error(f"Participant {participant_id} evaluation failed: {e}")
     
     # Update state with bids
     state["bids"] = bids
-    logger.info(f"Received {len(bids)} bids")
+    state["bid_statistics"] = calculate_bid_statistics(bids, state)
+    
+    logger.info(f"Received {len(bids)} bids from {len(participant_ids)} participants")
+    
+    # Check if minimum participation threshold met
+    min_bids = 3
+    if len(bids) < min_bids:
+        AlertManager.create_alert(
+            syndication_id=state["syndication_id"],
+            alert_type="low_participation",
+            severity="warning",
+            message=f"Only {len(bids)} bids received (minimum: {min_bids})"
+        )
+    
+    # Update dashboard metrics
+    publish_status_update(state, "BIDDING_COMPLETE", {
+        "total_bids": len(bids),
+        "total_bid_amount": sum(b["bid_amount"] for b in bids),
+        "subscription_rate": state["bid_statistics"]["subscription_rate"],
+        "spread_range": state["bid_statistics"]["spread_range"]
+    })
     
     return state
 
 
 def negotiation_node(state: SyndicationState) -> SyndicationState:
-    """Negotiation agent runs the Dutch auction"""
+    """Negotiation agent runs MULTI-ROUND Dutch auction"""
     logger.info(f"=== NEGOTIATION NODE: {state['syndication_id']} ===")
     
     agent = NegotiationAgent(state["syndication_id"])
-    return agent.run_auction(state)
+    
+    # Run auction with round-by-round updates
+    max_rounds = agent.calculate_max_rounds(state)
+    
+    for round_num in range(1, max_rounds + 1):
+        logger.info(f"Starting auction round {round_num}/{max_rounds}")
+        
+        # Run round
+        state = agent.run_auction_round(state, round_num)
+        
+        # Real-time auction update
+        publish_status_update(state, "AUCTION_ROUND", {
+            "round": round_num,
+            "current_spread": state["negotiation_state"]["current_spread"],
+            "total_committed": state["negotiation_state"]["total_committed"],
+            "subscription_rate": state["negotiation_state"]["subscription_rate"]
+        })
+        
+        # Check early termination conditions
+        if agent.should_close_auction(state):
+            logger.info(f"Auction closing early at round {round_num}")
+            break
+        
+        # Check failure conditions
+        if agent.is_auction_failing(state, round_num, max_rounds):
+            state["status"] = "failed"
+            state["failure_reason"] = "insufficient_subscription"
+            
+            AlertManager.create_alert(
+                syndication_id=state["syndication_id"],
+                alert_type="auction_failing",
+                severity="critical",
+                message=f"Subscription only {state['negotiation_state']['subscription_rate']*100:.1f}% at round {round_num}"
+            )
+            return state
+        
+        # Wait between rounds (simulated)
+        if round_num < max_rounds:
+            round_duration = agent.get_round_duration(state)
+            logger.info(f"Waiting {round_duration} minutes for next round...")
+            # In production: asyncio.sleep(round_duration * 60)
+    
+    # Finalize auction
+    state = agent.finalize_auction(state)
+    
+    # Calculate final metrics
+    state["auction_metrics"] = MetricsCalculator.calculate_auction_metrics(state)
+    
+    # Dashboard update
+    publish_status_update(state, "AUCTION_COMPLETE", {
+        "final_spread": state["negotiation_state"]["current_spread"],
+        "spread_improvement": state["pricing"]["initial_spread"] - state["negotiation_state"]["current_spread"],
+        "final_subscription": state["negotiation_state"]["subscription_rate"],
+        "total_rounds": state["negotiation_state"]["auction_round"],
+        "winning_bids": len(state.get("allocations", []))
+    })
+    
+    return state
 
 
 def settlement_node(state: SyndicationState) -> SyndicationState:
-    """Settlement agent manages post-auction workflow"""
+    """Settlement agent manages MULTI-STAGE post-auction workflow"""
     logger.info(f"=== SETTLEMENT NODE: {state['syndication_id']} ===")
     
     agent = SettlementAgent(state["syndication_id"])
-    return agent.run_settlement(state)
+    
+    # Multi-stage settlement process
+    stages = [
+        ("allocation_confirmation", agent.confirm_allocations),
+        ("legal_documentation", agent.distribute_documents),
+        ("compliance_verification", agent.verify_compliance),
+        ("signature_collection", agent.collect_signatures)
+    ]
+    
+    for stage_num, (stage_name, stage_func) in enumerate(stages, 1):
+        logger.info(f"Settlement Stage {stage_num}/{len(stages)}: {stage_name}")
+        
+        try:
+            state = stage_func(state)
+            
+            # Real-time settlement progress
+            publish_status_update(state, "SETTLEMENT_PROGRESS", {
+                "stage": stage_name,
+                "stage_number": stage_num,
+                "total_stages": len(stages),
+                "completion_rate": stage_num / len(stages),
+                "timestamp": datetime.utcnow()
+            })
+            
+        except Exception as e:
+            logger.error(f"Settlement stage {stage_name} failed: {e}")
+            state["status"] = "settlement_failed"
+            state["failure_reason"] = f"Stage failed: {stage_name}"
+            
+            AlertManager.create_alert(
+                syndication_id=state["syndication_id"],
+                alert_type="settlement_failure",
+                severity="critical",
+                message=f"Settlement failed at {stage_name}: {str(e)}"
+            )
+            return state
+    
+    # Settlement complete
+    state["status"] = "settlement_complete"
+    state["settlement_metrics"] = MetricsCalculator.calculate_settlement_metrics(state)
+    
+    publish_status_update(state, "SETTLEMENT_COMPLETE", {
+        "allocations_confirmed": len(state.get("allocations", [])),
+        "documents_signed": state.get("documents_signed_count", 0),
+        "ready_for_funding": True
+    })
+    
+    return state
 
 
 def payment_node(state: SyndicationState) -> SyndicationState:
-    """Payment agent processes all payments"""
+    """Payment agent processes SCHEDULED payments with retries"""
     logger.info(f"=== PAYMENT NODE: {state['syndication_id']} ===")
     
     agent = PaymentAgent(state["syndication_id"])
-    state = agent.process_payments(state)
-    return agent.complete_syndication(state)
+    
+    # Process payments by type in sequence
+    payment_types = [
+        ("commitment_fee", "T+1"),
+        ("arrangement_fee", "funding_date"),
+        ("principal", "funding_date")
+    ]
+    
+    all_payments = []
+    
+    for payment_type, due_timing in payment_types:
+        logger.info(f"Processing {payment_type} payments...")
+        
+        try:
+            payments = agent.process_payment_type(state, payment_type)
+            
+            # Retry failed payments
+            failed_payments = [p for p in payments if p["status"] == "failed"]
+            if failed_payments:
+                logger.warning(f"{len(failed_payments)} {payment_type} payments failed, retrying...")
+                
+                for payment in failed_payments:
+                    retry_result = agent.retry_payment(payment, max_retries=3)
+                    if retry_result["status"] == "completed":
+                        payments[payments.index(payment)] = retry_result
+                    else:
+                        AlertManager.create_alert(
+                            syndication_id=state["syndication_id"],
+                            alert_type="payment_failed",
+                            severity="critical",
+                            message=f"Payment failed after retries: {payment['payer']['institution_name']} - ${payment['amount_due']:,}"
+                        )
+            
+            all_payments.extend(payments)
+            
+            # Real-time payment status
+            completed = len([p for p in payments if p["status"] == "completed"])
+            total = len(payments)
+            
+            publish_status_update(state, "PAYMENT_PROGRESS", {
+                "payment_type": payment_type,
+                "completed": completed,
+                "total": total,
+                "completion_rate": completed / total if total > 0 else 0,
+                "amount_collected": sum(p.get("amount_paid", 0) for p in payments if p["status"] == "completed")
+            })
+            
+        except Exception as e:
+            logger.error(f"Payment processing failed for {payment_type}: {e}")
+            state["status"] = "payment_failed"
+            return state
+    
+    # Update state with all payments
+    state["payments"] = all_payments
+    state["payment_metrics"] = MetricsCalculator.calculate_payment_metrics(state)
+    
+    # Check payment completion
+    total_expected = state["payment_metrics"]["total_expected"]
+    total_collected = state["payment_metrics"]["total_collected"]
+    collection_rate = total_collected / total_expected if total_expected > 0 else 0
+    
+    if collection_rate < 0.95:  # Less than 95% collected
+        AlertManager.create_alert(
+            syndication_id=state["syndication_id"],
+            alert_type="incomplete_payment_collection",
+            severity="high",
+            message=f"Only {collection_rate*100:.1f}% of payments collected (${total_collected:,}/${total_expected:,})"
+        )
+    
+    # Audit for late payments
+    agent.handle_late_payments(state)
+    
+    # Final completion
+    state = agent.complete_syndication(state)
+    
+    publish_status_update(state, "SYNDICATION_COMPLETE", {
+        "final_status": state["status"],
+        "total_syndicated": state.get("total_committed", 0),
+        "total_fees_collected": state["payment_metrics"].get("total_fees_collected", 0),
+        "completion_time": datetime.utcnow()
+    })
+    
+    return state
+
+
+# === Helper Functions ===
+
+def calculate_bid_statistics(bids: List[Dict], state: SyndicationState) -> Dict[str, Any]:
+    """Calculate bidding statistics for dashboard"""
+    if not bids:
+        return {
+            "total_bids": 0,
+            "total_bid_amount": 0,
+            "subscription_rate": 0,
+            "spread_range": {"min": 0, "max": 0, "avg": 0}
+        }
+    
+    total_bid_amount = sum(b["bid_amount"] for b in bids)
+    syndication_target = state["loan_details"]["syndication_target"]
+    
+    spreads = [b["spread_bid"] for b in bids]
+    
+    return {
+        "total_bids": len(bids),
+        "unique_bidders": len(set(b["participant_agent_id"] for b in bids)),
+        "total_bid_amount": total_bid_amount,
+        "subscription_rate": total_bid_amount / syndication_target if syndication_target > 0 else 0,
+        "spread_range": {
+            "min": min(spreads),
+            "max": max(spreads),
+            "avg": sum(spreads) / len(spreads),
+            "median": sorted(spreads)[len(spreads) // 2]
+        }
+    }
+
+
+def publish_status_update(state: SyndicationState, event_type: str, data: Dict[str, Any]):
+    """
+    Publish real-time status update to dashboard via WebSocket/Redis/etc.
+    This is where you'd integrate with your real-time dashboard system.
+    """
+    message = {
+        "syndication_id": state["syndication_id"],
+        "event_type": event_type,
+        "timestamp": datetime.utcnow().isoformat(),
+        "data": data,
+        "status": state.get("status", "unknown")
+    }
+    
+    # In production, publish to:
+    # - WebSocket for real-time dashboard
+    # - Redis pub/sub for distributed systems
+    # - Kafka for event streaming
+    # - Database for historical tracking
+    
+    logger.info(f"[DASHBOARD] {event_type}: {data}")
+    
+    # Store in database for historical view
+    db.get_collection("syndication_events").insert_one(message)
 
 
 # === Routing Functions ===
 
 def route_after_negotiation(state: SyndicationState) -> Literal["settlement", "failed"]:
     """Route based on auction outcome"""
-    if state["status"] == "failed":
+    status = state.get("status", "unknown")
+    
+    # Debug logging
+    neg_state = state.get("negotiation_state", {})
+    sub_rate = neg_state.get("subscription_rate", 0)
+    logger.info(f"ROUTING CHECK: status={status}, sub_rate={sub_rate}")
+    
+    if status == "failed":
         return "failed"
+    
+    # Additional validation
+    if sub_rate < 0.80:  # Less than 80% subscribed
+        logger.warning(f"Routing to FAILED: Low subscription rate {sub_rate}")
+        state["status"] = "failed"
+        state["failure_reason"] = "insufficient_subscription"
+        return "failed"
+    
     return "settlement"
 
 
 def route_after_settlement(state: SyndicationState) -> Literal["payment", "settlement_failed"]:
     """Route based on settlement outcome"""
-    if state["status"] == "settlement_failed":
+    if state.get("status") in ["settlement_failed", "failed"]:
         return "settlement_failed"
     return "payment"
 
 
 def failed_node(state: SyndicationState) -> SyndicationState:
-    """Handle auction failure"""
+    """Handle auction failure with notifications and cleanup"""
     logger.warning(f"=== AUCTION FAILED: {state['syndication_id']} ===")
+    
+    # Notify all participants
+    for bid in state.get("bids", []):
+        ParticipantAgent(bid["participant_agent_id"]).notify_auction_failed(
+            state["syndication_id"],
+            reason=state.get("failure_reason", "unknown")
+        )
     
     # Notify originator
     originator = OriginatorAgent(state["originator_agent_id"])
-    originator.complete_syndication(state["syndication_id"], success=False)
+    originator.complete_syndication(
+        state["syndication_id"], 
+        success=False,
+        reason=state.get("failure_reason", "unknown")
+    )
+    
+    # Create failure alert
+    AlertManager.create_alert(
+        syndication_id=state["syndication_id"],
+        alert_type="syndication_failed",
+        severity="high",
+        message=f"Syndication failed: {state.get('failure_reason', 'unknown')}"
+    )
+    
+    # Dashboard notification
+    publish_status_update(state, "SYNDICATION_FAILED", {
+        "reason": state.get("failure_reason", "unknown"),
+        "final_subscription": state.get("negotiation_state", {}).get("subscription_rate", 0),
+        "bids_received": len(state.get("bids", []))
+    })
+    
+    # Update database
+    db.get_collection("syndications").update_one(
+        {"_id": state["syndication_id"]},
+        {"$set": {"status": "failed", "failure_reason": state.get("failure_reason")}}
+    )
     
     return state
 
@@ -102,10 +458,26 @@ def failed_node(state: SyndicationState) -> SyndicationState:
 def settlement_failed_node(state: SyndicationState) -> SyndicationState:
     """Handle settlement failure"""
     logger.warning(f"=== SETTLEMENT FAILED: {state['syndication_id']} ===")
+    
+    # Attempt rollback if needed
+    SettlementAgent(state["syndication_id"]).rollback_settlement(state)
+    
+    # Notify participants
+    for allocation in state.get("allocations", []):
+        ParticipantAgent(allocation["participant_agent_id"]).notify_settlement_failed(
+            state["syndication_id"]
+        )
+    
+    # Dashboard notification
+    publish_status_update(state, "SETTLEMENT_FAILED", {
+        "reason": state.get("failure_reason", "unknown"),
+        "stage_failed": state.get("failed_stage", "unknown")
+    })
+    
     return state
 
 
-# === Build the Graph ===
+# === Build the Enhanced Graph ===
 
 def build_syndication_graph() -> StateGraph:
     """Build the LangGraph workflow for syndication"""
@@ -128,7 +500,7 @@ def build_syndication_graph() -> StateGraph:
     workflow.add_edge("originator", "participants")
     workflow.add_edge("participants", "negotiation")
     
-    # Conditional routing after negotiation
+    # Conditional routing
     workflow.add_conditional_edges(
         "negotiation",
         route_after_negotiation,
@@ -138,7 +510,6 @@ def build_syndication_graph() -> StateGraph:
         }
     )
     
-    # Conditional routing after settlement
     workflow.add_conditional_edges(
         "settlement",
         route_after_settlement,
@@ -156,58 +527,103 @@ def build_syndication_graph() -> StateGraph:
     return workflow
 
 
-# === Main Execution ===
+# === Main Execution with Enhanced Logging ===
 
 def run_syndication(originator_id: str = "OA-001", 
-                    loan_params: Dict[str, Any] = None) -> Dict[str, Any]:
+                    loan_params: Dict[str, Any] = None,
+                    enable_dashboard: bool = True) -> Dict[str, Any]:
     """
-    Run a complete syndication workflow.
+    Run a complete syndication workflow with full observability.
     
     Args:
         originator_id: The originator agent ID
         loan_params: Optional specific loan parameters
+        enable_dashboard: Whether to publish real-time updates
     
     Returns:
         Final state after workflow completion
     """
+    start_time = datetime.utcnow()
+    
     # Generate initial syndication
     initial_state = generate_syndication(originator_id, loan_params)
     
-    logger.info(f"\n{'='*60}")
-    logger.info(f"STARTING SYNDICATION: {initial_state['syndication_id']}")
-    logger.info(f"Borrower: {initial_state['loan_details']['borrower_name']}")
-    logger.info(f"Amount: ${initial_state['loan_details']['total_amount']:,}")
-    logger.info(f"Rating: {initial_state['loan_details']['credit_rating']}")
-    logger.info(f"Spread: {initial_state['pricing']['initial_spread']} bps")
-    logger.info(f"{'='*60}\n")
+    logger.info(f"\n{'='*80}")
+    logger.info(f"🚀 STARTING SYNDICATION WORKFLOW")
+    logger.info(f"{'='*80}")
+    logger.info(f"  Syndication ID: {initial_state['syndication_id']}")
+    logger.info(f"  Originator: {initial_state['originator']}")
+    logger.info(f"  Borrower: {initial_state['loan_details']['borrower_name']}")
+    logger.info(f"  Industry: {initial_state['loan_details']['industry']}")
+    logger.info(f"  Total Amount: ${initial_state['loan_details']['total_amount']:,}")
+    logger.info(f"  Syndication Target: ${initial_state['loan_details']['syndication_target']:,}")
+    logger.info(f"  Credit Rating: {initial_state['loan_details']['credit_rating']}")
+    logger.info(f"  Initial Spread: {initial_state['pricing']['initial_spread']} bps")
+    logger.info(f"  Target Close: {initial_state['timeline']['target_close_date']}")
+    logger.info(f"{'='*80}\n")
     
     # Build and compile graph
     workflow = build_syndication_graph()
     memory = MemorySaver()
     app = workflow.compile(checkpointer=memory)
     
-    # Run the workflow
+    # Run the workflow with tracking
     config = {"configurable": {"thread_id": initial_state["syndication_id"]}}
     final_state = None
+    node_count = 0
     
     for event in app.stream(initial_state, config):
         for node_name, node_state in event.items():
-            logger.info(f"[{node_name}] Status: {node_state.get('status', 'unknown')}")
+            node_count += 1
+            status = node_state.get('status', 'unknown')
+            logger.info(f"[Node {node_count}] {node_name.upper()} → Status: {status}")
             final_state = node_state
     
-    logger.info(f"\n{'='*60}")
-    logger.info(f"SYNDICATION COMPLETE: {initial_state['syndication_id']}")
-    logger.info(f"Final Status: {final_state.get('status', 'unknown')}")
-    logger.info(f"Total Committed: ${final_state.get('total_committed', 0):,}")
-    logger.info(f"Subscription Rate: {final_state.get('subscription_rate', 0)*100:.1f}%")
-    logger.info(f"{'='*60}\n")
+    # Calculate final metrics
+    end_time = datetime.utcnow()
+    duration = (end_time - start_time).total_seconds()
+    
+    logger.info(f"\n{'='*80}")
+    logger.info(f"✅ SYNDICATION WORKFLOW COMPLETE")
+    logger.info(f"{'='*80}")
+    logger.info(f"  Syndication ID: {initial_state['syndication_id']}")
+    logger.info(f"  Final Status: {final_state.get('status', 'unknown')}")
+    logger.info(f"  Duration: {duration:.2f} seconds ({duration/60:.1f} minutes)")
+    logger.info(f"  Nodes Executed: {node_count}")
+    logger.info(f"")
+    logger.info(f"  📊 RESULTS:")
+    logger.info(f"    Total Bids Received: {len(final_state.get('bids', []))}")
+    logger.info(f"    Total Committed: ${final_state.get('total_committed', 0):,}")
+    logger.info(f"    Subscription Rate: {final_state.get('subscription_rate', 0)*100:.1f}%")
+    logger.info(f"    Final Spread: {final_state.get('negotiation_state', {}).get('current_spread', 0)} bps")
+    logger.info(f"    Allocations: {len(final_state.get('allocations', []))}")
+    logger.info(f"    Payments Processed: {len(final_state.get('payments', []))}")
+    
+    if final_state.get('payment_metrics'):
+        logger.info(f"")
+        logger.info(f"  💰 PAYMENT METRICS:")
+        logger.info(f"    Total Expected: ${final_state['payment_metrics'].get('total_expected', 0):,}")
+        logger.info(f"    Total Collected: ${final_state['payment_metrics'].get('total_collected', 0):,}")
+        logger.info(f"    Collection Rate: {final_state['payment_metrics'].get('collection_rate', 0)*100:.1f}%")
+    
+    logger.info(f"{'='*80}\n")
     
     return final_state
 
 
-async def run_syndication_async(originator_id: str = "OA-001") -> Dict[str, Any]:
-    """Async wrapper for running syndication"""
-    return await asyncio.to_thread(run_syndication, originator_id)
+async def run_multiple_syndications(count: int = 5, originator_ids: List[str] = None):
+    """Run multiple syndications concurrently for demo"""
+    if not originator_ids:
+        originator_ids = ["OA-001", "OA-002", "OA-003"]
+    
+    tasks = []
+    for i in range(count):
+        originator = originator_ids[i % len(originator_ids)]
+        task = asyncio.to_thread(run_syndication, originator)
+        tasks.append(task)
+    
+    results = await asyncio.gather(*tasks)
+    return results
 
 
 # === CLI Entry Point ===
@@ -218,14 +634,24 @@ if __name__ == "__main__":
     # Ensure database is connected
     db.get_database()
     
-    # Run a demo syndication
-    originator = sys.argv[1] if len(sys.argv) > 1 else "OA-001"
-    
-    print("\n🚀 Starting SyndiMatch Agent Orchestration Demo\n")
-    result = run_syndication(originator)
-    
-    print("\n📊 Final Result:")
-    print(f"  Syndication ID: {result.get('syndication_id')}")
-    print(f"  Status: {result.get('status')}")
-    print(f"  Allocations: {len(result.get('allocations', []))}")
-    print(f"  Payments: {len(result.get('payments', []))}")
+    # Parse arguments
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "multi":
+            count = int(sys.argv[2]) if len(sys.argv) > 2 else 3
+            print(f"\n🚀 Starting {count} Concurrent Syndications\n")
+            asyncio.run(run_multiple_syndications(count))
+        else:
+            originator = sys.argv[1]
+            print(f"\n🚀 Starting SyndiMatch for Originator: {originator}\n")
+            run_syndication(originator)
+    else:
+        print("\n🚀 Starting SyndiMatch Demo Syndication\n")
+        result = run_syndication("OA-001")
+        
+        print("\n" + "="*80)
+        print("📋 QUICK SUMMARY")
+        print("="*80)
+        print(f"Syndication: {result.get('syndication_id')}")
+        print(f"Status: {result.get('status')}")
+        print(f"Success: {'✓' if result.get('status') == 'completed' else '✗'}")
+        print("="*80 + "\n")

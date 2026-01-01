@@ -133,6 +133,128 @@ class PaymentAgent:
         
         db.payment_agents().insert_one(config)
         return config
+
+    def process_payment_type(self, state: SyndicationState, payment_type: str) -> List[Dict[str, Any]]:
+        """Process payments of a specific type"""
+        logger.info(f"[{self.agent_id}] Processing payments: {payment_type}")
+        
+        # Check if payments exist, if not generate them
+        pending_payments = list(db.payment_history().find({
+            "syndication_id": self.syndication_id,
+            "payment_type": payment_type,
+            "payment_status": "pending"
+        }))
+        
+        if not pending_payments:
+            logger.info(f"[{self.agent_id}] Generating pending payments for {payment_type}")
+            self._generate_payments_of_type(payment_type)
+            pending_payments = list(db.payment_history().find({
+                "syndication_id": self.syndication_id,
+                "payment_type": payment_type,
+                "payment_status": "pending"
+            }))
+        
+        results = []
+        for payment in pending_payments:
+            # Process payment
+            result = self._process_single_payment(payment)
+            
+            # Record result
+            payment_record = {
+                "payment_id": payment["_id"],
+                "payment_type": payment_type,
+                "payer": payment["payer"],
+                "amount_due": payment["amount_due"],
+                "amount_paid": result.amount_processed,
+                "status": result.status,
+                "transaction_hash": result.transaction_hash
+            }
+            results.append(payment_record)
+            
+        return results
+
+    def retry_payment(self, payment: Dict[str, Any], max_retries: int = 3) -> Dict[str, Any]:
+        """Retry a failed payment"""
+        logger.info(f"[{self.agent_id}] Retrying payment {payment['payment_id']}")
+        
+        # Fetch fresh record
+        current_record = db.payment_history().find_one({"_id": payment["payment_id"]})
+        if not current_record:
+            return payment # Should not happen
+            
+        if current_record["payment_status"] == "completed":
+            payment["status"] = "completed"
+            return payment
+            
+        # Retry logic (simplified: just try again)
+        result = self._process_single_payment(current_record)
+        
+        return {
+            "payment_id": payment["payment_id"],
+            "payment_type": payment["payment_type"],
+            "payer": payment["payer"],
+            "amount_due": payment["amount_due"],
+            "amount_paid": result.amount_processed,
+            "status": result.status,
+            "transaction_hash": result.transaction_hash
+        }
+
+    def _generate_payments_of_type(self, payment_type: str):
+        """Generate payment records for a specific type from allocations"""
+        allocation_doc = db.allocations().find_one({"syndication_id": self.syndication_id})
+        if not allocation_doc:
+            logger.warning(f"[{self.agent_id}] No allocations found to generate payments")
+            return
+
+        synd = db.syndications().find_one({"_id": self.syndication_id})
+        originator_wallet = self.config["payment_config"]["originator_wallet"]
+        escrow_wallet = self.config["payment_config"]["escrow_wallet"]
+
+        for alloc in allocation_doc.get("allocations", []):
+            payment_id = f"PAY-{self.syndication_id.split('-')[-1]}-{alloc['participant_agent_id'].split('-')[-1]}-{payment_type}"
+            
+            # Determine amount and recipient
+            amount = 0
+            recipient_wallet = originator_wallet
+            
+            if payment_type == "commitment_fee":
+                amount = alloc["fees"]["commitment_fee"]
+            elif payment_type == "arrangement_fee":
+                amount = alloc["fees"]["arrangement_fee"]
+            elif payment_type == "principal":
+                amount = alloc["final_allocation"]
+                recipient_wallet = escrow_wallet
+            
+            if amount > 0:
+                payment = {
+                    "_id": payment_id,
+                    "payment_agent_id": self.agent_id,
+                    "syndication_id": self.syndication_id,
+                    "allocation_id": alloc["_id"],
+                    "payer": {
+                        "participant_agent_id": alloc["participant_agent_id"],
+                        "institution_name": alloc["institution_name"],
+                        "wallet_address": f"participant-{alloc['participant_agent_id']}-wallet"
+                    },
+                    "recipient": {
+                        "type": "originator" if payment_type != "principal" else "escrow",
+                        "agent_id": synd["originator_agent_id"],
+                        "wallet_address": recipient_wallet
+                    },
+                    "payment_type": payment_type,
+                    "amount_due": amount,
+                    "amount_paid": 0,
+                    "currency": self.config["payment_config"]["base_currency"],
+                    "due_date": datetime.utcnow() + timedelta(days=5),
+                    "payment_status": "pending",
+                    "created_at": datetime.utcnow()
+                }
+                
+                db.payment_history().replace_one(
+                    {"_id": payment_id},
+                    payment,
+                    upsert=True
+                )
     
     def process_payments(self, state: SyndicationState) -> SyndicationState:
         """
@@ -388,11 +510,113 @@ class PaymentAgent:
             {"$set": {"payment_schedule": config["payment_schedule"]}}
         )
     
+    def process_commitment_fees(self, state: SyndicationState) -> List[Dict[str, Any]]:
+        """Process commitment fee payments"""
+        return self.process_payment_type(state, "commitment_fee")
+
+    def process_arrangement_fees(self, state: SyndicationState) -> List[Dict[str, Any]]:
+        """Process arrangement fee payments"""
+        return self.process_payment_type(state, "arrangement_fee")
+
+    def process_principal_payments(self, state: SyndicationState) -> List[Dict[str, Any]]:
+        """Process principal payments"""
+        return self.process_payment_type(state, "principal")
+
+    def check_payment_status(self, payment_id: str) -> Dict[str, Any]:
+        """Check status of a specific payment"""
+        payment = db.payment_history().find_one({"_id": payment_id})
+        if not payment:
+            return {"status": "not_found"}
+        return {
+            "status": payment["payment_status"],
+            "amount_paid": payment.get("amount_paid", 0),
+            "updated_at": payment.get("updated_at")
+        }
+
+    def handle_late_payments(self, state: SyndicationState) -> List[Dict[str, Any]]:
+        """Identify and audit overdue payments"""
+        now = datetime.utcnow()
+        overdue = list(db.payment_history().find({
+            "syndication_id": self.syndication_id,
+            "payment_status": "pending",
+            "due_date": {"$lt": now}
+        }))
+        
+        results = []
+        for payment in overdue:
+            delay = (now - payment["due_date"]).total_seconds() / 3600
+            result = {
+                "payment_id": payment["_id"],
+                "payer": payment["payer"]["institution_name"],
+                "hours_overdue": round(delay, 2),
+                "penalty_accruing": True
+            }
+            results.append(result)
+            logger.warning(f"[{self.agent_id}] Payment overdue: {payment['_id']} ({round(delay, 1)}h)")
+            
+        return results
+
+    def release_escrow(self, state: SyndicationState) -> Dict[str, Any]:
+        """Release funds from escrow to borrower"""
+        logger.info(f"[{self.agent_id}] Releasing escrow for {self.syndication_id}")
+        
+        # Get escrow wallet details
+        escrow_wallet = self.config["payment_config"]["escrow_wallet"]
+        
+        # Determine borrower wallet (for demo, derive from borrower name or use placeholder)
+        borrower_name = state["loan_details"].get("borrower_name", "unknown").replace(" ", "-").lower()
+        borrower_wallet = f"borrower-{borrower_name}-wallet"
+        
+        # Calculate total in escrow
+        principal_payments = list(db.payment_history().find({
+            "syndication_id": self.syndication_id,
+            "payment_type": "principal",
+            "payment_status": "completed"
+        }))
+        total_collected = sum(p.get("amount_paid", 0) for p in principal_payments)
+        
+        if total_collected == 0:
+            logger.warning(f"[{self.agent_id}] No funds in escrow to release")
+            return {
+                "status": "skipped", 
+                "reason": "no_funds",
+                "amount_released": 0
+            }
+
+        try:
+            # Call x402 release
+            borrower_res, platform_res = x402.release_escrow(
+                escrow_id=self.syndication_id,
+                borrower_wallet=borrower_wallet,
+                total_amount=total_collected
+            )
+            
+            result = {
+                "status": "completed",
+                "borrower_tx": borrower_res.transaction_hash,
+                "platform_fee_tx": platform_res.transaction_hash,
+                "amount_released": borrower_res.amount,
+                "platform_fee": platform_res.amount,
+                "borrower_wallet": borrower_wallet,
+                "timestamp": datetime.utcnow()
+            }
+            
+            logger.info(f"[{self.agent_id}] Escrow release successful: {result}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"[{self.agent_id}] Escrow release failed: {e}")
+            return {"status": "failed", "error": str(e)}
+
     def complete_syndication(self, state: SyndicationState) -> SyndicationState:
         """
         Finalize syndication after all payments complete.
         """
         logger.info(f"[{self.agent_id}] Completing syndication {self.syndication_id}")
+        
+        # Release escrow funds to borrower
+        escrow_result = self.release_escrow(state)
+        state["payment_metrics"]["escrow_release"] = escrow_result
         
         # Mark syndication as completed
         state["status"] = "completed"

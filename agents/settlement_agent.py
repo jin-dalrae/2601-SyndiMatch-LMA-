@@ -119,6 +119,42 @@ class SettlementAgent:
         
         db.settlement_agents().insert_one(config)
         return config
+
+    def confirm_allocations(self, state: SyndicationState) -> SyndicationState:
+        """Step 1: Confirm allocations"""
+        self._execute_stage(state, self.WORKFLOW_STAGES[0])
+        return state
+
+    def distribute_documents(self, state: SyndicationState) -> SyndicationState:
+        """Step 2: Distribute legal documents"""
+        # Mapping to legal_documentation stage
+        self._execute_stage(state, self.WORKFLOW_STAGES[2])
+        return state
+
+    def verify_compliance(self, state: SyndicationState) -> SyndicationState:
+        """Step 3: Verify compliance"""
+        self._execute_stage(state, self.WORKFLOW_STAGES[3])
+        return state
+
+    def collect_signatures(self, state: SyndicationState) -> SyndicationState:
+        """Step 4: Collect signatures"""
+        # In this simplified agent, signatures are collected during legal doc stage
+        # We perform a verification here
+        logger.info(f"[{self.agent_id}] Verifying signatures collected")
+        
+        # Check if actually signed (from previous stage logic)
+        signed_count = db.settlement_agents().find_one({"_id": self.agent_id}).get("performance_tracking", {}).get("documents_signed", 0)
+        state["documents_signed_count"] = signed_count
+        
+        return state
+
+    def rollback_settlement(self, state: SyndicationState) -> SyndicationState:
+        """Rollback settlement on failure"""
+        logger.warning(f"[{self.agent_id}] Rolling back settlement")
+        state["status"] = "settlement_failed"
+        state["failure_reason"] = "Rollback triggered"
+        self._update_syndication(state)
+        return state
     
     def run_settlement(self, state: SyndicationState) -> SyndicationState:
         """

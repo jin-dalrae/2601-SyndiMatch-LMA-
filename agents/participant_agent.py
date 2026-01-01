@@ -30,12 +30,32 @@ class ParticipantAgent:
     
     def __init__(self, agent_id: str):
         self.agent_id = agent_id
-        self.llm = ChatAnthropic(
-            model=AGENT_MODEL,
-            api_key=ANTHROPIC_API_KEY,
-            temperature=0.7  # More variation in decision-making
-        )
-        self.profile = self._load_profile()
+        
+        # Initialize LLM only if API key is present
+        if ANTHROPIC_API_KEY and ANTHROPIC_API_KEY.startswith("sk-"):
+            self.llm = ChatAnthropic(
+                model=AGENT_MODEL,
+                api_key=ANTHROPIC_API_KEY,
+                temperature=0.7
+            )
+        else:
+            self.llm = None
+            logger.info(f"[{self.agent_id}] No valid API Key found. Running in Simulation Mode (Rule-Based).")
+            
+        try:
+            self.profile = self._load_profile()
+        except Exception as e:
+            logger.warning(f"[{self.agent_id}] Profile load failed: {e}. Using default.")
+            self.profile = {
+                "institution": {"name": "Default Investor", "type": "Bank"},
+                "risk_appetite": {
+                    "available_capacity": 100000000, 
+                    "min_ticket": 1000000, 
+                    "max_single_ticket": 20000000,
+                    "min_acceptable_yield": 4.0
+                },
+                "strategy": {"investment_style": "balanced"}
+            }
     
     def _load_profile(self) -> Dict[str, Any]:
         """Load participant profile from MongoDB"""
@@ -46,7 +66,22 @@ class ParticipantAgent:
     
     def _refresh_profile(self):
         """Refresh profile from database to get latest state"""
-        self.profile = self._load_profile()
+        try:
+            self.profile = self._load_profile()
+        except Exception:
+            pass # Keep existing profile on error
+
+    def evaluate_opportunity(self, state: SyndicationState) -> Optional[Dict[str, Any]]:
+        """
+        Evaluate opportunity and submit bid if applicable.
+        Used by the enhanced orchestrator for parallel execution.
+        """
+        decision = self.evaluate_loan(state)
+        
+        if decision and decision.decision == "bid":
+            return self.submit_bid(state, decision)
+        
+        return None
     
     def evaluate_loan(self, state: SyndicationState) -> Optional[BidDecision]:
         """
@@ -67,9 +102,9 @@ class ParticipantAgent:
             )
         
         # Build prompt for LLM evaluation
-        prompt = self._build_evaluation_prompt(state)
-        
-        system_message = SystemMessage(content="""
+        if self.llm:
+            try:
+                system_message = SystemMessage(content="""
 You are an AI investment analyst for a financial institution participating in loan syndications.
 Analyze the loan opportunity and decide whether to bid based on your institution's profile.
 
@@ -83,23 +118,24 @@ Respond ONLY with valid JSON in this exact format:
     "risk_adjusted_return": <float percentage or null>
 }
 """)
+                prompt = self._build_evaluation_prompt(state)
+                response = self.llm.invoke([system_message, HumanMessage(content=prompt)])
+                decision_data = json.loads(response.content)
+                
+                return BidDecision(
+                    decision=decision_data["decision"],
+                    amount=decision_data.get("amount", 0),
+                    spread=decision_data.get("spread", state["current_spread"]),
+                    reasoning=decision_data["reasoning"],
+                    portfolio_fit_score=decision_data.get("portfolio_fit_score", 0.5),
+                    risk_adjusted_return=decision_data.get("risk_adjusted_return")
+                )
+            except Exception as e:
+                logger.error(f"[{self.agent_id}] LLM evaluation failed: {e}")
+                # Fallback to rule-based decision
         
-        try:
-            response = self.llm.invoke([system_message, HumanMessage(content=prompt)])
-            decision_data = json.loads(response.content)
-            
-            return BidDecision(
-                decision=decision_data["decision"],
-                amount=decision_data.get("amount", 0),
-                spread=decision_data.get("spread", state["current_spread"]),
-                reasoning=decision_data["reasoning"],
-                portfolio_fit_score=decision_data.get("portfolio_fit_score", 0.5),
-                risk_adjusted_return=decision_data.get("risk_adjusted_return")
-            )
-        except Exception as e:
-            logger.error(f"[{self.agent_id}] LLM evaluation failed: {e}")
-            # Fallback to rule-based decision
-            return self._rule_based_evaluation(state)
+        # Fallback / Simulation Mode
+        return self._rule_based_evaluation(state)
     
     def _build_evaluation_prompt(self, state: SyndicationState) -> str:
         """Build detailed prompt for LLM evaluation"""
@@ -322,6 +358,15 @@ Do not bid more than you have available.
             "payment_type": payment_type,
             "timestamp": now.isoformat()
         }
+
+    def notify_auction_failed(self, syndication_id: str, reason: str):
+        """Handle notification of failed auction"""
+        logger.info(f"[{self.agent_id}] Auction failed for {syndication_id}: {reason}")
+        # Release capital reservations if any (not implemented in this simplified version)
+
+    def notify_settlement_failed(self, syndication_id: str):
+        """Handle notification of failed settlement"""
+        logger.warning(f"[{self.agent_id}] Settlement failed for {syndication_id}")
 
 
 def evaluate_all_participants(state: SyndicationState) -> List[Dict[str, Any]]:

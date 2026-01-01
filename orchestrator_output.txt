@@ -1,0 +1,326 @@
+/Users/rae/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+CDP SDK not installed. Install with: pip install cdp-sdk
+x402 Client running in DEMO mode
+x402 Client running in DEMO mode
+INFO:db:Connected to MongoDB: syndimatch
+INFO:__main__:
+================================================================================
+INFO:__main__:🚀 STARTING SYNDICATION WORKFLOW
+INFO:__main__:================================================================================
+INFO:__main__:  Syndication ID: SYND-2025-550
+INFO:__main__:  Originator: JPMorgan Chase
+INFO:__main__:  Borrower: Atlas Holdings
+INFO:__main__:  Industry: Industrial
+INFO:__main__:  Total Amount: $1,927,000,000
+INFO:__main__:  Syndication Target: $1,507,180,357
+INFO:__main__:  Credit Rating: BB
+INFO:__main__:  Initial Spread: 470 bps
+INFO:__main__:  Target Close: 2026-01-03T11:26:02.493893
+INFO:__main__:================================================================================
+
+INFO:__main__:=== ORIGINATOR NODE: SYND-2025-550 ===
+INFO:originator_agent:[OA-001] No valid API Key found. Running in Simulation Mode.
+INFO:originator_agent:[OA-001] Broadcasting syndication: SYND-2025-550
+INFO:originator_agent:[OA-001] Syndication SYND-2025-550 broadcast complete
+INFO:__main__:[DASHBOARD] BROADCAST: {'event': 'syndication_opened', 'syndication_id': 'SYND-2025-550', 'amount': 1927000000, 'spread': 470, 'target_close': '2026-01-03T11:26:02.493893'}
+INFO:__main__:[Node 1] ORIGINATOR → Status: open
+INFO:__main__:=== PARTICIPANTS NODE: SYND-2025-550 ===
+INFO:__main__:Evaluating 15 participants in parallel...
+INFO:participant_agent:[PA-001] No valid API Key found. Running in Simulation Mode (Rule-Based).
+INFO:participant_agent:[PA-002] No valid API Key found. Running in Simulation Mode (Rule-Based).
+INFO:participant_agent:[PA-001] Submitted bid: $226,077,053 @ 470 bps
+INFO:participant_agent:[PA-003] No valid API Key found. Running in Simulation Mode (Rule-Based).
+INFO:participant_agent:[PA-004] No valid API Key found. Running in Simulation Mode (Rule-Based).
+INFO:participant_agent:[PA-002] Submitted bid: $226,077,053 @ 470 bps
+INFO:participant_agent:[PA-003] Submitted bid: $226,077,053 @ 470 bps
+INFO:participant_agent:[PA-005] No valid API Key found. Running in Simulation Mode (Rule-Based).
+INFO:participant_agent:[PA-101] No valid API Key found. Running in Simulation Mode (Rule-Based).
+INFO:participant_agent:[PA-102] No valid API Key found. Running in Simulation Mode (Rule-Based).
+INFO:participant_agent:[PA-004] Submitted bid: $226,077,053 @ 470 bps
+INFO:participant_agent:[PA-005] Submitted bid: $75,000,000 @ 470 bps
+INFO:participant_agent:[PA-101] Submitted bid: $100,000,000 @ 470 bps
+INFO:participant_agent:[PA-103] No valid API Key found. Running in Simulation Mode (Rule-Based).
+INFO:participant_agent:[PA-104] No valid API Key found. Running in Simulation Mode (Rule-Based).
+INFO:participant_agent:[PA-105] No valid API Key found. Running in Simulation Mode (Rule-Based).
+INFO:participant_agent:[PA-106] No valid API Key found. Running in Simulation Mode (Rule-Based).
+INFO:participant_agent:[PA-102] Submitted bid: $200,000,000 @ 470 bps
+INFO:participant_agent:[PA-103] Submitted bid: $226,077,053 @ 470 bps
+INFO:participant_agent:[PA-104] Submitted bid: $80,000,000 @ 470 bps
+INFO:participant_agent:[PA-107] No valid API Key found. Running in Simulation Mode (Rule-Based).
+INFO:participant_agent:[PA-108] No valid API Key found. Running in Simulation Mode (Rule-Based).
+INFO:participant_agent:[PA-109] No valid API Key found. Running in Simulation Mode (Rule-Based).
+INFO:participant_agent:[PA-106] Submitted bid: $80,000,000 @ 470 bps
+INFO:participant_agent:[PA-110] No valid API Key found. Running in Simulation Mode (Rule-Based).
+INFO:__main__:[DASHBOARD] BID_RECEIVED: {'participant': 'Apollo Global Management', 'amount': 226077053, 'spread': 470, 'timestamp': datetime.datetime(2026, 1, 1, 17, 26, 4, 362339)}
+INFO:participant_agent:[PA-107] Submitted bid: $150,000,000 @ 470 bps
+INFO:participant_agent:[PA-108] Submitted bid: $226,077,053 @ 470 bps
+INFO:__main__:[DASHBOARD] BID_RECEIVED: {'participant': 'CalPERS', 'amount': 226077053, 'spread': 470, 'timestamp': datetime.datetime(2026, 1, 1, 17, 26, 4, 397863)}
+INFO:__main__:[DASHBOARD] BID_RECEIVED: {'participant': 'BNP Paribas Asset Management', 'amount': 226077053, 'spread': 470, 'timestamp': datetime.datetime(2026, 1, 1, 17, 26, 4, 429233)}
+INFO:participant_agent:[PA-109] Submitted bid: $60,000,000 @ 470 bps
+INFO:participant_agent:[PA-110] Submitted bid: $226,077,053 @ 470 bps
+INFO:__main__:[DASHBOARD] BID_RECEIVED: {'participant': 'MUFG Bank', 'amount': 226077053, 'spread': 470, 'timestamp': datetime.datetime(2026, 1, 1, 17, 26, 4, 461023)}
+INFO:__main__:[DASHBOARD] BID_RECEIVED: {'participant': 'Palmer Square Capital', 'amount': 75000000, 'spread': 470, 'timestamp': datetime.datetime(2026, 1, 1, 17, 26, 4, 491237)}
+INFO:__main__:[DASHBOARD] BID_RECEIVED: {'participant': 'PNC Bank', 'amount': 100000000, 'spread': 470, 'timestamp': datetime.datetime(2026, 1, 1, 17, 26, 4, 522675)}
+INFO:__main__:[DASHBOARD] BID_RECEIVED: {'participant': 'Ares Management', 'amount': 200000000, 'spread': 470, 'timestamp': datetime.datetime(2026, 1, 1, 17, 26, 4, 552978)}
+INFO:__main__:[DASHBOARD] BID_RECEIVED: {'participant': 'MetLife Investment Management', 'amount': 226077053, 'spread': 470, 'timestamp': datetime.datetime(2026, 1, 1, 17, 26, 4, 584098)}
+INFO:__main__:[DASHBOARD] BID_RECEIVED: {'participant': 'Golub Capital', 'amount': 80000000, 'spread': 470, 'timestamp': datetime.datetime(2026, 1, 1, 17, 26, 4, 616065)}
+INFO:__main__:[DASHBOARD] BID_RECEIVED: {'participant': 'KeyBank', 'amount': 80000000, 'spread': 470, 'timestamp': datetime.datetime(2026, 1, 1, 17, 26, 4, 646288)}
+INFO:__main__:[DASHBOARD] BID_RECEIVED: {'participant': 'Blue Owl Capital', 'amount': 150000000, 'spread': 470, 'timestamp': datetime.datetime(2026, 1, 1, 17, 26, 4, 676456)}
+INFO:__main__:[DASHBOARD] BID_RECEIVED: {'participant': "Ontario Teachers' Pension", 'amount': 226077053, 'spread': 470, 'timestamp': datetime.datetime(2026, 1, 1, 17, 26, 4, 706997)}
+INFO:__main__:[DASHBOARD] BID_RECEIVED: {'participant': 'Barings LLC', 'amount': 60000000, 'spread': 470, 'timestamp': datetime.datetime(2026, 1, 1, 17, 26, 4, 737195)}
+INFO:__main__:[DASHBOARD] BID_RECEIVED: {'participant': 'Prudential Investment Management', 'amount': 226077053, 'spread': 470, 'timestamp': datetime.datetime(2026, 1, 1, 17, 26, 4, 766897)}
+INFO:__main__:Received 14 bids from 15 participants
+INFO:__main__:[DASHBOARD] BIDDING_COMPLETE: {'total_bids': 14, 'total_bid_amount': 2327539371, 'subscription_rate': 1.544300494754922, 'spread_range': {'min': 470, 'max': 470, 'avg': 470.0, 'median': 470}}
+INFO:__main__:[Node 2] PARTICIPANTS → Status: open
+INFO:__main__:=== NEGOTIATION NODE: SYND-2025-550 ===
+INFO:__main__:Starting auction round 1/10
+INFO:negotiation_agent:[NA-SYND-2025-550] Round 1: $2,327,539,371 (154.4%) @ 470 bps
+INFO:__main__:[DASHBOARD] AUCTION_ROUND: {'round': 1, 'current_spread': 470, 'total_committed': 2327539371, 'subscription_rate': 1.544300494754922}
+INFO:__main__:Auction closing early at round 1
+INFO:negotiation_agent:[NA-SYND-2025-550] Closing auction: fully_subscribed
+INFO:__main__:[DASHBOARD] AUCTION_COMPLETE: {'final_spread': 470, 'spread_improvement': 0, 'final_subscription': 1.544300494754922, 'total_rounds': 1, 'winning_bids': 14}
+INFO:__main__:ROUTING CHECK: status=closing, sub_rate=1.544300494754922
+INFO:__main__:[Node 3] NEGOTIATION → Status: closing
+INFO:__main__:=== SETTLEMENT NODE: SYND-2025-550 ===
+INFO:__main__:Settlement Stage 1/4: allocation_confirmation
+INFO:settlement_agent:[SA-SYND-2025-550] Executing stage 1: allocation_confirmation
+INFO:__main__:[DASHBOARD] SETTLEMENT_PROGRESS: {'stage': 'allocation_confirmation', 'stage_number': 1, 'total_stages': 4, 'completion_rate': 0.25, 'timestamp': datetime.datetime(2026, 1, 1, 17, 26, 6, 304667)}
+INFO:__main__:Settlement Stage 2/4: legal_documentation
+INFO:settlement_agent:[SA-SYND-2025-550] Executing stage 3: legal_documentation
+INFO:__main__:[DASHBOARD] SETTLEMENT_PROGRESS: {'stage': 'legal_documentation', 'stage_number': 2, 'total_stages': 4, 'completion_rate': 0.5, 'timestamp': datetime.datetime(2026, 1, 1, 17, 26, 7, 96273)}
+INFO:__main__:Settlement Stage 3/4: compliance_verification
+INFO:settlement_agent:[SA-SYND-2025-550] Executing stage 4: compliance_verification
+INFO:__main__:[DASHBOARD] SETTLEMENT_PROGRESS: {'stage': 'compliance_verification', 'stage_number': 3, 'total_stages': 4, 'completion_rate': 0.75, 'timestamp': datetime.datetime(2026, 1, 1, 17, 26, 7, 216347)}
+INFO:__main__:Settlement Stage 4/4: signature_collection
+INFO:settlement_agent:[SA-SYND-2025-550] Verifying signatures collected
+INFO:__main__:[DASHBOARD] SETTLEMENT_PROGRESS: {'stage': 'signature_collection', 'stage_number': 4, 'total_stages': 4, 'completion_rate': 1.0, 'timestamp': datetime.datetime(2026, 1, 1, 17, 26, 7, 274727)}
+INFO:__main__:[DASHBOARD] SETTLEMENT_COMPLETE: {'allocations_confirmed': 14, 'documents_signed': 14, 'ready_for_funding': True}
+INFO:__main__:[Node 4] SETTLEMENT → Status: settlement_complete
+INFO:__main__:=== PAYMENT NODE: SYND-2025-550 ===
+INFO:__main__:Processing commitment_fee payments...
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payments: commitment_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Generating pending payments for commitment_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-001-commitment_fee: $995,482
+INFO:x402_client:x402 Payment: $995,482 USDC | 0xd66d37248a8094...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-001 after commitment_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$995,482
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-002-commitment_fee: $995,482
+INFO:x402_client:x402 Payment: $995,482 USDC | 0x0a2e64e8a51726...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-002 after commitment_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$995,482
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-003-commitment_fee: $995,482
+INFO:x402_client:x402 Payment: $995,482 USDC | 0x37074937c6f0d6...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-003 after commitment_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$995,482
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-004-commitment_fee: $995,482
+INFO:x402_client:x402 Payment: $995,482 USDC | 0x265ae6bfe6de35...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-004 after commitment_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$995,482
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-005-commitment_fee: $330,246
+INFO:x402_client:x402 Payment: $330,246 USDC | 0x2b0737cae671ab...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-005 after commitment_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$330,246
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-101-commitment_fee: $440,328
+INFO:x402_client:x402 Payment: $440,328 USDC | 0xb0b455f7e4b51f...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-101 after commitment_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$440,328
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-102-commitment_fee: $880,657
+INFO:x402_client:x402 Payment: $880,657 USDC | 0x66d1d169d2d07c...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-102 after commitment_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$880,657
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-103-commitment_fee: $995,482
+INFO:x402_client:x402 Payment: $995,482 USDC | 0x5845a8bd56bb7a...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-103 after commitment_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$995,482
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-104-commitment_fee: $352,263
+INFO:x402_client:x402 Payment: $352,263 USDC | 0x5860cbf0cbff79...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-104 after commitment_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$352,263
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-106-commitment_fee: $352,263
+INFO:x402_client:x402 Payment: $352,263 USDC | 0xebf0a92b0aeb2a...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-106 after commitment_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$352,263
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-107-commitment_fee: $660,493
+INFO:x402_client:x402 Payment: $660,493 USDC | 0x8c3af38f9185b1...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-107 after commitment_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$660,493
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-108-commitment_fee: $995,482
+INFO:x402_client:x402 Payment: $995,482 USDC | 0xda7cdc2951c6e0...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-108 after commitment_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$995,482
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-109-commitment_fee: $264,197
+INFO:x402_client:x402 Payment: $264,197 USDC | 0xc40cbe0a016477...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-109 after commitment_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$264,197
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-110-commitment_fee: $995,482
+INFO:x402_client:x402 Payment: $995,482 USDC | 0x78a132d3b11cf2...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-110 after commitment_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$995,482
+INFO:__main__:[DASHBOARD] PAYMENT_PROGRESS: {'payment_type': 'commitment_fee', 'completed': 14, 'total': 14, 'completion_rate': 1.0, 'amount_collected': 10248821}
+INFO:__main__:Processing arrangement_fee payments...
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payments: arrangement_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Generating pending payments for arrangement_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-001-arrangement_fee: $2,927,889
+INFO:x402_client:x402 Payment: $2,927,889 USDC | 0x4f63e8e3e8bf0a...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-001 after arrangement_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$2,927,889
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-002-arrangement_fee: $2,927,889
+INFO:x402_client:x402 Payment: $2,927,889 USDC | 0xa946623bbc6eb3...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-002 after arrangement_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$2,927,889
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-003-arrangement_fee: $2,927,889
+INFO:x402_client:x402 Payment: $2,927,889 USDC | 0xe81c759296bfc8...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-003 after arrangement_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$2,927,889
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-004-arrangement_fee: $2,927,889
+INFO:x402_client:x402 Payment: $2,927,889 USDC | 0xd37c6ac5f69fa6...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-004 after arrangement_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$2,927,889
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-005-arrangement_fee: $971,313
+INFO:x402_client:x402 Payment: $971,313 USDC | 0xe214bbf30dfa0d...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-005 after arrangement_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$971,313
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-101-arrangement_fee: $1,295,084
+INFO:x402_client:x402 Payment: $1,295,084 USDC | 0x97207bbc51837b...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-101 after arrangement_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$1,295,084
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-102-arrangement_fee: $2,590,169
+INFO:x402_client:x402 Payment: $2,590,169 USDC | 0x8cd29a57cd0cf9...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-102 after arrangement_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$2,590,169
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-103-arrangement_fee: $2,927,889
+INFO:x402_client:x402 Payment: $2,927,889 USDC | 0x29999bfc2f8ddd...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-103 after arrangement_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$2,927,889
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-104-arrangement_fee: $1,036,067
+INFO:x402_client:x402 Payment: $1,036,067 USDC | 0x758156311ea796...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-104 after arrangement_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$1,036,067
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-106-arrangement_fee: $1,036,067
+INFO:x402_client:x402 Payment: $1,036,067 USDC | 0x1990b6be2a9a7a...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-106 after arrangement_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$1,036,067
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-107-arrangement_fee: $1,942,627
+INFO:x402_client:x402 Payment: $1,942,627 USDC | 0xf400cf096f4c9c...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-107 after arrangement_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$1,942,627
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-108-arrangement_fee: $2,927,889
+INFO:x402_client:x402 Payment: $2,927,889 USDC | 0x476cfee5275631...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-108 after arrangement_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$2,927,889
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-109-arrangement_fee: $777,050
+INFO:x402_client:x402 Payment: $777,050 USDC | 0xd9323460a818c4...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-109 after arrangement_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$777,050
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-110-arrangement_fee: $2,927,889
+INFO:x402_client:x402 Payment: $2,927,889 USDC | 0x0fa16cb0aa1e38...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-110 after arrangement_fee
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$2,927,889
+INFO:__main__:[DASHBOARD] PAYMENT_PROGRESS: {'payment_type': 'arrangement_fee', 'completed': 14, 'total': 14, 'completion_rate': 1.0, 'amount_collected': 30143600}
+INFO:__main__:Processing principal payments...
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payments: principal
+INFO:payment_agent:[PAY-SYND-2025-550] Generating pending payments for principal
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-001-principal: $146,394,470
+INFO:x402_client:x402 Payment: $146,394,470 USDC | 0x496016e4ce69a2...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-001 after principal
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$146,394,470
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-002-principal: $146,394,470
+INFO:x402_client:x402 Payment: $146,394,470 USDC | 0xc1dbd6bb5e7fb0...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-002 after principal
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$146,394,470
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-003-principal: $146,394,470
+INFO:x402_client:x402 Payment: $146,394,470 USDC | 0x66e6a932fd0a0c...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-003 after principal
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$146,394,470
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-004-principal: $146,394,470
+INFO:x402_client:x402 Payment: $146,394,470 USDC | 0x30864f0cdb8cbc...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-004 after principal
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$146,394,470
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-005-principal: $48,565,677
+INFO:x402_client:x402 Payment: $48,565,677 USDC | 0x1e8581f84d5f83...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-005 after principal
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$48,565,677
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-101-principal: $64,754,236
+INFO:x402_client:x402 Payment: $64,754,236 USDC | 0x79d9105fe01f44...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-101 after principal
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$64,754,236
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-102-principal: $129,508,473
+INFO:x402_client:x402 Payment: $129,508,473 USDC | 0x1ea06f08523241...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-102 after principal
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$129,508,473
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-103-principal: $146,394,470
+INFO:x402_client:x402 Payment: $146,394,470 USDC | 0x33ab1009dc72ee...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-103 after principal
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$146,394,470
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-104-principal: $51,803,389
+INFO:x402_client:x402 Payment: $51,803,389 USDC | 0x1d4fff59abef79...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-104 after principal
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$51,803,389
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-106-principal: $51,803,389
+INFO:x402_client:x402 Payment: $51,803,389 USDC | 0x36eff8d5be41a3...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-106 after principal
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$51,803,389
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-107-principal: $97,131,355
+INFO:x402_client:x402 Payment: $97,131,355 USDC | 0x23dcfa696323d5...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-107 after principal
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$97,131,355
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-108-principal: $146,394,470
+INFO:x402_client:x402 Payment: $146,394,470 USDC | 0x4ecdb79123d725...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-108 after principal
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$146,394,470
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-109-principal: $38,852,542
+INFO:x402_client:x402 Payment: $38,852,542 USDC | 0xd6899a887e4480...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-109 after principal
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$38,852,542
+INFO:payment_agent:[PAY-SYND-2025-550] Processing payment PAY-550-110-principal: $146,394,470
+INFO:x402_client:x402 Payment: $146,394,470 USDC | 0x5a3ec4b97026c6...
+INFO:payment_agent:[PAY-SYND-2025-550] Updated participant PA-110 after principal
+INFO:payment_agent:[PAY-SYND-2025-550] Updated originator OA-001: +$146,394,470
+INFO:__main__:[DASHBOARD] PAYMENT_PROGRESS: {'payment_type': 'principal', 'completed': 14, 'total': 14, 'completion_rate': 1.0, 'amount_collected': 1507180351}
+INFO:payment_agent:[PAY-SYND-2025-550] Completing syndication SYND-2025-550
+INFO:payment_agent:[PAY-SYND-2025-550] Releasing escrow for SYND-2025-550
+INFO:x402_client:x402 Payment: $1,505,673,171 USDC | 0x8c95d3ad447ab0...
+INFO:x402_client:x402 Payment: $1,507,180 USDC | 0x7682d94e194e8b...
+INFO:x402_client:Escrow released: $1,505,673,171 to borrower, $1,507,180 platform fee
+INFO:payment_agent:[PAY-SYND-2025-550] Escrow release successful: {'status': 'completed', 'borrower_tx': '0x8c95d3ad447ab0ef9e3d328557b14f6ac6de0ab50ec97b51f33cff648a455f5d', 'platform_fee_tx': '0x7682d94e194e8bdd9dcfc47ac92e709a0133209b6efa16999db34eb44f3ea8ec', 'amount_released': 1505673171, 'platform_fee': 1507180, 'borrower_wallet': 'borrower-atlas-holdings-wallet', 'timestamp': datetime.datetime(2026, 1, 1, 17, 26, 15, 812894)}
+INFO:originator_agent:[OA-001] No valid API Key found. Running in Simulation Mode.
+INFO:originator_agent:[OA-001] Syndication SYND-2025-550 marked as success
+INFO:payment_agent:[PAY-SYND-2025-550] Syndication SYND-2025-550 completed successfully
+INFO:__main__:[DASHBOARD] SYNDICATION_COMPLETE: {'final_status': 'completed', 'total_syndicated': 2327539371, 'total_fees_collected': 0, 'completion_time': datetime.datetime(2026, 1, 1, 17, 26, 15, 960756)}
+INFO:__main__:[Node 5] PAYMENT → Status: completed
+INFO:__main__:
+================================================================================
+INFO:__main__:✅ SYNDICATION WORKFLOW COMPLETE
+INFO:__main__:================================================================================
+INFO:__main__:  Syndication ID: SYND-2025-550
+INFO:__main__:  Final Status: completed
+INFO:__main__:  Duration: 13.54 seconds (0.2 minutes)
+INFO:__main__:  Nodes Executed: 5
+INFO:__main__:
+INFO:__main__:  📊 RESULTS:
+INFO:__main__:    Total Bids Received: 14
+INFO:__main__:    Total Committed: $2,327,539,371
+INFO:__main__:    Subscription Rate: 154.4%
+INFO:__main__:    Final Spread: 470 bps
+INFO:__main__:    Allocations: 14
+INFO:__main__:    Payments Processed: 42
+INFO:__main__:
+INFO:__main__:  💰 PAYMENT METRICS:
+INFO:__main__:    Total Expected: $1,547,572,772
+INFO:__main__:    Total Collected: $1,547,572,772
+INFO:__main__:    Collection Rate: 100.0%
+INFO:__main__:================================================================================
+
+
+🚀 Starting SyndiMatch Demo Syndication
+
+
+================================================================================
+📋 QUICK SUMMARY
+================================================================================
+Syndication: SYND-2025-550
+Status: completed
+Success: ✓
+================================================================================
+

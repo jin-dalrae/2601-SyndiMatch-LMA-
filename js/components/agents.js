@@ -13,92 +13,180 @@ const AgentsComponent = {
         this.render();
     },
 
-    getFilteredData() {
+    async getFilteredData() {
         if (this.filterId === 'all') {
-            return {
-                agents: SyndiData.agents,
-                decisions: SyndiData.decisions
+            // Fetch real data from API for the "all" view
+            const [agentsData, allEvents, syndications] = await Promise.all([
+                API.getAgents(),
+                API.getAllSyndicationEvents(100), // Get latest 100 events
+                API.getSyndications()
+            ]);
+
+            // Aggregate agents by type with syndication context
+            const agents = {
+                originator: (agentsData?.originator || []).map(a => ({
+                    id: a.agent_id || a.id || 'OA-LEAD',
+                    entity: a.name || a.entity || 'Originator',
+                    status: a.status || 'active',
+                    loans: a.deals_completed || 0,
+                    success: a.success_rate || 95
+                })),
+                participant: (agentsData?.participant || []).map(a => ({
+                    id: a.agent_id || a.id || 'PA-UNKNOWN',
+                    entity: a.name || a.institution_name || 'Participant',
+                    status: a.status || 'active',
+                    bids: a.total_bids || 0,
+                    winRate: a.win_rate || 0
+                })),
+                negotiation: (agentsData?.negotiation || []).map(a => ({
+                    id: a.agent_id || a.id || 'NA-1',
+                    syndId: a.syndication_id || a.syndId || 'N/A',
+                    status: a.status || 'idle',
+                    round: a.current_round || 1,
+                    subscription: (a.subscription_rate || 0) * 100
+                })),
+                settlement: (agentsData?.settlement || []).map(a => ({
+                    id: a.agent_id || a.id || 'SA-1',
+                    syndId: a.syndication_id || a.syndId || 'N/A',
+                    status: a.status || 'idle',
+                    stage: a.current_stage || 'Pending',
+                    docs: a.documents_completed_pct || 0
+                })),
+                payment: (agentsData?.payment || []).map(a => ({
+                    id: a.agent_id || a.id || 'PAY-1',
+                    syndId: a.syndication_id || a.syndId || 'N/A',
+                    status: a.status || 'idle',
+                    collected: (a.collection_rate || 0) * 100,
+                    amount: `$${a.total_collected || 0}M`
+                }))
             };
+
+            // Map events to decision log format
+            const decisions = (allEvents || []).map(e => {
+                let actionType = 'neutral';
+                if (e.event_type && e.event_type.includes('FAILED')) actionType = 'negative';
+                if (e.event_type && (e.event_type.includes('COMPLETE') || e.event_type.includes('SUCCESS'))) actionType = 'positive';
+
+                const dataStr = Object.entries(e.data || {})
+                    .slice(0, 3) // Limit to 3 fields for brevity
+                    .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v).slice(0, 30) : v}`)
+                    .join(', ');
+
+                return {
+                    agent: (e.event_type || 'SYSTEM').split('_')[0],
+                    time: e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : 'N/A',
+                    action: e.event_type || 'Unknown',
+                    factors: [{ type: actionType, text: dataStr || 'No additional data' }],
+                    result: e.syndication_id ? `Syndication: ${e.syndication_id}` : 'Processed'
+                };
+            });
+
+            // If no data from API, fallback to mock
+            if (agents.originator.length === 0 && agents.participant.length === 0 && decisions.length === 0) {
+                return {
+                    agents: SyndiData.agents,
+                    decisions: SyndiData.decisions
+                };
+            }
+
+            return { agents, decisions };
         }
 
-        const synd = SyndiData.syndications.find(s => s.id === this.filterId);
-        // Better empty state if syndication not found
+        // Fetch real data in parallel
+        const [synd, events, agentsData] = await Promise.all([
+            API.getSyndication(this.filterId),
+            API.getSyndicationEvents(this.filterId),
+            API.getAgents()
+        ]);
+
         if (!synd) return {
             agents: { originator: [], participant: [], negotiation: [], settlement: [], payment: [] },
             decisions: []
         };
 
-        // 1. Originator (Dynamic & Strict)
+        // 1. Originator
         const originatorName = typeof synd.originator === 'object' ? synd.originator.name : synd.originator;
-        let originatorAgent = SyndiData.agents.originator.find(a => a.entity === originatorName);
-        if (!originatorAgent) {
-            originatorAgent = {
-                id: 'OA-LEAD',
-                entity: originatorName,
-                status: 'active',
-                loans: 12,
-                success: 95
-            };
-        }
+        // Try to find in real agents, fallback to mock
+        let originatorAgent = (agentsData?.originator || []).find(a => a.name === originatorName) || {
+            id: 'OA-LEAD',
+            entity: originatorName,
+            status: 'active',
+            loans: 12,
+            success: 95
+        };
 
-        // 2. Participants (From real bids)
+        // 2. Participants from real bids
         const participants = (synd.bids || []).map(bid => ({
-            id: bid.participantId || bid.participant || 'UNKNOWN',
-            entity: bid.participantName || bid.participant || 'Bidder',
+            id: bid.participant_agent_id || bid.participantId || 'UNKNOWN',
+            entity: bid.institution_name || bid.participantName || 'Bidder', // specific to backend model
             status: 'active',
             bids: 1,
             winRate: bid.allocation ? 100 : 0,
-            note: `Bid: $${bid.amount}M @ ${bid.spread}bps${bid.allocation ? ' (Won)' : ''}`
+            note: `Bid: $${bid.bid_amount || bid.amount}M @ ${bid.spread_bid || bid.spread}bps${bid.allocation ? ' (Won)' : ''}`
         }));
 
-        // 3. Negotiation Agent
+        // 3. Negotiation Agent (Derived from synd status)
         const negotiationAgents = [];
-        if (['open', 'negotiating'].includes(synd.phase) || synd.status === 'negotiating') {
+        if (synd.status !== 'created') {
+            const isRunning = ['open', 'negotiating'].includes(synd.status);
+            const negState = synd.negotiation_state || {};
             negotiationAgents.push({
                 id: `NA-${synd.id.split('-').pop()}`,
                 syndId: synd.id,
-                status: 'running',
-                round: `Rd ${synd.round}`,
-                subscription: synd.subscription || 0
-            });
-        } else if (synd.phase !== 'open') {
-            negotiationAgents.push({
-                id: `NA-${synd.id.split('-').pop()}`,
-                syndId: synd.id,
-                status: 'idle',
-                round: 'Complete',
-                subscription: synd.subscription || 100
+                status: isRunning ? 'running' : 'complete',
+                round: `Rd ${negState.auction_round || synd.round || 1}`,
+                subscription: (negState.subscription_rate || (synd.subscription || 0)) * 100
             });
         }
 
         // 4. Settlement Agent
         const settlementAgents = [];
-        if (['closing', 'settlement', 'closed'].includes(synd.phase)) {
+        if (['settlement', 'closed', 'completed'].includes(synd.status) || synd.phase === 'closed') {
+            // Check specific settlement stage from events if possible, or just default
             settlementAgents.push({
                 id: `SA-${synd.id.split('-').pop()}`,
                 syndId: synd.id,
-                status: synd.phase === 'closed' ? 'complete' : 'working',
-                stage: synd.phase === 'closed' ? 'Archived' : 'Documentation',
-                docs: synd.phase === 'closed' ? 100 : 50
+                status: synd.status === 'completed' ? 'complete' : 'working',
+                stage: synd.status === 'completed' ? 'Archived' : 'Documentation',
+                docs: synd.documents_signed_count ? (synd.documents_signed_count / (participants.length || 1) * 100) : 50
             });
         }
 
         // 5. Payment Agent
         const paymentAgents = [];
-        if (['closed', 'completed'].includes(synd.phase) || synd.status === 'completed') {
+        if (['payment', 'completed'].includes(synd.status)) {
+            const payMetrics = synd.payment_metrics || {};
             paymentAgents.push({
                 id: `PAY-${synd.id.split('-').pop()}`,
                 syndId: synd.id,
                 status: 'active',
-                collected: 100,
-                amount: `$${synd.amount}M`
+                collected: payMetrics.collection_rate ? payMetrics.collection_rate * 100 : 0,
+                amount: `$${payMetrics.total_collected || 0}M`
             });
         }
 
-        // Decisions
-        const decisions = SyndiData.decisions.filter(d =>
-            d.action.includes(synd.id) || d.result.includes(synd.id)
-        );
+        // Map backend events to decisions
+        const decisions = events.map(e => {
+            // Determine visual style based on event type
+            let actionType = 'neutral';
+            let resultText = 'Processed';
+
+            if (e.event_type.includes('FAILED')) actionType = 'negative';
+            if (e.event_type.includes('COMPLETE')) actionType = 'positive';
+
+            // Format data payload for display
+            const dataStr = Object.entries(e.data || {})
+                .map(([k, v]) => `${k}: ${v}`)
+                .join(', ');
+
+            return {
+                agent: e.event_type.split('_')[0], // e.g., "BID" -> "BID" (Improve this mapping)
+                time: new Date(e.timestamp).toLocaleTimeString(),
+                action: e.event_type,
+                factors: [{ type: actionType, text: dataStr }],
+                result: resultText
+            };
+        });
 
         return {
             agents: {
@@ -112,8 +200,40 @@ const AgentsComponent = {
         };
     },
 
-    render() {
+    async render() {
         this.renderFilter();
+
+        // Add loading state to containers
+        const statusContainer = document.getElementById('agents-status-container');
+        const decisionContainer = document.getElementById('decision-log');
+
+        if (statusContainer) statusContainer.innerHTML += '<div class="loading-state">Syncing with orchestration engine...</div>';
+
+        // Fetch async data
+        this.data = await this.getFilteredData();
+
+        // Clear loading and render
+        if (statusContainer) {
+            // Keep the filter (first child) and clear the rest
+            const filterBar = statusContainer.querySelector('.agent-filter-toolbar');
+            statusContainer.innerHTML = '';
+            if (filterBar) statusContainer.appendChild(filterBar);
+
+            // Re-render orchestration container if needed
+            const orchContainer = document.createElement('div');
+            orchContainer.id = 'orchestration-view-container';
+            orchContainer.style.display = this.filterId !== 'all' ? 'block' : 'none';
+            orchContainer.style.marginBottom = '2rem';
+            statusContainer.appendChild(orchContainer);
+
+            if (this.filterId !== 'all' && window.AgentOrchestration) {
+                AgentOrchestration.render(orchContainer);
+                // We need to re-fetch the syndication object for this View
+                const synd = SyndiData.syndications.find(s => s.id === this.filterId);
+                if (synd) AgentOrchestration.setViewingSyndication(synd);
+            }
+        }
+
         this.renderAgentStatus();
         this.renderDecisionLog();
     },
@@ -168,9 +288,9 @@ const AgentsComponent = {
 
     renderAgentStatus() {
         const container = document.getElementById('agents-status-container');
-        if (!container) return;
+        if (!container || !this.data) return;
 
-        const { agents } = this.getFilteredData();
+        const { agents } = this.data;
 
         const agentGroups = [
             { title: 'Originator Agents', count: agents.originator.length, data: agents.originator, type: 'originator' },
@@ -204,13 +324,13 @@ const AgentsComponent = {
                 info = agent.note || `Bids: ${agent.bids} | Win Rate: ${agent.winRate}%`;
                 break;
             case 'negotiation':
-                info = `Round: ${agent.round} | Subscription: ${agent.subscription}%`;
+                info = `Round: ${agent.round} | Subscription: ${(agent.subscription || 0).toFixed(1)}%`;
                 break;
             case 'settlement':
-                info = agent.note || `Stage: ${agent.stage} | Docs: ${agent.docs}% signed`;
+                info = agent.note || `Stage: ${agent.stage} | Docs: ${(agent.docs || 0).toFixed(0)}% signed`;
                 break;
             case 'payment':
-                info = `Collected: ${agent.collected}% (${agent.amount})`;
+                info = `Collected: ${(agent.collected || 0).toFixed(1)}% (${agent.amount})`;
                 break;
         }
 
@@ -228,9 +348,14 @@ const AgentsComponent = {
 
     renderDecisionLog() {
         const container = document.getElementById('decision-log');
-        if (!container) return;
+        if (!container || !this.data) return;
 
-        const { decisions } = this.getFilteredData();
+        const { decisions } = this.data;
+
+        if (decisions.length === 0) {
+            container.innerHTML = '<div class="empty-state">No decision logs found for this syndication.</div>';
+            return;
+        }
 
         container.innerHTML = decisions.map(decision => `
             <div class="decision-entry">

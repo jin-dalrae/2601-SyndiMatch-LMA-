@@ -13,6 +13,7 @@ DATABASE_NAME = "syndimatch"
 
 # Anthropic
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+SIMULATION_MODE = not (ANTHROPIC_API_KEY and ANTHROPIC_API_KEY.startswith("sk-"))
 AGENT_MODEL = "claude-sonnet-4-20250514"
 
 # Coinbase x402
