@@ -12,8 +12,8 @@ import uuid
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from state import SyndicationState, BidDecision, Bid
-from config import ANTHROPIC_API_KEY, AGENT_MODEL
+from .state import SyndicationState, BidDecision, Bid
+from .config import ANTHROPIC_API_KEY, AGENT_MODEL
 import db
 
 logger = logging.getLogger(__name__)
@@ -193,9 +193,10 @@ Do not bid more than you have available.
         """Check if loan passes basic eligibility"""
         risk = self.profile.get("risk_appetite", {})
         sector_prefs = self.profile.get("sector_preferences", {})
+        rating_pref = risk.get("credit_rating_range", {})
         
         # Check available capacity with 2% buffer for fees
-        available_cap = risk.get("available_capacity", 0)
+        available_cap = risk.get("available_capacity", 0) - risk.get("reserved_for_bids", 0)
         fee_buffer = available_cap * 0.02
         if (available_cap - fee_buffer) < risk.get("min_ticket", 0):
             return False
@@ -203,6 +204,18 @@ Do not bid more than you have available.
         # Check if sector is avoided
         if state["loan_details"]["industry"] in sector_prefs.get("avoid", []):
             return False
+
+        # Check rating against range if provided
+        loan_rating = state["loan_details"].get("credit_rating")
+        if loan_rating and rating_pref:
+            # Simple lexical check for min/max buckets if present
+            min_rating = rating_pref.get("min")
+            max_rating = rating_pref.get("max")
+            # If min/max exist and loan outside, fail
+            if min_rating and loan_rating < min_rating:
+                return False
+            if max_rating and loan_rating > max_rating:
+                return False
         
         return True
     
@@ -258,11 +271,21 @@ Do not bid more than you have available.
         min_yield = risk.get("min_acceptable_yield", 0)
         
         if estimated_yield >= min_yield:
+            available = max(0, risk.get("available_capacity", 0) - risk.get("reserved_for_bids", 0))
+            capacity_after_fees = max(0, available - available * 0.02)
             amount = min(
                 risk.get("max_single_ticket", 50000000),
-                risk.get("available_capacity", 0),
+                capacity_after_fees,
                 state["loan_details"]["syndication_target"] * 0.15
             )
+            if amount < risk.get("min_ticket", 0):
+                return BidDecision(
+                    decision="pass",
+                    amount=0,
+                    spread=0,
+                    reasoning="Rule-based: Insufficient available capacity for min ticket",
+                    portfolio_fit_score=0.2
+                )
             return BidDecision(
                 decision="bid",
                 amount=int(amount),
@@ -329,7 +352,11 @@ Do not bid more than you have available.
             {"_id": self.agent_id},
             {
                 "$inc": {"performance_history.bids_submitted_ytd": 1},
-                "$set": {"last_bid_at": now}
+                "$set": {"last_bid_at": now},
+                "$inc": {
+                    "risk_appetite.available_capacity": -decision.amount,
+                    "risk_appetite.reserved_for_bids": decision.amount
+                }
             }
         )
         
@@ -350,6 +377,7 @@ Do not bid more than you have available.
                 "$inc": {
                     "risk_appetite.current_deployed": amount,
                     "risk_appetite.available_capacity": -amount,
+                    "risk_appetite.reserved_for_bids": -min(amount, self.profile.get("risk_appetite", {}).get("reserved_for_bids", 0)),
                     "performance_history.allocations_won": 1
                 },
                 "$set": {"updated_at": datetime.utcnow()}

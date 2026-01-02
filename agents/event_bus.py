@@ -37,6 +37,7 @@ class EventBus:
     
     _handlers: Dict[Type[DomainEvent], List[Callable]] = {}
     _global_handlers: List[Callable] = []
+    _sticky_global_handlers: List[Callable] = []  # Persist across setup() resets
     _enabled: bool = True
     
     @classmethod
@@ -70,6 +71,16 @@ class EventBus:
             logger.debug(f"Subscribed {getattr(handler, '__name__', 'handler')} to ALL events")
         else:
             logger.debug(f"Global handler {getattr(handler, '__name__', 'handler')} already subscribed to ALL events")
+
+    @classmethod
+    def subscribe_all_sticky(cls, handler: Callable[[DomainEvent], None]) -> None:
+        """
+        Subscribe a global handler that survives setup_event_handlers() clears.
+        Useful for long-lived bridges (e.g., WebSocket broadcasting).
+        """
+        if handler not in cls._sticky_global_handlers:
+            cls._sticky_global_handlers.append(handler)
+        cls.subscribe_all(handler)
     
     @classmethod
     def emit(cls, event: DomainEvent) -> None:
@@ -106,7 +117,7 @@ class EventBus:
     def clear(cls) -> None:
         """Clear all handlers. Useful for testing."""
         cls._handlers = {}
-        cls._global_handlers = []
+        cls._global_handlers = list(cls._sticky_global_handlers)
     
     @classmethod
     def disable(cls) -> None:

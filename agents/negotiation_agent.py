@@ -11,7 +11,7 @@ import logging
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from state import SyndicationState, AuctionDecision
+from .state import SyndicationState, AuctionDecision
 from config import (
     ANTHROPIC_API_KEY, AGENT_MODEL, 
     MAX_AUCTION_ROUNDS, MIN_SUBSCRIPTION_RATE, EARLY_CLOSE_THRESHOLD

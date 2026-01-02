@@ -32,9 +32,13 @@ def seed_originator_agents():
         {"_id": "OA-008", "entity": "MUFG Bank", "headquarters": "Tokyo, Japan", "status": "active", "active_loans": 1, "success_rate": 95, "total_fees_ytd": 0}
     ]
     
+    # Canonical collection name used by app: originator
+    db["originator"].delete_many({})
+    db["originator"].insert_many(originators)
+    # Backward compatibility for older scripts
     db.originator_agents.delete_many({})
     db.originator_agents.insert_many(originators)
-    print(f"✅ Seeded {len(originators)} originator agents")
+    print(f"✅ Seeded {len(originators)} originator agents (originator + originator_agents)")
 
 
 def seed_participant_agents():
@@ -115,6 +119,7 @@ def seed_participant_agents():
         deployed = int(total * random.uniform(0.4, 0.8))
         p["risk_appetite"]["current_deployed"] = deployed
         p["risk_appetite"]["available_capacity"] = total - deployed
+        p["risk_appetite"]["reserved_for_bids"] = 0
         
         # Default credit ratings if missing
         if "credit_rating_range" not in p["risk_appetite"]:
@@ -126,9 +131,13 @@ def seed_participant_agents():
         if "sector_preferences" not in p:
             p["sector_preferences"] = {"preferred": ["Industrial", "Consumer"], "neutral": ["Healthcare"], "avoid": ["Speculative"]}
 
+    # Canonical collection name used by app: participants
+    db["participants"].delete_many({})
+    db["participants"].insert_many(participants)
+    # Backward compatibility for older scripts
     db.participant_agents.delete_many({})
     db.participant_agents.insert_many(participants)
-    print(f"✅ Seeded {len(participants)} participant agents with randomized deployment")
+    print(f"✅ Seeded {len(participants)} participant agents with randomized deployment (participants + participant_agents)")
 
 
 def seed_demo_syndications():
@@ -226,9 +235,13 @@ def seed_demo_syndications():
         }
     ]
     
+    # Canonical collection name used by app: syndication_original
+    db["syndication_original"].delete_many({})
+    db["syndication_original"].insert_many(syndications)
+    # Backward compatibility for older scripts
     db.syndications.delete_many({})
     db.syndications.insert_many(syndications)
-    print(f"✅ Seeded {len(syndications)} demo syndications with relative dates")
+    print(f"✅ Seeded {len(syndications)} demo syndications with relative dates (syndication_original + syndications)")
 
 
 def main():
@@ -242,20 +255,23 @@ def main():
     
     # Print summary and sample data
     print("Collections summary:")
-    print(f"  • originator_agents: {db.originator_agents.count_documents({})}")
-    print(f"  • participant_agents: {db.participant_agents.count_documents({})}")
-    print(f"  • syndications: {db.syndications.count_documents({})}")
+    print(f"  • originator (canonical): {db['originator'].count_documents({})}")
+    print(f"  • originator_agents (legacy): {db.originator_agents.count_documents({})}")
+    print(f"  • participants (canonical): {db['participants'].count_documents({})}")
+    print(f"  • participant_agents (legacy): {db.participant_agents.count_documents({})}")
+    print(f"  • syndication_original (canonical): {db['syndication_original'].count_documents({})}")
+    print(f"  • syndications (legacy): {db.syndications.count_documents({})}")
     
     print("\nSample records:")
-    sample_o = db.originator_agents.find_one()
+    sample_o = db["originator"].find_one()
     if sample_o:
         print(f"  • Originator: {sample_o['entity']} ({sample_o['_id']})")
     
-    sample_p = db.participant_agents.find_one()
+    sample_p = db["participants"].find_one()
     if sample_p:
         print(f"  • Participant: {sample_p['institution']['name']} (Deployed: {sample_p['risk_appetite']['current_deployed']:,})")
     
-    sample_s = db.syndications.find_one()
+    sample_s = db["syndication_original"].find_one()
     if sample_s:
         print(f"  • Syndication: {sample_s['loan_details']['borrower_name']} (Status: {sample_s['status']})")
 

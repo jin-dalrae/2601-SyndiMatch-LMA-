@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 import logging
 
-from state import SyndicationState, SettlementDecision
+from .state import SyndicationState, SettlementDecision
 from config import COMMITMENT_FEE_DUE_HOURS
 import db
 

@@ -10,6 +10,10 @@ const App = {
     init() {
         console.log('🚀 SyndiMatch Dashboard initializing...');
 
+        if (window.AppState && typeof AppState.init === 'function') {
+            AppState.init();
+        }
+
         // Initialize all components
         PipelineComponent.init();
         SyndicationDetailComponent.init();
@@ -75,6 +79,7 @@ const App = {
     showOverview() {
         this.currentSyndId = null;
         this.currentSubPage = null;
+        if (window.AppState) AppState.set('activeSyndicationId', null);
         this.updateNavigationForOverview();
         this.switchView('overview');
     },
@@ -82,6 +87,7 @@ const App = {
     showSyndicationPage(syndId, subPage) {
         this.currentSyndId = syndId;
         this.currentSubPage = subPage;
+        if (window.AppState) AppState.set('activeSyndicationId', syndId);
 
         console.log(`📋 Viewing ${syndId} - ${subPage}`);
 
@@ -496,4 +502,3 @@ const App = {
 
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => App.init());
-

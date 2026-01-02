@@ -1,0 +1,50 @@
+{
+  "hosting": [
+    {
+      "target": "syndimatch",
+      "public": ".",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**",
+        "**/venv311/**",
+        "**/agents/**",
+        "**/server/**",
+        "**/tests/**",
+        "**/docs/**",
+        "**/*.md",
+        "**/*.txt",
+        "**/*.py",
+        "**/__pycache__/**",
+        "**/.git/**"
+      ],
+      "rewrites": [
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
+      ],
+      "headers": [
+        {
+          "source": "**/*.@(js|css|html)",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "max-age=3600"
+            }
+          ]
+        },
+        {
+          "source": "**/*.@(jpg|jpeg|gif|png|svg|webp)",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "max-age=86400"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+

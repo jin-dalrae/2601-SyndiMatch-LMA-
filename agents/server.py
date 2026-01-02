@@ -18,6 +18,7 @@ from originator_agent import generate_syndication
 from participant_agent import ParticipantAgent
 from x402_client import x402, PaymentStatus  # Import x402 client
 import db
+from event_bus import EventBus
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -56,6 +57,25 @@ class ConnectionManager:
                 logger.error(f"Broadcast error: {e}")
 
 manager = ConnectionManager()
+_main_event_loop = None  # Set on startup for thread-safe WS broadcasts
+
+
+def _broadcast_domain_event(event: Any) -> None:
+    """
+    Bridge DomainEvents from the EventBus to all connected WebSocket clients.
+    Uses the main FastAPI event loop to schedule async broadcasts from worker threads.
+    """
+    global _main_event_loop
+    if not _main_event_loop or _main_event_loop.is_closed():
+        return
+
+    try:
+        payload = event.to_dict()
+        # Ensure a consistent shape for the frontend
+        payload["status"] = "active"
+        asyncio.run_coroutine_threadsafe(manager.broadcast(payload), _main_event_loop)
+    except Exception as e:
+        logger.error(f"WS broadcast failed for {type(event).__name__}: {e}")
 
 
 # === Request Models ===
@@ -511,27 +531,18 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             data = await websocket.receive_text()
             message = json.loads(data)
+            msg_type = message.get("type")
             
             # Handle different message types
-            if message.get("type") == "subscribe":
+            if msg_type == "subscribe":
                 await websocket.send_json({
                     "type": "subscribed",
                     "message": "Connected to SyndiMatch updates"
                 })
             
-            elif message.get("type") == "run_syndication":
+            elif msg_type == "run_syndication":
                 originator = message.get("originator_id", "OA-001")
                 synd_id = message.get("syndication_id")
-<<<<<<< Updated upstream
-                
-                await websocket.send_json({
-                    "type": "syndication_started",
-                    "message": f"Starting syndication run for {synd_id or originator}"
-                })
-                
-                # Run syndication in background as a task to avoid blocking the WS loop
-                asyncio.create_task(_handle_run_syndication_ws(websocket, originator, synd_id))
-=======
                 step_mode = message.get("step_mode", False)
                 
                 await websocket.send_json({
@@ -543,7 +554,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 loan_params = {"step_mode": step_mode}
                 asyncio.create_task(_handle_run_syndication_ws(websocket, originator, synd_id, loan_params))
 
-            elif message.get("type") == "step_syndication":
+            elif msg_type == "step_syndication":
                 synd_id = message.get("syndication_id")
                 if synd_id:
                     await websocket.send_json({
@@ -551,7 +562,16 @@ async def websocket_endpoint(websocket: WebSocket):
                         "message": f"Stepping syndication {synd_id}..."
                     })
                     asyncio.create_task(_handle_resume_syndication_ws(websocket, synd_id))
->>>>>>> Stashed changes
+
+            elif msg_type == "reset_engine":
+                try:
+                    db.get_collection("syndication_events").delete_many({})
+                    await websocket.send_json({
+                        "type": "engine_reset",
+                        "message": "Engine state cleared"
+                    })
+                except Exception as e:
+                    await websocket.send_json({"type": "error", "message": f"Reset failed: {e}"})
             
                 await websocket.send_json({"type": "pong"})
     
@@ -562,34 +582,7 @@ async def websocket_endpoint(websocket: WebSocket):
         manager.disconnect(websocket)
 
 
-<<<<<<< Updated upstream
-async def _handle_run_syndication_ws(websocket: WebSocket, originator_id: str, synd_id: Optional[str] = None):
-    """Helper to run syndication and report back over WS without blocking loop"""
-    try:
-        # Use provided synd_id or create new one from originator
-        target_id = synd_id or originator_id
-        result = await run_syndication_async(target_id)
-        
-        await websocket.send_json({
-            "type": "syndication_complete",
-            "data": {
-                "syndication_id": result.get("syndication_id"),
-                "status": result.get("status"),
-                "total_committed": result.get("total_committed"),
-                "allocations_count": len(result.get("allocations", []))
-            }
-        })
-    except Exception as e:
-        logger.error(f"WS Syndication run error: {e}")
-        try:
-            await websocket.send_json({
-                "type": "error",
-                "message": f"Syndication run failed: {str(e)}"
-            })
-        except:
-            pass # Socket might be closed
-=======
-async def _handle_run_syndication_ws(websocket: WebSocket, originator_id: str, synd_id: Optional[str], loan_params: Dict[str, Any]):
+async def _handle_run_syndication_ws(websocket: WebSocket, originator_id: str, synd_id: Optional[str], loan_params: Optional[Dict[str, Any]] = None):
     """Helper to run syndication and report back over WS"""
     try:
         target_id = synd_id or originator_id
@@ -611,7 +604,8 @@ async def _handle_run_syndication_ws(websocket: WebSocket, originator_id: str, s
         logger.error(f"WS Syndication run error: {e}")
         try:
             await websocket.send_json({"type": "error", "message": f"Run failed: {str(e)}"})
-        except: pass
+        except:
+            pass
 
 
 async def _handle_resume_syndication_ws(websocket: WebSocket, syndication_id: str):
@@ -634,8 +628,8 @@ async def _handle_resume_syndication_ws(websocket: WebSocket, syndication_id: st
         logger.error(f"WS Resume error: {e}")
         try:
             await websocket.send_json({"type": "error", "message": f"Step failed: {str(e)}"})
-        except: pass
->>>>>>> Stashed changes
+        except:
+            pass
 
 
 # === Startup Events ===
@@ -643,6 +637,10 @@ async def _handle_resume_syndication_ws(websocket: WebSocket, syndication_id: st
 @app.on_event("startup")
 async def startup():
     logger.info("SyndiMatch Agent API starting...")
+    global _main_event_loop
+    _main_event_loop = asyncio.get_running_loop()
+    # Register WS bridge as a sticky global handler (survives setup_event_handlers clears)
+    EventBus.subscribe_all_sticky(_broadcast_domain_event)
     db.get_database()
     logger.info("Database connected")
 

@@ -10,8 +10,8 @@ import hashlib
 import secrets
 import uuid
 
-from state import SyndicationState, PaymentDecision, PaymentStatus
-from config import LATE_PAYMENT_PENALTY_BPS, GRACE_PERIOD_HOURS
+from .state import SyndicationState, PaymentDecision, PaymentStatus
+from .config import LATE_PAYMENT_PENALTY_BPS, GRACE_PERIOD_HOURS
 from x402_client import X402Client, PaymentResult
 import db
 

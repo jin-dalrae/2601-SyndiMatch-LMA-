@@ -4,7 +4,7 @@ Calculates performance metrics for syndication stages
 """
 
 from typing import Dict, Any, List
-from state import SyndicationState
+from .state import SyndicationState
 from datetime import datetime
 
 class MetricsCalculator:

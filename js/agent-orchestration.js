@@ -24,41 +24,29 @@ const AgentOrchestration = {
     currentStage: null,
     workflowLog: [],
     activeSyndication: null,
-<<<<<<< Updated upstream
     isSimulatedMode: false,  // Track if we're in simulated mode
-=======
     manualMode: false,
->>>>>>> Stashed changes
 
     /**
      * Normalize syndication data from various sources to a consistent shape
      */
     normalizeSyndication(data) {
         if (!data) return null;
-<<<<<<< Updated upstream
 
         return {
-            id: data.syndication_id || data.id || 'Unknown',
-            borrower: data.borrower || data.loan_details?.borrower_name || 'Unknown Borrower',
-            amount: data.amount || data.loan_details?.total_amount || 0,
-            rating: data.rating || data.loan_details?.credit_rating || 'NR',
-            spread: data.spread || data.pricing?.initial_spread || data.loan_details?.spread || null,
-            industry: data.industry || data.loan_details?.industry || 'Unknown',
-            originator: data.originator || data.originatorName || 'Unknown',
-            status: data.status || 'active',
-            phase: data.phase || 'open'
-=======
-        return {
-            id: data.syndication_id || data.id || data._id,
+            id: data.syndication_id || data.id || data._id || 'Unknown',
             borrower: data.loan_details?.borrower_name || data.borrower || 'Unknown Borrower',
-            amount: (data.loan_details?.total_amount / 1000000) || data.amount || 0,
+            amount: typeof data.loan_details?.total_amount === 'number'
+                ? data.loan_details.total_amount / 1000000
+                : data.amount || 0,
             rating: data.loan_details?.credit_rating || data.rating || 'N/A',
-            spread: data.current_spread || data.pricing?.initial_spread || data.spread || 0,
-            industry: data.loan_details?.industry || data.industry || 'N/A',
+            spread: data.current_spread || data.pricing?.initial_spread || data.spread || data.loan_details?.spread || null,
+            industry: data.loan_details?.industry || data.industry || 'Unknown',
+            originator: data.originator || data.originatorName || data.originator_agent_id || 'Unknown',
             status: data.status || 'pending',
-            subscription: (data.subscription_rate * 100) || data.subscription || 0,
+            phase: data.phase || data.status || 'open',
+            subscription: (data.subscription_rate ? data.subscription_rate * 100 : 0) || data.subscription || 0,
             round: data.current_round || data.round || 1
->>>>>>> Stashed changes
         };
     },
 
@@ -524,11 +512,7 @@ const AgentOrchestration = {
                     <button class="btn-control btn-secondary" id="btn-step-engine" title="Execute next node only">⚡ Step</button>
                     <div class="control-spacer"></div>
                     <label class="toggle-control">
-<<<<<<< Updated upstream
-                        <input type="checkbox" id="check-manual-mode">
-=======
                         <input type="checkbox" id="check-manual-mode" ${this.manualMode ? 'checked' : ''}>
->>>>>>> Stashed changes
                         <span class="toggle-label">Manual Step Mode</span>
                     </label>
                 </div>

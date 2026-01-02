@@ -24,7 +24,7 @@ from datetime import datetime
 from collections.abc import Mapping
 
 import db
-from state import SyndicationState
+from .state import SyndicationState
 
 logger = logging.getLogger(__name__)
 

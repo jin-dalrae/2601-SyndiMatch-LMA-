@@ -12,8 +12,8 @@ import uuid
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from state import SyndicationState
-from config import ANTHROPIC_API_KEY, AGENT_MODEL
+from .state import SyndicationState
+from .config import ANTHROPIC_API_KEY, AGENT_MODEL
 import db
 
 logger = logging.getLogger(__name__)

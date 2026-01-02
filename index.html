@@ -102,6 +102,58 @@
     <main class="main-content">
         <!-- Overview View -->
         <div class="view active" id="view-overview">
+            <!-- Origination Form -->
+            <section class="origination-section">
+                <div class="origination-card">
+                    <div class="origination-header">
+                        <div>
+                            <h2 class="section-title">Originate a Deal</h2>
+                            <p class="section-subtitle">Create a live syndication and trigger the LangGraph agents.</p>
+                        </div>
+                        <button class="btn-secondary" id="btn-originate-demo">Quick Demo Deal</button>
+                    </div>
+                    <form id="origination-form" class="origination-form">
+                        <div class="form-row">
+                            <label>Borrower</label>
+                            <input type="text" name="borrower" placeholder="Acme Holdings" required />
+                        </div>
+                        <div class="form-row">
+                            <label>Amount (USD millions)</label>
+                            <input type="number" name="amount" min="10" step="10" placeholder="500" required />
+                        </div>
+                        <div class="form-row">
+                            <label>Spread (bps)</label>
+                            <input type="number" name="spread" min="100" max="800" step="5" placeholder="425" required />
+                        </div>
+                        <div class="form-row">
+                            <label>Rating</label>
+                            <input type="text" name="rating" placeholder="BB+" />
+                        </div>
+                        <div class="form-row">
+                            <label>Industry</label>
+                            <input type="text" name="industry" placeholder="Software/SaaS" />
+                        </div>
+                        <div class="form-row">
+                            <label>Originator</label>
+                            <select name="originator_agent_id">
+                                <option value="OA-001">JPMorgan Chase</option>
+                                <option value="OA-002">Bank of America</option>
+                                <option value="OA-003">Citigroup</option>
+                                <option value="OA-004">Goldman Sachs</option>
+                                <option value="OA-005">Wells Fargo</option>
+                                <option value="OA-006">BNP Paribas</option>
+                                <option value="OA-007">Barclays</option>
+                                <option value="OA-008">MUFG Bank</option>
+                            </select>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn-primary">Create & Run</button>
+                            <span class="form-status" id="origination-status"></span>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
             <!-- Pipeline Section -->
             <section class="pipeline-section">
                 <h2 class="section-title">Syndication Pipeline</h2>
@@ -221,6 +273,9 @@
         </div>
     </div>
 
+    <!-- Firebase SDK -->
+    <script type="module" src="js/firebase-config.js"></script>
+    
     <!-- Scripts -->
     <script src="js/api.js"></script>
     <script src="js/data.js"></script>
@@ -238,6 +293,7 @@
     <script src="js/components/agents.js"></script>
     <script src="js/components/analytics.js"></script>
     <script src="js/components/alerts.js"></script>
+    <script src="js/components/origination-form.js"></script>
     <script src="js/agent-orchestration.js"></script>
     <script src="js/app.js"></script>
 </body>

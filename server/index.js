@@ -48,6 +48,54 @@ app.get('/api/syndications/:id', async (req, res) => {
     }
 });
 
+// Create a new syndication (used by originator form/demo)
+app.post('/api/syndications', async (req, res) => {
+    try {
+        const db = getDB();
+        const body = req.body || {};
+
+        const id = body.id || body.syndication_id || `SYND-${Date.now()}`;
+        const now = new Date();
+
+        const doc = {
+            _id: id,
+            syndication_id: id,
+            borrower: body.borrower || 'Unknown Borrower',
+            industry: body.industry || 'Unknown',
+            originator: body.originator || 'Unknown',
+            originator_agent_id: body.originator_agent_id || 'OA-001',
+            amount: Number(body.amount) || 0,
+            rating: body.rating || 'NR',
+            spread: Number(body.spread) || 400,
+            status: body.status || 'open',
+            phase: body.phase || 'open',
+            round: body.round || 1,
+            subscription: body.subscription || 0,
+            createdAt: now,
+            updatedAt: now,
+            loan_details: body.loan_details || {
+                borrower_name: body.borrower || 'Unknown Borrower',
+                industry: body.industry || 'Unknown',
+                credit_rating: body.rating || 'NR',
+                total_amount: (Number(body.amount) || 0) * 1_000_000,
+                syndication_target: (Number(body.amount) || 0) * 1_000_000,
+                loan_type: body.loan_type || 'Term Loan B'
+            },
+            pricing: body.pricing || { base_rate: 'SOFR', initial_spread: Number(body.spread) || 400 },
+            timeline: body.timeline || {
+                broadcast_date: now.toISOString(),
+                target_close_date: new Date(now.getTime() + 48 * 3600 * 1000).toISOString()
+            }
+        };
+
+        await db.collection('syndication_original').insertOne(doc);
+        res.status(201).json(doc);
+    } catch (error) {
+        console.error('❌ Failed to create syndication:', error);
+        res.status(500).json({ error: 'Internal Server Error', message: 'Failed to create syndication' });
+    }
+});
+
 // Bids
 app.get('/api/bids', async (req, res) => {
     try {
@@ -190,6 +238,49 @@ async function logPaymentEvent(type, data) {
     }
 }
 
+// Track participant payment and summary
+async function recordCompletedPayment(payment) {
+    try {
+        const db = getDB();
+
+        const historyDoc = {
+            _id: payment.paymentId,
+            syndication_id: payment.syndId,
+            payment_type: payment.type || 'commitment_fee',
+            payer: {
+                participant_agent_id: payment.participantId,
+                wallet_address: payment.paidFrom || 'mock-participant-wallet'
+            },
+            amount_due: payment.amount,
+            amount_paid: payment.amount,
+            currency: payment.currency || 'USDC',
+            payment_status: 'completed',
+            paid_at: payment.paidAt || new Date(),
+            tx_hash: payment.txHash,
+            gas_used: payment.gasUsed,
+            created_at: payment.createdAt || new Date()
+        };
+
+        await db.collection('payment_history').updateOne(
+            { _id: historyDoc._id },
+            { $set: historyDoc },
+            { upsert: true }
+        );
+
+        // Update summary
+        await db.collection('payment_summaries').updateOne(
+            { syndId: payment.syndId },
+            {
+                $inc: { totalPaid: payment.amount },
+                $setOnInsert: { totalDue: 0 }
+            },
+            { upsert: true }
+        );
+    } catch (error) {
+        console.error('❌ Failed to record completed payment:', error);
+    }
+}
+
 // Protected resource - triggers HTTP 402
 app.post('/api/x402/join-syndication', async (req, res) => {
     const { syndId, participantId, commitmentAmount } = req.body;
@@ -290,6 +381,7 @@ app.post('/api/x402/pay', async (req, res) => {
         await db.collection('pending_payments').deleteOne({ _id: payment._id });
 
         await logPaymentEvent('payment_completed', { paymentId, txHash, syndId: payment.syndId });
+        await recordCompletedPayment(payment);
 
         console.log(`✅ x402 Payment completed: ${paymentId} | ${payment.amountFormatted} | ${txHash.slice(0, 16)}...`);
 
@@ -414,4 +506,3 @@ async function startServer() {
 }
 
 startServer();
-

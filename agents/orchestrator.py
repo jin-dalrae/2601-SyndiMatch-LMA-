@@ -13,7 +13,7 @@ import asyncio
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 
-from state import SyndicationState, SyndicationStatus
+from .state import SyndicationState, SyndicationStatus
 from originator_agent import OriginatorAgent, generate_syndication
 from participant_agent import ParticipantAgent
 from negotiation_agent import NegotiationAgent
