@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional
 import json
 import logging
+import uuid
 
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -68,8 +69,9 @@ class ParticipantAgent:
         """Refresh profile from database to get latest state"""
         try:
             self.profile = self._load_profile()
-        except Exception:
-            pass # Keep existing profile on error
+        except Exception as e:
+            # Log warning instead of silently swallowing
+            logger.warning(f"[{self.agent_id}] Profile refresh failed: {e}. Keeping existing.")
 
     def evaluate_opportunity(self, state: SyndicationState) -> Optional[Dict[str, Any]]:
         """
@@ -130,9 +132,15 @@ Respond ONLY with valid JSON in this exact format:
                     portfolio_fit_score=decision_data.get("portfolio_fit_score", 0.5),
                     risk_adjusted_return=decision_data.get("risk_adjusted_return")
                 )
+            except json.JSONDecodeError as e:
+                logger.error(f"[{self.agent_id}] LLM returned invalid JSON: {e}")
+                logger.debug(f"[{self.agent_id}] Raw LLM response: {response.content}")
+            except KeyError as e:
+                logger.error(f"[{self.agent_id}] LLM response missing required field: {e}")
+                logger.debug(f"[{self.agent_id}] Parsed data: {decision_data}")
             except Exception as e:
                 logger.error(f"[{self.agent_id}] LLM evaluation failed: {e}")
-                # Fallback to rule-based decision
+            # Fallback to rule-based decision
         
         # Fallback / Simulation Mode
         return self._rule_based_evaluation(state)
@@ -166,7 +174,7 @@ Respond ONLY with valid JSON in this exact format:
 - Syndication Target: ${state['loan_details']['syndication_target']:,}
 - Current Spread: {state['current_spread']} bps
 - Base Rate: {state['pricing']['base_rate']}
-- All-in Yield (estimated): {4.5 + state['current_spread']/100:.2f}%
+- All-in Yield (estimated): {self._calculate_yield(state):.2f}%
 - Current Subscription: {state['subscription_rate']*100:.1f}%
 - Auction Round: {state['current_round']}
 - Originator: {state['originator']}
@@ -212,12 +220,41 @@ Do not bid more than you have available.
         
         return violations
     
+    def _calculate_yield(self, state: SyndicationState, spread: Optional[int] = None) -> float:
+        """
+        Calculate all-in yield using actual base rate from state.
+        
+        Args:
+            state: Syndication state containing pricing info
+            spread: Optional spread override (bps), defaults to current_spread
+        
+        Returns:
+            All-in yield as percentage (e.g., 7.5 for 7.5%)
+        """
+        # Get base rate - handle both numeric and string (e.g., "SOFR")
+        base_rate = state["pricing"].get("base_rate", 4.5)
+        
+        # If base_rate is a string like "SOFR", use current SOFR approximation
+        # In production, this would fetch from a rate service
+        if isinstance(base_rate, str):
+            # Current market approximations (should be fetched from rate service)
+            rate_lookup = {
+                "SOFR": 4.35,
+                "LIBOR": 4.50,  # Deprecated but may exist in legacy
+                "PRIME": 7.50,
+                "T-BILL": 4.25
+            }
+            base_rate = rate_lookup.get(base_rate.upper(), 4.5)
+        
+        spread_bps = spread if spread is not None else state.get("current_spread", 0)
+        return float(base_rate) + (spread_bps / 100)
+    
     def _rule_based_evaluation(self, state: SyndicationState) -> BidDecision:
         """Fallback rule-based evaluation if LLM fails"""
         risk = self.profile.get("risk_appetite", {})
         
-        # Simple yield check
-        estimated_yield = 4.5 + state["current_spread"] / 100
+        # Calculate yield using ACTUAL base rate, not hardcoded 4.5
+        estimated_yield = self._calculate_yield(state)
         min_yield = risk.get("min_acceptable_yield", 0)
         
         if estimated_yield >= min_yield:
@@ -250,7 +287,8 @@ Do not bid more than you have available.
         if decision.decision != "bid":
             return {"status": "passed", "participant": self.agent_id}
         
-        bid_id = f"BID-{state['syndication_id'].split('-')[-1]}-{self.agent_id.split('-')[-1]}"
+        # Generate unique bid ID using UUID to prevent collisions across rounds
+        bid_id = f"BID-{uuid.uuid4().hex[:12].upper()}"
         now_str = state.get("current_time")
         now = datetime.fromisoformat(now_str) if now_str else datetime.utcnow()
         
@@ -263,7 +301,7 @@ Do not bid more than you have available.
             "institution_type": self.profile.get("institution", {}).get("type", "Unknown"),
             "bid_amount": decision.amount,
             "spread_bid": decision.spread,
-            "all_in_yield": 4.5 + decision.spread / 100,
+            "all_in_yield": self._calculate_yield(state, decision.spread),
             "min_allocation": int(decision.amount * 0.5),
             "max_allocation": decision.amount,
             "partial_fill_acceptable": True,

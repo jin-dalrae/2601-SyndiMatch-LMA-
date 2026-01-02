@@ -11,3 +11,4 @@ websockets>=12.0
 uvicorn>=0.25.0
 fastapi>=0.108.0
 cdp-sdk>=0.0.9
+python-dateutil>=2.8.2

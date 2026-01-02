@@ -67,7 +67,7 @@ const App = {
             const subPage = syndMatch[2] || 'orchestration';
             this.showSyndicationPage(syndId, subPage);
         } else {
-            // Simple view route (orchestration, payments, analytics)
+            // Simple view route (analytics, etc.)
             this.switchView(hash);
         }
     },
@@ -98,8 +98,6 @@ const App = {
 
         navContainer.innerHTML = `
             <button class="nav-tab active" data-view="overview">Overview</button>
-            <button class="nav-tab" data-view="orchestration">Orchestration</button>
-            <button class="nav-tab" data-view="payments">Payments</button>
             <button class="nav-tab" data-view="analytics">Analytics</button>
         `;
 
@@ -205,25 +203,89 @@ const App = {
     },
 
     async renderSyndicationOrchestration(container, syndId) {
+        // Get syndication data
+        const synd = SyndiData.syndications.find(s => s.id === syndId) || {};
+
         container.innerHTML = `
             <div class="syndication-page">
-                <div class="page-header">
-                    <h2 class="page-title">Orchestration: ${syndId}</h2>
+                <div class="page-header" style="margin-bottom: 1.5rem;">
+                    <h2 class="page-title" style="margin: 0; font-size: 1.5rem;">Orchestration: ${syndId}</h2>
+                    <p style="margin: 0.5rem 0 0; color: var(--text-muted);">${synd.borrower || 'Unknown Borrower'} • ${Utils.formatCurrency((synd.amount || 0) * 1000000)}</p>
                 </div>
-                <div class="agents-grid">
-                    <section class="agents-status-section">
-                        <h3 class="section-title">Agent Status</h3>
+                
+                <!-- Agent Workflow Pipeline -->
+                <div class="agent-workflow-pipeline" style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 2rem; padding: 1.5rem; background: linear-gradient(135deg, #f8fafc, #f1f5f9); border-radius: 12px; border: 1px solid var(--border-color);">
+                    <div class="workflow-agent" style="flex: 1; text-align: center;">
+                        <div style="width: 56px; height: 56px; margin: 0 auto 0.75rem; border-radius: 50%; background: linear-gradient(135deg, #10b981, #059669); display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">🏛️</div>
+                        <div style="font-weight: 700; font-size: 0.875rem;">Originator Agent</div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted);">${synd.originator || 'JPMorgan'}</div>
+                        <div style="margin-top: 0.5rem; padding: 0.25rem 0.5rem; background: #dcfce7; color: #166534; border-radius: 4px; font-size: 0.7rem; font-weight: 600;">ACTIVE</div>
+                    </div>
+                    <div style="display: flex; align-items: center; color: var(--border-color); font-size: 1.5rem;">→</div>
+                    <div class="workflow-agent" style="flex: 1; text-align: center;">
+                        <div style="width: 56px; height: 56px; margin: 0 auto 0.75rem; border-radius: 50%; background: linear-gradient(135deg, #3b82f6, #1d4ed8); display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">👥</div>
+                        <div style="font-weight: 700; font-size: 0.875rem;">Participant Agents</div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted);">${synd.participantCount || 0} active</div>
+                        <div style="margin-top: 0.5rem; padding: 0.25rem 0.5rem; background: #fef3c7; color: #92400e; border-radius: 4px; font-size: 0.7rem; font-weight: 600;">BIDDING</div>
+                    </div>
+                    <div style="display: flex; align-items: center; color: var(--border-color); font-size: 1.5rem;">→</div>
+                    <div class="workflow-agent" style="flex: 1; text-align: center;">
+                        <div style="width: 56px; height: 56px; margin: 0 auto 0.75rem; border-radius: 50%; background: linear-gradient(135deg, #f59e0b, #d97706); display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">⚖️</div>
+                        <div style="font-weight: 700; font-size: 0.875rem;">Negotiation Agent</div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted);">Allocation Logic</div>
+                        <div style="margin-top: 0.5rem; padding: 0.25rem 0.5rem; background: ${synd.status === 'negotiating' ? '#fef3c7' : '#f3f4f6'}; color: ${synd.status === 'negotiating' ? '#92400e' : '#6b7280'}; border-radius: 4px; font-size: 0.7rem; font-weight: 600;">${synd.status === 'negotiating' ? 'ACTIVE' : 'WAITING'}</div>
+                    </div>
+                    <div style="display: flex; align-items: center; color: var(--border-color); font-size: 1.5rem;">→</div>
+                    <div class="workflow-agent" style="flex: 1; text-align: center;">
+                        <div style="width: 56px; height: 56px; margin: 0 auto 0.75rem; border-radius: 50%; background: linear-gradient(135deg, #8b5cf6, #6d28d9); display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">📋</div>
+                        <div style="font-weight: 700; font-size: 0.875rem;">Settlement Agent</div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted);">Documentation</div>
+                        <div style="margin-top: 0.5rem; padding: 0.25rem 0.5rem; background: ${synd.status === 'closing' ? '#dbeafe' : '#f3f4f6'}; color: ${synd.status === 'closing' ? '#1e40af' : '#6b7280'}; border-radius: 4px; font-size: 0.7rem; font-weight: 600;">${synd.status === 'closing' ? 'ACTIVE' : 'WAITING'}</div>
+                    </div>
+                    <div style="display: flex; align-items: center; color: var(--border-color); font-size: 1.5rem;">→</div>
+                    <div class="workflow-agent" style="flex: 1; text-align: center;">
+                        <div style="width: 56px; height: 56px; margin: 0 auto 0.75rem; border-radius: 50%; background: linear-gradient(135deg, #ec4899, #db2777); display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">💰</div>
+                        <div style="font-weight: 700; font-size: 0.875rem;">Payment Agent</div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted);">x402 Protocol</div>
+                        <div style="margin-top: 0.5rem; padding: 0.25rem 0.5rem; background: ${synd.status === 'completed' ? '#dcfce7' : '#f3f4f6'}; color: ${synd.status === 'completed' ? '#166534' : '#6b7280'}; border-radius: 4px; font-size: 0.7rem; font-weight: 600;">${synd.status === 'completed' ? 'COMPLETE' : 'WAITING'}</div>
+                    </div>
+                </div>
+
+                <!-- Syndication Summary -->
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2rem;">
+                    <div style="background: var(--bg-card); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
+                        <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Status</div>
+                        <div style="font-size: 1.25rem; font-weight: 700; text-transform: capitalize;">${synd.status || 'Open'}</div>
+                    </div>
+                    <div style="background: var(--bg-card); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
+                        <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Subscription</div>
+                        <div style="font-size: 1.25rem; font-weight: 700; color: var(--primary);">${synd.subscription || 0}%</div>
+                    </div>
+                    <div style="background: var(--bg-card); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
+                        <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Spread</div>
+                        <div style="font-size: 1.25rem; font-weight: 700;">${synd.spread || '—'} bps</div>
+                    </div>
+                    <div style="background: var(--bg-card); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
+                        <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Time Remaining</div>
+                        <div style="font-size: 1.25rem; font-weight: 700;">${synd.timeRemaining || '—'}</div>
+                    </div>
+                </div>
+
+                <!-- Agent Activity and Decision Log -->
+                <div class="agents-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                    <section class="agents-status-section" style="background: var(--bg-card); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-color);">
+                        <h3 class="section-title" style="margin: 0 0 1rem; font-size: 1rem; font-weight: 700;">Agent Activity</h3>
                         <div id="synd-agents-status"></div>
                     </section>
-                    <section class="agents-log-section">
-                        <h3 class="section-title">Decision Log</h3>
-                        <div class="decision-log" id="synd-decision-log"></div>
+                    <section class="agents-log-section" style="background: var(--bg-card); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-color);">
+                        <h3 class="section-title" style="margin: 0 0 1rem; font-size: 1rem; font-weight: 700;">Decision Log</h3>
+                        <div class="decision-log" id="synd-decision-log" style="max-height: 400px; overflow-y: auto;"></div>
                     </section>
                 </div>
             </div>
         `;
 
-        // Set filter and render agents component
+        // Fetch and render agent data
         if (window.AgentsComponent) {
             AgentsComponent.filterId = syndId;
             const data = await AgentsComponent.getFilteredData();
@@ -236,20 +298,21 @@ const App = {
 
             // Render decision log
             const logContainer = document.getElementById('synd-decision-log');
-            if (logContainer && data.decisions) {
+            if (logContainer && data.decisions && data.decisions.length > 0) {
                 logContainer.innerHTML = data.decisions.slice(0, 20).map(d => `
-                    <div class="log-entry">
-                        <div class="log-header">
-                            <span class="log-agent">${d.agent}</span>
-                            <span class="log-time">${d.time}</span>
+                    <div class="log-entry" style="padding: 0.75rem; border-bottom: 1px solid var(--border-color); font-size: 0.875rem;">
+                        <div class="log-header" style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                            <span class="log-agent" style="font-weight: 600; color: var(--primary);">${d.agent}</span>
+                            <span class="log-time" style="color: var(--text-muted); font-size: 0.75rem;">${d.time}</span>
                         </div>
-                        <div class="log-action">${d.action}</div>
-                        <div class="log-factors">
-                            ${(d.factors || []).map(f => `<span class="factor ${f.type}">${f.text}</span>`).join('')}
+                        <div class="log-action" style="color: var(--text-primary);">${d.action}</div>
+                        <div class="log-factors" style="margin-top: 0.25rem;">
+                            ${(d.factors || []).map(f => `<span class="factor ${f.type}" style="font-size: 0.75rem; color: var(--text-muted);">${f.text}</span>`).join('')}
                         </div>
-                        <div class="log-result">${d.result}</div>
                     </div>
                 `).join('');
+            } else {
+                logContainer.innerHTML = '<div style="text-align: center; padding: 2rem; color: var(--text-muted);">No activity logged yet for this syndication.</div>';
             }
         }
     },
@@ -363,13 +426,13 @@ const App = {
                                     <div class="tx-status-icon tx-status-confirmed">✓</div>
                                     <div class="tx-feed-content">
                                         <div class="tx-feed-main">
-                                            <span class="tx-feed-parties">${tx.participant} → Originator</span>
-                                            <span class="tx-feed-amount">+${Utils.formatCurrency(tx.amount)}</span>
+                                            <span class="tx-feed-parties">${tx.participant || tx.sender || tx.agent_id || 'System'} → ${tx.recipient || 'Originator'}</span>
+                                            <span class="tx-feed-amount">${tx.amount ? '+' + Utils.formatCurrency(tx.amount) : ''}</span>
                                         </div>
                                         <div class="tx-feed-meta">
-                                            <span>${tx.type}</span>
-                                            <span>${tx.tx || 'Confirmed'}</span>
-                                            <span>${tx.time}</span>
+                                            <span>${tx.type || tx.event_type || 'Transaction'}</span>
+                                            <span>${tx.tx || tx.id || 'Confirmed'}</span>
+                                            <span>${tx.time || (tx.timestamp ? new Date(tx.timestamp).toLocaleTimeString() : '')}</span>
                                         </div>
                                     </div>
                                 </div>

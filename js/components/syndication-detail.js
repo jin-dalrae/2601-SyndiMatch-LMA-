@@ -94,6 +94,11 @@ const SyndicationDetailComponent = {
     // AI-Generated Introduction (under 50 words)
     renderAIIntro(synd) {
         const container = document.getElementById('detail-header');
+
+        // Clear existing intro first
+        const existingIntro = document.querySelector('.ai-intro-section');
+        if (existingIntro) existingIntro.remove();
+
         const aiIntros = {
             'open': `New opportunity from ${synd.originator || 'JPMorgan'}. ${synd.rating} rated ${synd.industry} borrower at ${synd.spread}bps. Strong fundamentals support attractive risk-adjusted returns.`,
             'negotiating': `Active auction in Round ${synd.round}. Current subscription at ${synd.subscription}% with ${synd.spread}bps clearing spread. Multiple institutional bidders competing.`,
@@ -203,6 +208,7 @@ const SyndicationDetailComponent = {
     renderParticipantGrid(synd) {
         const container = document.getElementById('participant-grid');
         const participants = SyndiData.participants.slice(0, 8);
+        const bids = synd.bids || SyndiData.bids || [];
 
         // Selection reasons
         const selectionReasons = [
@@ -227,9 +233,9 @@ const SyndicationDetailComponent = {
                 </thead>
                 <tbody>
                     ${participants.map((p, i) => {
-            const bid = SyndiData.bids.find(b => b.participant === p.name);
+            const bid = bids.find(b => b.participant === p.name || b.participant_agent_id === p.id);
             const allocated = synd.status !== 'open' && bid;
-            const allocationPct = allocated ? Utils.randomBetween(70, 100) : 0;
+            const allocationPct = allocated ? (bid.allocation_pct || Utils.randomBetween(70, 100)) : 0;
             return `
                             <tr class="${allocated ? 'allocated' : ''}">
                                 <td>
@@ -237,8 +243,8 @@ const SyndicationDetailComponent = {
                                     ${allocated ? `<div class="selection-reason">🤖 ${selectionReasons[i % selectionReasons.length]}</div>` : ''}
                                 </td>
                                 <td><span class="participant-type">${p.type}</span></td>
-                                <td>${bid?.amount ? Utils.formatCurrency(bid.amount * 1000000) : '—'}</td>
-                                <td>${bid?.spread || '—'}</td>
+                                <td>${bid?.amount || bid?.bid_amount ? Utils.formatCurrency((bid.amount || bid.bid_amount) * 1000000) : '—'}</td>
+                                <td>${bid?.spread || bid?.spread_bid || '—'}</td>
                                 <td>${allocated ? `${allocationPct}%` : '—'}</td>
                                 <td>
                                     <span class="participant-status">
@@ -387,8 +393,18 @@ const SyndicationDetailComponent = {
                 </div>
                 <div class="bid-reason">🤖 ${reason}</div>
             `;
-            container.insertBefore(newBid, container.querySelector('.bid-item'));
 
+            const firstBid = container.querySelector('.bid-item');
+            container.insertBefore(newBid, firstBid || null);
+
+            // Limit feed size
+            const maxBids = 20;
+            const items = container.querySelectorAll('.bid-item');
+            if (items.length > maxBids) {
+                items[items.length - 1].remove();
+            }
+
+            setTimeout(() => newBid.classList.add('fade-in'), 10);
             setTimeout(() => newBid.classList.remove('new'), 5000);
         }, 5000);
     },

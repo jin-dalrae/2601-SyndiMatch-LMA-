@@ -21,8 +21,6 @@
         <div class="header-left">
             <nav class="nav-tabs">
                 <button class="nav-tab active" data-view="overview">Overview</button>
-                <button class="nav-tab" data-view="orchestration">Orchestration</button>
-                <button class="nav-tab" data-view="payments">Payments</button>
                 <button class="nav-tab" data-view="analytics">Analytics</button>
             </nav>
         </div>
@@ -66,39 +64,39 @@
     </header>
 
     <!-- Top Metrics Bar -->
-    <!-- Top Metrics Bar (Hidden as per user request) -->
-    <!-- <section class="metrics-bar" id="metrics-bar">
-        <div class="metric-card">
+    <!-- Top Metrics Bar -->
+    <section class="metrics-bar" id="metrics-bar">
+        <div class="metric-card" data-metric-id="metric-active">
             <div class="metric-label">Active Syndications</div>
-            <div class="metric-value" id="metric-active">8</div>
+            <div class="metric-value">8</div>
             <div class="metric-change positive">+2 today</div>
         </div>
-        <div class="metric-card">
+        <div class="metric-card" data-metric-id="metric-value">
             <div class="metric-label">Total Value in Play</div>
-            <div class="metric-value" id="metric-value">$2.4B</div>
+            <div class="metric-value">$2.4B</div>
             <div class="metric-change positive">+$340M</div>
         </div>
-        <div class="metric-card">
+        <div class="metric-card" data-metric-id="metric-closed">
             <div class="metric-label">Closed Today</div>
-            <div class="metric-value" id="metric-closed">3</div>
+            <div class="metric-value">3</div>
             <div class="metric-change positive">Target: 4</div>
         </div>
-        <div class="metric-card">
+        <div class="metric-card" data-metric-id="metric-success">
             <div class="metric-label">Success Rate</div>
-            <div class="metric-value" id="metric-success">94.2%</div>
+            <div class="metric-value">94.2%</div>
             <div class="metric-change positive">+1.2%</div>
         </div>
-        <div class="metric-card">
+        <div class="metric-card" data-metric-id="metric-participants">
             <div class="metric-label">Active Participants</div>
-            <div class="metric-value" id="metric-participants">47</div>
+            <div class="metric-value">47</div>
             <div class="metric-change neutral">steady</div>
         </div>
-        <div class="metric-card">
+        <div class="metric-card" data-metric-id="metric-payments">
             <div class="metric-label">Payments (24h)</div>
-            <div class="metric-value" id="metric-payments">$892M</div>
+            <div class="metric-value">$892M</div>
             <div class="metric-change positive">+$156M</div>
         </div>
-    </section> -->
+    </section>
 
     <!-- Main Content Area -->
     <main class="main-content">

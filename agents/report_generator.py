@@ -36,8 +36,9 @@ class ReportGenerator:
             logger.warning("ReportGenerator running in DEMO mode - generating mock reports")
     
     async def _call_gemini(self, prompt: str, max_tokens: int = 100) -> str:
-        """Make API call to Gemini"""
+        """Make API call to Gemini (Async)"""
         if self.demo_mode:
+            logger.info(f"[ReportGenerator Demo] Prompt: {prompt[:100]}...")
             return self._generate_mock_response(prompt)
         
         try:
@@ -57,31 +58,35 @@ class ReportGenerator:
                 data = response.json()
                 return data["candidates"][0]["content"]["parts"][0]["text"]
         except Exception as e:
-            logger.error(f"Gemini API error: {e}")
+            logger.error(f"Gemini API error (async): {e}")
             return self._generate_mock_response(prompt)
     
     def _call_gemini_sync(self, prompt: str, max_tokens: int = 100) -> str:
         """Synchronous Gemini call"""
         if self.demo_mode:
+            # Log prompt in demo mode for transparency
+            logger.info(f"[ReportGenerator Demo] Prompt: {prompt[:100]}...")
             return self._generate_mock_response(prompt)
         
         try:
-            response = httpx.post(
-                f"{GEMINI_ENDPOINT}?key={self.api_key}",
-                json={
-                    "contents": [{"parts": [{"text": prompt}]}],
-                    "generationConfig": {
-                        "maxOutputTokens": max_tokens,
-                        "temperature": 0.7
-                    }
-                },
-                timeout=30.0
-            )
-            response.raise_for_status()
-            data = response.json()
-            return data["candidates"][0]["content"]["parts"][0]["text"]
+            # Use a context manager for httpx.Client to ensure proper cleanup
+            with httpx.Client() as client:
+                response = client.post(
+                    f"{GEMINI_ENDPOINT}?key={self.api_key}",
+                    json={
+                        "contents": [{"parts": [{"text": prompt}]}],
+                        "generationConfig": {
+                            "maxOutputTokens": max_tokens,
+                            "temperature": 0.7
+                        }
+                    },
+                    timeout=30.0
+                )
+                response.raise_for_status()
+                data = response.json()
+                return data["candidates"][0]["content"]["parts"][0]["text"]
         except Exception as e:
-            logger.error(f"Gemini API error: {e}")
+            logger.error(f"Gemini API error (sync): {e}")
             return self._generate_mock_response(prompt)
     
     def _generate_mock_response(self, prompt: str) -> str:
@@ -177,30 +182,35 @@ Include key metrics only. No headers."""
         """
         Generate a brief report explaining an agent's decision.
         """
+        # Handle JSON truncation safely
+        context_str = json.dumps(context, default=str)
+        if len(context_str) > 500:
+            context_str = context_str[:500].rsplit("}", 1)[0] + "}"
+            
         prompt = f"""Generate a brief AI agent decision report (under 40 words).
-
+ 
 Agent: {agent_type} ({agent_id})
 Action: {action}
-Context: {json.dumps(context, default=str)[:500]}
-
+Context: {context_str}
+ 
 Explain the reasoning concisely in first person ("I decided...")."""
-
-        return self._call_gemini_sync(prompt, max_tokens=60)
+ 
+        return self._call_gemini_sync(prompt, max_tokens=80)
 
 
 # Singleton instance
 report_generator = ReportGenerator()
 
 
-# Convenience functions
-def generate_bidding_reason(participant, syndication, amount, spread) -> str:
+# Convenience functions with type hints
+def generate_bidding_reason(participant: Dict[str, Any], syndication: Dict[str, Any], amount: int, spread: int) -> str:
     return report_generator.generate_bidding_reason(participant, syndication, amount, spread)
-
-def generate_selection_reason(participant, allocation, syndication) -> str:
+ 
+def generate_selection_reason(participant: Dict[str, Any], allocation: Dict[str, Any], syndication: Dict[str, Any]) -> str:
     return report_generator.generate_selection_reason(participant, allocation, syndication)
-
-def generate_syndication_intro(syndication) -> str:
+ 
+def generate_syndication_intro(syndication: Dict[str, Any]) -> str:
     return report_generator.generate_syndication_introduction(syndication)
-
-def generate_quarterly_report(syndications, participants, quarter="Q4 2024") -> str:
+ 
+def generate_quarterly_report(syndications: List[Dict[str, Any]], participants: List[Dict[str, Any]], quarter: str = "Q4 2024") -> str:
     return report_generator.generate_quarterly_report(syndications, participants, quarter)

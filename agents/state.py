@@ -1,25 +1,25 @@
-"""
-SyndiMatch Agent Orchestration - State Definitions
-Defines the state schema for LangGraph workflow
-"""
-
-from typing import TypedDict, List, Optional, Dict, Any
+from typing import TypedDict, List, Optional, Dict, Any, Union
 from datetime import datetime
 from pydantic import BaseModel, Field
 from enum import Enum
 
 
 class SyndicationStatus(str, Enum):
+    """Workflow status for a syndication"""
     OPEN = "open"
+    BIDDING = "bidding"
     NEGOTIATING = "negotiating"
     CLOSING = "closing"
     SETTLEMENT = "settlement"
+    SETTLEMENT_FAILED = "settlement_failed"
     FUNDING = "funding"
+    PAYMENT_FAILED = "payment_failed"
     COMPLETED = "completed"
     FAILED = "failed"
 
 
 class BidStatus(str, Enum):
+    """Status for individual bids"""
     ACTIVE = "active"
     WITHDRAWN = "withdrawn"
     REJECTED = "rejected"
@@ -28,6 +28,7 @@ class BidStatus(str, Enum):
 
 
 class PaymentStatus(str, Enum):
+    """Status for payment transactions"""
     PENDING = "pending"
     PROCESSING = "processing"
     COMPLETED = "completed"
@@ -36,13 +37,135 @@ class PaymentStatus(str, Enum):
     DISPUTED = "disputed"
 
 
-# === Bid Model ===
+# === Typed Sub-States for Orchestrator ===
+
+class LoanDetails(TypedDict):
+    borrower_name: str
+    industry: str
+    loan_type: str
+    credit_rating: str
+    total_amount: int
+    currency: str
+    originator_hold: int
+    syndication_target: int
+
+
+class Pricing(TypedDict):
+    base_rate: str  # SOFR, EURIBOR, etc.
+    initial_spread: int
+    commitment_fee: float
+    arrangement_fee: float
+
+
+class Timeline(TypedDict):
+    broadcast_date: str  # ISO string
+    target_close_date: str
+    funding_date: Optional[str]
+    completed_at: Optional[str]
+
+
+class NegotiationState(TypedDict):
+    current_spread: int
+    subscription_rate: float
+    total_committed: int
+    auction_round: int
+    winning_bids: List[str]
+    status: str
+
+
+class BidStatistics(TypedDict):
+    total_bids: int
+    unique_bidders: int
+    total_bid_amount: int
+    subscription_rate: float
+    spread_range: Dict[str, float]  # min, max, avg, median
+    bid_coverage_ratio: float
+
+
+class PaymentMetrics(TypedDict):
+    total_expected: int
+    total_collected: int
+    collection_rate: float
+    total_fees_collected: int
+    payments_completed: int
+    payments_failed: int
+
+
+class SettlementMetrics(TypedDict):
+    stages_completed: int
+    total_stages: int
+    documents_signed: int
+    compliance_verified: bool
+
+
+class AuctionMetrics(TypedDict):
+    total_rounds: int
+    spread_improvement: int
+    final_subscription: float
+    winning_bidder_count: int
+
+
+# === Main Syndication State ===
+
+class SyndicationState(TypedDict):
+    """Main state object passed through LangGraph workflow"""
+    
+    # Identifiers
+    syndication_id: str
+    originator_agent_id: str
+    originator: str
+    
+    # Nested Models
+    loan_details: LoanDetails
+    pricing: Pricing
+    timeline: Timeline
+    
+    # Current State
+    status: Union[SyndicationStatus, str]
+    current_round: int
+    current_spread: int
+    total_committed: int
+    subscription_rate: float
+    
+    # Collections
+    bids: List[Dict[str, Any]]
+    allocations: List[Dict[str, Any]]
+    rejected_bids: List[Dict[str, Any]]
+    payments: List[Dict[str, Any]]
+    auction_history: List[Dict[str, Any]]
+    
+    # Agent References
+    negotiation_agent_id: Optional[str]
+    settlement_agent_id: Optional[str]
+    payment_agent_id: Optional[str]
+    
+    # Metadata & Timestamps
+    created_at: str
+    updated_at: str
+    current_time: Optional[str]  # Simulated time ISO string
+    
+    # Error handling
+    errors: List[str]
+    warnings: List[str]
+    failure_reason: Optional[str]
+    
+    # Orchestrator Enhanced State
+    negotiation_state: NegotiationState
+    bid_statistics: BidStatistics
+    auction_metrics: AuctionMetrics
+    settlement_metrics: SettlementMetrics
+    payment_metrics: PaymentMetrics
+    metrics: Dict[str, Any]
+
+
+# === Agent Decision Models (Stays as Pydantic for LLM integration) ===
+
 class Bid(BaseModel):
     bid_id: str
     syndication_id: str
     participant_agent_id: str
     institution_name: str
-    institution_type: str
+    institution_type: str = "Bank"
     bid_amount: int
     spread_bid: int  # basis points
     all_in_yield: float
@@ -60,7 +183,6 @@ class Bid(BaseModel):
     reasoning: Optional[str] = None
 
 
-# === Allocation Model ===
 class Allocation(BaseModel):
     allocation_id: str
     participant_agent_id: str
@@ -70,18 +192,17 @@ class Allocation(BaseModel):
     allocation_percentage: float
     final_spread: int
     commitment_status: str = "pending"
-    fees: Dict[str, Any] = {}
+    fees: Dict[str, Any] = Field(default_factory=dict)
 
 
-# === Payment Model ===
 class Payment(BaseModel):
     payment_id: str
     payment_agent_id: str
     syndication_id: str
     payer_agent_id: str
     payer_institution: str
-    recipient_type: str  # originator, escrow, borrower
-    payment_type: str  # commitment_fee, arrangement_fee, principal
+    recipient_type: str
+    payment_type: str
     amount_due: int
     amount_paid: int = 0
     currency: str = "USD"
@@ -90,90 +211,6 @@ class Payment(BaseModel):
     transaction_hash: Optional[str] = None
 
 
-# === Main Syndication State ===
-class SyndicationState(TypedDict):
-    """Main state object passed through LangGraph workflow"""
-    
-    # Identifiers
-    syndication_id: str
-    originator_agent_id: str
-    originator: str
-    
-    # Loan Details
-    loan_details: Dict[str, Any]
-    """
-    Contains:
-    - borrower_name: str
-    - industry: str
-    - loan_type: str
-    - credit_rating: str
-    - total_amount: int
-    - currency: str
-    - originator_hold: int
-    - syndication_target: int
-    """
-    
-    # Pricing
-    pricing: Dict[str, Any]
-    """
-    Contains:
-    - base_rate: str (SOFR, EURIBOR, SONIA)
-    - initial_spread: int (bps)
-    - commitment_fee: float (percentage)
-    """
-    
-    # Timeline
-    timeline: Dict[str, Any]
-    """
-    Contains:
-    - broadcast_date: datetime
-    - target_close_date: datetime
-    - funding_date: datetime (set by settlement)
-    """
-    
-    # Current State
-    status: str
-    current_round: int
-    current_spread: int
-    total_committed: int
-    subscription_rate: float
-    
-    # Bids & Allocations
-    bids: List[Dict[str, Any]]
-    allocations: List[Dict[str, Any]]
-    rejected_bids: List[Dict[str, Any]]
-    
-    # Payments
-    payments: List[Dict[str, Any]]
-    
-    # Auction History
-    auction_history: List[Dict[str, Any]]
-    
-    # Agent References
-    negotiation_agent_id: Optional[str]
-    settlement_agent_id: Optional[str]
-    payment_agent_id: Optional[str]
-    
-    # Timestamps
-    created_at: str
-    updated_at: str
-    current_time: Optional[str]  # Simulated time ISO string
-    
-    # Error handling
-    errors: List[str]
-    warnings: List[str]
-    
-    # === Orchestrator Enhanced State ===
-    negotiation_state: Dict[str, Any]
-    bid_statistics: Dict[str, Any]
-    auction_metrics: Dict[str, Any]
-    settlement_metrics: Dict[str, Any]
-    payment_metrics: Dict[str, Any]
-    metrics: Dict[str, Any]
-    failure_reason: Optional[str]
-
-
-# === Agent Decision Models ===
 class BidDecision(BaseModel):
     """Output from ParticipantAgent evaluation"""
     decision: str = Field(description="'bid' or 'pass'")
@@ -188,7 +225,7 @@ class BidDecision(BaseModel):
 class AuctionDecision(BaseModel):
     """Output from NegotiationAgent auction round"""
     action: str = Field(description="'continue', 'close', or 'fail'")
-    new_spread: int = Field(description="New spread for next round")
+    new_spread: int = Field(default=0, description="New spread for next round")
     winners: List[str] = Field(default_factory=list)
     reasoning: str = Field(description="Explanation for decision")
 

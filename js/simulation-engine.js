@@ -148,12 +148,80 @@ const SimulationEngine = {
         this.state.isRunning = true;
         this.state.lastTickTime = Date.now();
 
+        // Connect to WebSocket for real-time events
+        if (window.WebSocketManager) {
+            WebSocketManager.connect();
+        }
+
         // Tick every 100ms real time
         this.state.tickInterval = setInterval(() => this.tick(), 100);
+
+        // Listen for day changes to potentially trigger new syndications
+        this.on('dayChange', (data) => this.onDayChange(data));
 
         this.emit('simulationStart', { date: this.state.currentDate });
         this.updateControls();
         console.log('▶️ Simulation started at', this.formatDate(this.state.currentDate));
+    },
+
+    /**
+     * Handle day change - potentially trigger new syndications
+     */
+    onDayChange(data) {
+        // Random chance to trigger a new syndication each day (20% chance)
+        if (Math.random() < 0.2) {
+            this.triggerNewSyndication();
+        }
+    },
+
+    /**
+     * Trigger a new syndication via the backend
+     */
+    async triggerNewSyndication() {
+        try {
+            const response = await fetch('http://localhost:8000/api/syndications/new', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    borrower: this.getRandomBorrower(),
+                    amount: Utils.randomBetween(100, 500),
+                    rating: this.getRandomRating(),
+                    spread: Utils.randomBetween(350, 550)
+                })
+            });
+            if (response.ok) {
+                console.log('🚀 New syndication triggered');
+            }
+        } catch (e) {
+            // Fallback: create locally if backend unavailable
+            const syndId = `SYND-${new Date().getFullYear()}-${String(Date.now()).slice(-3)}`;
+            SyndiData.addSyndication({
+                id: syndId,
+                borrower: this.getRandomBorrower(),
+                amount: Utils.randomBetween(100, 500),
+                rating: this.getRandomRating(),
+                spread: Utils.randomBetween(350, 550),
+                status: 'open',
+                subscription: 0,
+                participantCount: 0,
+                originator: ['JPMorgan', 'BofA', 'Citi', 'Goldman'][Utils.randomBetween(0, 3)]
+            });
+            if (window.PipelineComponent) PipelineComponent.render();
+        }
+    },
+
+    getRandomBorrower() {
+        const borrowers = [
+            'Apex Technologies', 'Horizon Medical', 'Summit Logistics', 'Vertex Energy',
+            'Pinnacle Software', 'Atlas Manufacturing', 'Meridian Foods', 'Quantum Systems',
+            'Nova Pharma', 'Titan Industries', 'Stellar Corp', 'Frontier Holdings'
+        ];
+        return borrowers[Utils.randomBetween(0, borrowers.length - 1)];
+    },
+
+    getRandomRating() {
+        const ratings = ['BBB+', 'BBB', 'BBB-', 'BB+', 'BB', 'BB-', 'B+'];
+        return ratings[Utils.randomBetween(0, ratings.length - 1)];
     },
 
     /**

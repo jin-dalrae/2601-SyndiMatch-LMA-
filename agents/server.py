@@ -109,11 +109,20 @@ async def create_syndication(request: CreateSyndicationRequest):
 
 
 @app.post("/api/syndication/run")
-async def run_full_syndication(request: CreateSyndicationRequest):
+async def run_full_syndication(request: RunSyndicationRequest):
     """Run a complete syndication workflow"""
     try:
+        # Check if exists
+        synd = db.syndications().find_one({"_id": request.syndication_id})
+        if not synd:
+            # If not found, check if it's an originator ID (legacy behavior)
+            # and create it first
+            synd_id = request.syndication_id
+        else:
+            synd_id = synd["_id"]
+
         # Run in background
-        result = await run_syndication_async(request.originator_id)
+        result = await run_syndication_async(synd_id)
         
         return {
             "success": True,
@@ -121,7 +130,7 @@ async def run_full_syndication(request: CreateSyndicationRequest):
             "status": result.get("status"),
             "total_committed": result.get("total_committed"),
             "subscription_rate": result.get("subscription_rate"),
-            "allocations": len(result.get("allocations", []))
+            "allocations_count": len(result.get("allocations", []))
         }
     except Exception as e:
         logger.error(f"Run syndication error: {e}")
@@ -133,11 +142,14 @@ async def get_syndications():
     """Get all syndications"""
     try:
         syndications = list(db.syndications().find({}).sort("created_at", -1).limit(50))
-        # Convert ObjectId to string
+        # Standardize ObjectId -> str conversion
         for s in syndications:
-            s["_id"] = str(s["_id"]) if "_id" in s else s.get("syndication_id")
+            if "_id" in s:
+                s["_id"] = str(s["_id"])
+            # Handle potential Dict[str, Any] nested states if needed
         return syndications
     except Exception as e:
+        logger.error(f"Get syndications error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -181,7 +193,20 @@ async def get_allocations(syndication_id: str):
 @app.get("/api/payments/{syndication_id}")
 async def get_payments(syndication_id: str):
     """Get payment history for a syndication"""
-    return payments
+    try:
+        payments_list = list(db.payment_history().find({"syndication_id": syndication_id}))
+        # Standardize IDs and dates for JSON
+        for p in payments_list:
+            if "_id" in p:
+                p["_id"] = str(p["_id"])
+            if "created_at" in p and isinstance(p["created_at"], datetime):
+                p["created_at"] = p["created_at"].isoformat()
+            if "due_date" in p and isinstance(p["due_date"], datetime):
+                p["due_date"] = p["due_date"].isoformat()
+        return payments_list
+    except Exception as e:
+        logger.error(f"Get payments error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/agents/bid")
@@ -204,6 +229,14 @@ async def agent_bid(request: Dict[str, Any]):
         else:
             current_time = datetime.utcnow()
 
+        # Validate and parse numeric inputs safely
+        try:
+            amount_m = float(syndication_data.get("amount", 0))
+            spread = int(syndication_data.get("spread", 400))
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="Invalid amount or spread format")
+
+        from datetime import timedelta
         # Map frontend data to SyndicationState
         # Note: We construct a partial state sufficient for evaluation
         state = {
@@ -212,18 +245,18 @@ async def agent_bid(request: Dict[str, Any]):
             "loan_details": {
                 "borrower_name": syndication_data.get("borrower"),
                 "industry": syndication_data.get("industry"),
-                "total_amount": int(syndication_data.get("amount") * 1000000), # Convert M to absolute
+                "total_amount": int(amount_m * 1000000), # Convert M to absolute
                 "credit_rating": syndication_data.get("rating"),
-                "syndication_target": int(syndication_data.get("amount") * 1000000),
+                "syndication_target": int(amount_m * 1000000),
                 "loan_type": "Term Loan B" # Default
             },
             "pricing": {
                 "base_rate": "SOFR",
-                "initial_spread": syndication_data.get("spread", 400)
+                "initial_spread": spread
             },
-            "current_spread": syndication_data.get("spread", 400),
+            "current_spread": spread,
             "subscription_rate": float(syndication_data.get("subscription", 0)) / 100.0,
-            "current_round": syndication_data.get("round", 1),
+            "current_round": int(syndication_data.get("round", 1)),
             "timeline": {
                 # Ensure target close is in future relative to simulation time
                 "target_close_date": (current_time + timedelta(hours=48)).isoformat()
@@ -471,27 +504,41 @@ async def websocket_endpoint(websocket: WebSocket):
             elif message.get("type") == "run_syndication":
                 # Client wants to run a syndication
                 originator = message.get("originator_id", "OA-001")
+                synd_id = message.get("syndication_id")
                 
                 await websocket.send_json({
                     "type": "syndication_started",
-                    "message": f"Starting syndication with {originator}"
+                    "message": f"Starting syndication run for {synd_id or originator}"
                 })
                 
-                # Run syndication and stream updates
-                result = await run_syndication_async(originator)
-                
-                await websocket.send_json({
-                    "type": "syndication_complete",
-                    "data": {
-                        "syndication_id": result.get("syndication_id"),
-                        "status": result.get("status"),
-                        "total_committed": result.get("total_committed"),
-                        "allocations": len(result.get("allocations", []))
-                    }
-                })
+                # Run syndication in background as a task to avoid blocking the WS loop
+                asyncio.create_task(self._handle_run_syndication_ws(websocket, originator, synd_id))
             
             elif message.get("type") == "ping":
                 await websocket.send_json({"type": "pong"})
+    
+    async def _handle_run_syndication_ws(self, websocket: WebSocket, originator_id: str, synd_id: Optional[str] = None):
+        """Helper to run syndication and report back over WS without blocking loop"""
+        try:
+            # Use provided synd_id or create new one from originator
+            target_id = synd_id or originator_id
+            result = await run_syndication_async(target_id)
+            
+            await websocket.send_json({
+                "type": "syndication_complete",
+                "data": {
+                    "syndication_id": result.get("syndication_id"),
+                    "status": result.get("status"),
+                    "total_committed": result.get("total_committed"),
+                    "allocations_count": len(result.get("allocations", []))
+                }
+            })
+        except Exception as e:
+            logger.error(f"WS Syndication run error: {e}")
+            await websocket.send_json({
+                "type": "error",
+                "message": f"Syndication run failed: {str(e)}"
+            })
     
     except WebSocketDisconnect:
         manager.disconnect(websocket)

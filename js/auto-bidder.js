@@ -2,6 +2,16 @@
  * SyndiMatch Auto-Bidder
  * Automatically places bids based on participant agent profiles
  * Includes relationship tracking and multi-round negotiations
+ * 
+ * UNIT CONVENTIONS:
+ * - Internal calculations: DOLLARS (e.g., 150000000 = $150M)
+ * - Profile maxAllocation: MILLIONS (e.g., 150 = $150M) - converted on use
+ * - Syndication amounts: MILLIONS (e.g., 500 = $500M) - converted on use
+ * - Display/logging: MILLIONS (e.g., "$150M")
+ * - Spreads: BASIS POINTS (e.g., 400 = 4.00%)
+ * 
+ * Helper: toM(dollars) converts dollars to millions for display
+ *         fromM(millions) converts millions to dollars for calculation
  */
 
 const AutoBidder = {
@@ -107,6 +117,17 @@ const AutoBidder = {
 
     // Cancel window in simulated hours
     cancelWindowHours: 24,
+
+    /**
+     * Unit conversion helpers
+     */
+    toM(dollars) {
+        return dollars / 1000000;
+    },
+
+    fromM(millions) {
+        return millions * 1000000;
+    },
 
     /**
      * Initialize relationship scores
@@ -276,11 +297,16 @@ const AutoBidder = {
         }
 
         // Check capacity
+        // NOTE: All comparisons in DOLLARS for consistency
         const wealth = SimulationEngine?.getWealth(participantId);
         const availableCapital = wealth ? (wealth.currentWealth - (wealth.allocatedCapital || 0)) : 500000000;
-        const maxBid = Math.min(profile.maxAllocation * 1000000, availableCapital * 0.2);
+        const maxBidDollars = Math.min(
+            this.fromM(profile.maxAllocation),  // Convert millions to dollars
+            availableCapital * 0.2
+        );
+        const syndicationDollars = this.fromM(syndication.amount);  // Convert millions to dollars
 
-        if (maxBid >= syndication.amount * 100000) {
+        if (maxBidDollars >= syndicationDollars * 0.1) {  // Can cover at least 10% of deal
             score += 15;
             reasons.push('Sufficient capacity');
         }
@@ -292,7 +318,9 @@ const AutoBidder = {
         score += Math.random() * 20 - 10;
 
         const shouldBid = score >= 40;
-        const bidAmount = shouldBid ? Math.min(
+
+        // Calculate bid amount in MILLIONS (for storage) but based on DOLLAR math
+        const bidAmountM = shouldBid ? Math.min(
             profile.maxAllocation,
             Math.round(syndication.amount * (0.1 + Math.random() * 0.2))
         ) : 0;
@@ -307,7 +335,7 @@ const AutoBidder = {
             shouldBid,
             score: Math.round(score),
             reasons,
-            bidAmount,
+            bidAmount: bidAmountM,  // In MILLIONS for storage
             bidSpread: counterSpread,
             relationshipScore,
             isIndicationOfInterest: syndication.phase === 'bookbuilding'
@@ -386,28 +414,30 @@ const AutoBidder = {
         }
 
         // Add bid to syndication
+        // NOTE: bid.amount is in MILLIONS
         syndication.bids.push({
             participantId: bid.participantId,
             participantName: bid.participantName,
-            amount: bid.amount,
-            spread: bid.spread,
+            amount: bid.amount,  // MILLIONS
+            spread: bid.spread,  // BASIS POINTS
             timestamp: SimulationEngine?.getCurrentDate()?.toISOString(),
             reasons: bid.reasons
         });
 
-        // Update subscription
+        // Update subscription percentage
+        // Both bid.amount and syndication.amount are in MILLIONS, so ratio is correct
         syndication.subscription = Math.min(
             100,
             syndication.subscription + (bid.amount / syndication.amount) * 100
         );
 
-        // Record transaction
+        // Record transaction in DOLLARS (SimulationEngine uses dollars)
         if (window.SimulationEngine) {
             SimulationEngine.recordTransaction({
                 type: 'bid',
                 from: bid.participantId,
                 to: syndication.originatorId,
-                amount: bid.amount * 1000000,
+                amount: this.fromM(bid.amount),  // Convert MILLIONS to DOLLARS
                 dealId: bid.syndicationId,
                 description: `${bid.participantName} bid $${bid.amount}M on ${syndication.borrower}`
             });
@@ -435,7 +465,8 @@ const AutoBidder = {
         const currentDate = SimulationEngine?.getCurrentDate() || new Date();
 
         // Calculate break fee (0.2% of bid amount)
-        const breakFee = bid.amount * 1000000 * 0.002;
+        // bid.amount is MILLIONS, convert to DOLLARS for fee calculation
+        const breakFee = this.fromM(bid.amount) * 0.002;  // 0.2% in DOLLARS
 
         bid.status = 'cancelled';
 
@@ -529,15 +560,16 @@ const AutoBidder = {
         });
 
         // Record commitment fee transactions for each allocation
+        // NOTE: alloc.allocation is in MILLIONS, convert to DOLLARS for transactions
         allocations.forEach(alloc => {
-            const commitmentFee = alloc.allocation * 1000000 * (syndication.commitmentFeeRate || 0.01);
+            const commitmentFee = this.fromM(alloc.allocation) * (syndication.commitmentFeeRate || 0.01);
 
             if (window.SimulationEngine && commitmentFee > 0) {
                 SimulationEngine.recordTransaction({
                     type: 'commitment_fee',
                     from: alloc.participantId,
                     to: syndication.originatorId,
-                    amount: commitmentFee,
+                    amount: commitmentFee,  // DOLLARS
                     dealId: syndication.id,
                     description: `Commitment fee for $${alloc.allocation}M allocation`
                 });
@@ -548,9 +580,9 @@ const AutoBidder = {
                 // Notify backend agent (Sync state)
                 if (typeof API !== 'undefined' && !API.useMockData && alloc.participantId.startsWith('PA-')) {
                     API.agentAllocate(alloc.participantId, syndication.id, {
-                        final_allocation: alloc.allocation * 1000000,
+                        final_allocation: this.fromM(alloc.allocation),  // DOLLARS
                         allocation_percentage: (alloc.allocation / syndication.amount) * 100,
-                        final_spread: syndication.spread || 400
+                        final_spread: syndication.spread || 400  // BASIS POINTS
                     });
                 }
             }

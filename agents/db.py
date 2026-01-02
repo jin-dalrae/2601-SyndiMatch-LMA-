@@ -34,7 +34,8 @@ def get_collection(name: str):
 
 # Collection shortcuts
 def syndications():
-    return get_collection("syndications")
+    """Point to the canonical syndications collection"""
+    return get_collection("syndication_original")
 
 def bids():
     return get_collection("bids")
@@ -49,10 +50,12 @@ def payment_history():
     return get_collection("payment_history")
 
 def participant_agents():
-    return get_collection("participant_agents")
+    """Point to the richer participants collection"""
+    return get_collection("participants")
 
 def originator_agents():
-    return get_collection("originator_agents")
+    """Point to the richer originator collection"""
+    return get_collection("originator")
 
 def negotiation_agents():
     return get_collection("negotiation_agents")

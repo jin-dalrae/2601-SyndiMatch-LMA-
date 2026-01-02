@@ -5,133 +5,129 @@
 const API = {
     baseUrl: 'http://localhost:3001/api',
     agentUrl: 'http://localhost:8000/api',
-    useMockData: false, // Connected to MongoDB backend
+    useMockData: false,
 
-    async get(endpoint) {
+    // Initialize clients
+    init() {
+        if (window.APIClient) {
+            this.serverClient = new window.APIClient(this.baseUrl);
+            this.agentClient = new window.APIClient(this.agentUrl);
+        }
+    },
+
+    async get(client, endpoint) {
         if (this.useMockData) return null;
-
         try {
-            const response = await fetch(`${this.baseUrl}${endpoint}`);
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            return await response.json();
+            const activeClient = client === 'agent' ? this.agentClient : this.serverClient;
+            if (!activeClient) throw new Error('API Client not initialized');
+            return await activeClient.get(endpoint);
         } catch (error) {
-            console.warn(`API error (${endpoint}):`, error.message);
+            // Error already logged by APIClient
+            return null;
+        }
+    },
+
+    async post(client, endpoint, data) {
+        if (this.useMockData) return null;
+        try {
+            const activeClient = client === 'agent' ? this.agentClient : this.serverClient;
+            if (!activeClient) throw new Error('API Client not initialized');
+            return await activeClient.post(endpoint, data);
+        } catch (error) {
             return null;
         }
     },
 
     async getSyndications() {
-        const data = await this.get('/syndications');
-        return data || SyndiData.syndications;
+        const data = await this.get('server', '/syndications');
+        return data || (typeof SyndiData !== 'undefined' ? SyndiData.syndications : []);
     },
 
     async getSyndication(id) {
-        const data = await this.get(`/syndications/${id}`);
-        return data || SyndiData.syndications.find(s => s.id === id);
+        const data = await this.get('server', `/syndications/${id}`);
+        if (data) return data;
+        return typeof SyndiData !== 'undefined' ? SyndiData.syndications.find(s => s.id === id) : null;
     },
 
     async getBids(syndId) {
-        const data = await this.get(`/bids?syndId=${syndId}`);
-        return data || SyndiData.bids;
+        const data = await this.get('server', `/bids?syndId=${syndId}`);
+        if (data) return data;
+        return typeof SyndiData !== 'undefined' ? (SyndiData.bids || []) : [];
     },
 
     async getParticipants() {
-        const data = await this.get('/participants');
-        return data || SyndiData.participants;
+        const data = await this.get('server', '/participants');
+        return data || (typeof SyndiData !== 'undefined' ? SyndiData.participants : []);
     },
 
     async getPayments() {
-        const data = await this.get('/payments');
-        return data || SyndiData.transactions;
+        const data = await this.get('server', '/payments');
+        // Standardize key access between backend (payments) and SyndiData (transactions)
+        return data || (typeof SyndiData !== 'undefined' ? SyndiData.transactions : []);
     },
 
     async getAgents() {
-        const data = await this.get('/agents');
-        return data || SyndiData.agents;
+        const data = await this.get('server', '/agents');
+        return data || (typeof SyndiData !== 'undefined' ? SyndiData.agents : []);
     },
 
     async getAllocations(syndId) {
-        const data = await this.get(`/allocations/${syndId}`);
-        return data || SyndiData.allocations[syndId];
+        const data = await this.get('server', `/allocations/${syndId}`);
+        if (data) return data;
+
+        // Fix for fallback: allocations is an array in seed
+        if (typeof SyndiData !== 'undefined' && SyndiData.allocations) {
+            const fallback = SyndiData.allocations.find(a => a.syndId === syndId);
+            return fallback ? fallback.allocations : null;
+        }
+        return null;
     },
 
     // x402/CDP Data (from Python Agent Server)
     async getX402Balance(address) {
-        try {
-            const response = await fetch(`${this.agentUrl}/x402/balance/${address}`);
-            if (response.ok) return await response.json();
-        } catch (e) { console.warn('x402 API unavailable'); }
-        // Fallback or return logic could go here, for now let caller handle null
-        return null;
+        return await this.get('agent', `/x402/balance/${address}`);
     },
 
     async getSyndicationEvents(syndId) {
-        if (this.useMockData) return [];
-        try {
-            const response = await fetch(`${this.baseUrl}/syndication-events/${syndId}`);
-            if (response.ok) return await response.json();
-        } catch (e) { console.warn('Events API unavailable'); }
-        return [];
+        const data = await this.get('server', `/syndication-events/${syndId}`);
+        return data || [];
     },
 
     async getAllSyndicationEvents(limit = 100) {
-        if (this.useMockData) return [];
-        try {
-            const response = await fetch(`${this.baseUrl}/syndication-events?limit=${limit}`);
-            if (response.ok) return await response.json();
-        } catch (e) { console.warn('Events API unavailable'); }
-        return [];
+        const data = await this.get('server', `/syndication-events?limit=${limit}`);
+        return data || [];
     },
 
     async getEscrowDetails(syndId) {
-        try {
-            const response = await fetch(`${this.agentUrl}/x402/escrow/${syndId}`);
-            if (response.ok) return await response.json();
-        } catch (e) { console.warn('x402 API unavailable'); }
-        return null;
+        return await this.get('agent', `/x402/escrow/${syndId}`);
     },
 
     // Trigger AI Agent Bid (POST)
     async agentBid(agentId, syndication) {
-        if (this.useMockData) return null;
-        try {
-            const response = await fetch(`${this.agentUrl}/agents/bid`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    agent_id: agentId,
-                    syndication: syndication,
-                    currentTime: window.SimulationEngine ? window.SimulationEngine.getCurrentDate().toISOString() : null
-                })
-            });
-            if (response.ok) return await response.json();
-            throw new Error(`Agent bid failed: ${response.status}`);
-        } catch (e) {
-            console.warn(`Agent bid error for ${agentId}:`, e.message);
-            return null;
-        }
+        const payload = {
+            agent_id: agentId,
+            syndication: syndication,
+            currentTime: window.SimulationEngine
+                ? window.SimulationEngine.getCurrentDate().toISOString()
+                : new Date().toISOString()
+        };
+        return await this.post('agent', '/agents/bid', payload);
     },
 
     // Notify Agent of Allocation (POST)
     async agentAllocate(agentId, syndId, allocation) {
-        if (this.useMockData) return null;
-        try {
-            await fetch(`${this.agentUrl}/agents/allocate`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    agent_id: agentId,
-                    syndication_id: syndId,
-                    allocation: allocation
-                })
-            });
-        } catch (e) {
-            console.warn(`Agent allocation error for ${agentId}:`, e.message);
-        }
+        const payload = {
+            agent_id: agentId,
+            syndication_id: syndId,
+            allocation: allocation
+        };
+        return await this.post('agent', '/agents/allocate', payload);
     },
 
     // Check if API is available
     async checkConnection() {
+        if (!this.serverClient) this.init();
+
         try {
             const response = await fetch(`${this.baseUrl}/health`);
             if (response.ok) {
@@ -147,5 +143,5 @@ const API = {
     }
 };
 
-// Check API connection on load
+// Initialize and Check API connection on load
 API.checkConnection();

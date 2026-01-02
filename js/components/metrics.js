@@ -20,15 +20,13 @@ const MetricsComponent = {
 
     setupClickHandlers() {
         const cards = document.querySelectorAll('.metric-card');
-        cards.forEach((card, index) => {
+        cards.forEach((card) => {
             // Add clickable styling
             card.style.cursor = 'pointer';
             card.setAttribute('role', 'button');
             card.setAttribute('tabindex', '0');
 
-            // Get metric ID from the value element inside
-            const valueEl = card.querySelector('.metric-value');
-            const metricId = valueEl?.id;
+            const metricId = card.dataset.metricId;
 
             if (metricId && this.routes[metricId]) {
                 const route = this.routes[metricId];
@@ -96,15 +94,26 @@ const MetricsComponent = {
     },
 
     showNavigationFeedback(label) {
-        // Brief toast-like feedback
-        const toast = document.createElement('div');
-        toast.className = 'metric-toast';
-        toast.textContent = `Viewing: ${label}`;
-        document.body.appendChild(toast);
+        // Brief toast-like feedback (reuse existing toast if present)
+        let toast = document.querySelector('.metric-toast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.className = 'metric-toast';
+            document.body.appendChild(toast);
+        }
 
-        setTimeout(() => {
+        toast.textContent = `Viewing: ${label}`;
+        toast.classList.remove('fade-out');
+
+        // Reset timer if already running
+        if (this._toastTimeout) clearTimeout(this._toastTimeout);
+
+        this._toastTimeout = setTimeout(() => {
             toast.classList.add('fade-out');
-            setTimeout(() => toast.remove(), 300);
+            this._toastTimeout = setTimeout(() => {
+                if (toast.parentNode) toast.remove();
+                this._toastTimeout = null;
+            }, 300);
         }, 1500);
     },
 
@@ -118,8 +127,9 @@ const MetricsComponent = {
             'metric-payments': data.payments || '$892M'
         };
 
-        Object.entries(metrics).forEach(([id, value]) => {
-            const el = document.getElementById(id);
+        Object.entries(metrics).forEach(([metricId, value]) => {
+            const card = document.querySelector(`.metric-card[data-metric-id="${metricId}"]`);
+            const el = card?.querySelector('.metric-value');
             if (el && el.textContent !== value) {
                 el.textContent = value;
                 el.classList.add('updated');
@@ -130,14 +140,34 @@ const MetricsComponent = {
 
     startLiveUpdates() {
         // Simulate real-time metric changes
-        setInterval(() => {
+        if (this._updateInterval) clearInterval(this._updateInterval);
+
+        this._updateInterval = setInterval(() => {
             const variations = {
-                payments: ['$886M', '$892M', '$895M', '$901M', '$912M']
+                payments: ['$886M', '$892M', '$895M', '$901M', '$912M'],
+                active: ['7', '8', '9', '8'],
+                success: ['94.1%', '94.2%', '94.3%', '94.2%']
             };
+
+            const getRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
             this.updateMetrics({
-                payments: variations.payments[Math.floor(Math.random() * variations.payments.length)]
+                payments: getRandom(variations.payments),
+                active: getRandom(variations.active),
+                success: getRandom(variations.success)
             });
         }, 8000);
+    },
+
+    destroy() {
+        if (this._updateInterval) {
+            clearInterval(this._updateInterval);
+            this._updateInterval = null;
+        }
+        if (this._toastTimeout) {
+            clearTimeout(this._toastTimeout);
+            this._toastTimeout = null;
+        }
     }
 };
 

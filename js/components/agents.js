@@ -3,6 +3,41 @@
 // ========================================
 
 const AgentsComponent = {
+    statusMap: {
+        healthy: 'Active',
+        warning: 'Warning',
+        error: 'Error',
+        running: 'Running',
+        processing: 'Processing',
+        complete: 'Complete',
+        active: 'Active',
+        idle: 'Idle',
+        working: 'Working'
+    },
+
+    healthIconMap: {
+        healthy: '🟢',
+        active: '🟢',
+        running: '🔵',
+        processing: '🟡',
+        warning: '🟡',
+        error: '🔴',
+        complete: '🟣',
+        idle: '⚪',
+        working: '🔵'
+    },
+
+    agentLabelMap: {
+        BID: 'Bidder',
+        ORIGINATOR: 'Originator',
+        PAYMENT: 'Payment',
+        SETTLEMENT: 'Settlement',
+        NEGOTIATION: 'Negotiation',
+        SYSTEM: 'System',
+        AUCTION: 'Auction',
+        SYNDICATION: 'Workflow'
+    },
+
     init() {
         this.filterId = 'all';
         this.render();
@@ -25,18 +60,18 @@ const AgentsComponent = {
             // Aggregate agents by type with syndication context
             const agents = {
                 originator: (agentsData?.originator || []).map(a => ({
-                    id: a.agent_id || a.id || 'OA-LEAD',
-                    entity: a.name || a.entity || 'Originator',
+                    id: a.agent_id || a.id || a._id || 'OA-LEAD',
+                    entity: a.institution?.name || a.entity || a.name || 'Originator',
                     status: a.status || 'active',
-                    loans: a.deals_completed || 0,
-                    success: a.success_rate || 95
+                    loans: a.track_record?.deals_closed_ytd || a.deals_completed || a.active_loans || 0,
+                    success: a.track_record?.success_rate || a.success_rate || 95
                 })),
                 participant: (agentsData?.participant || []).map(a => ({
-                    id: a.agent_id || a.id || 'PA-UNKNOWN',
-                    entity: a.name || a.institution_name || 'Participant',
+                    id: a.agent_id || a.id || a._id || 'PA-UNKNOWN',
+                    entity: a.institution?.name || a.name || a.institution_name || 'Participant',
                     status: a.status || 'active',
-                    bids: a.total_bids || 0,
-                    winRate: a.win_rate || 0
+                    bids: a.performance_history?.bids_submitted_ytd || a.total_bids || 0,
+                    winRate: ((a.performance_history?.win_rate || a.win_rate || 0) * 100).toFixed(1)
                 })),
                 negotiation: (agentsData?.negotiation || []).map(a => ({
                     id: a.agent_id || a.id || 'NA-1',
@@ -64,18 +99,18 @@ const AgentsComponent = {
             // Map events to decision log format
             const decisions = (allEvents || []).map(e => {
                 let actionType = 'neutral';
-                if (e.event_type && e.event_type.includes('FAILED')) actionType = 'negative';
-                if (e.event_type && (e.event_type.includes('COMPLETE') || e.event_type.includes('SUCCESS'))) actionType = 'positive';
+                const type = e.event_type || 'SYSTEM';
+                if (type.includes('FAILED')) actionType = 'negative';
+                if (type.includes('COMPLETE') || type.includes('SUCCESS')) actionType = 'positive';
 
                 const dataStr = Object.entries(e.data || {})
-                    .slice(0, 3) // Limit to 3 fields for brevity
-                    .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v).slice(0, 30) : v}`)
+                    .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v, null, 2).substring(0, 100) : v}`)
                     .join(', ');
 
                 return {
-                    agent: (e.event_type || 'SYSTEM').split('_')[0],
-                    time: e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : 'N/A',
-                    action: e.event_type || 'Unknown',
+                    agent: this.agentLabelMap[type.split('_')[0]] || 'System',
+                    time: e.timestamp ? new Date(e.timestamp).toISOString().replace('T', ' ').substring(0, 19) : 'N/A',
+                    action: type,
                     factors: [{ type: actionType, text: dataStr || 'No additional data' }],
                     result: e.syndication_id ? `Syndication: ${e.syndication_id}` : 'Processed'
                 };
@@ -160,24 +195,22 @@ const AgentsComponent = {
 
         // Map backend events to decisions
         const decisions = events.map(e => {
-            // Determine visual style based on event type
             let actionType = 'neutral';
-            let resultText = 'Processed';
+            const type = e.event_type || 'SYSTEM';
 
-            if (e.event_type.includes('FAILED')) actionType = 'negative';
-            if (e.event_type.includes('COMPLETE')) actionType = 'positive';
+            if (type.includes('FAILED')) actionType = 'negative';
+            if (type.includes('COMPLETE')) actionType = 'positive';
 
-            // Format data payload for display
             const dataStr = Object.entries(e.data || {})
-                .map(([k, v]) => `${k}: ${v}`)
+                .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v, null, 2).substring(0, 100) : v}`)
                 .join(', ');
 
             return {
-                agent: e.event_type.split('_')[0], // e.g., "BID" -> "BID" (Improve this mapping)
-                time: new Date(e.timestamp).toLocaleTimeString(),
-                action: e.event_type,
-                factors: [{ type: actionType, text: dataStr }],
-                result: resultText
+                agent: this.agentLabelMap[type.split('_')[0]] || 'System',
+                time: new Date(e.timestamp).toISOString().replace('T', ' ').substring(0, 19),
+                action: type,
+                factors: [{ type: actionType, text: dataStr || 'No data' }],
+                result: 'Processed'
             };
         });
 
@@ -383,8 +416,9 @@ const AgentsComponent = {
     },
 
     renderAgentRow(agent, type) {
-        const healthStatus = agent.status === 'warning' ? 'warning' : (agent.status === 'error' ? 'error' : 'healthy');
-        const healthIcon = healthStatus === 'healthy' ? '🟢' : (healthStatus === 'warning' ? '🟡' : '🔴');
+        const status = agent.status || 'active';
+        const healthIcon = this.healthIconMap[status] || '🟢';
+        const displayStatus = this.statusMap[status] || status;
 
         let info = '';
         switch (type) {
@@ -411,7 +445,7 @@ const AgentsComponent = {
                 <span class="agent-entity">${agent.entity || agent.syndId}</span>
                 <span class="agent-info">${info}</span>
                 <span class="agent-health">
-                    ${healthIcon} ${agent.status === 'running' ? 'Running' : (agent.status === 'processing' ? 'Processing' : (agent.status === 'complete' ? 'Complete' : 'Active'))}
+                    ${healthIcon} ${displayStatus}
                 </span>
             </div>
         `;

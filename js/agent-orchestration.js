@@ -24,6 +24,26 @@ const AgentOrchestration = {
     currentStage: null,
     workflowLog: [],
     activeSyndication: null,
+    isSimulatedMode: false,  // Track if we're in simulated mode
+
+    /**
+     * Normalize syndication data from various sources to a consistent shape
+     */
+    normalizeSyndication(data) {
+        if (!data) return null;
+
+        return {
+            id: data.syndication_id || data.id || 'Unknown',
+            borrower: data.borrower || data.loan_details?.borrower_name || 'Unknown Borrower',
+            amount: data.amount || data.loan_details?.total_amount || 0,
+            rating: data.rating || data.loan_details?.credit_rating || 'NR',
+            spread: data.spread || data.pricing?.initial_spread || data.loan_details?.spread || null,
+            industry: data.industry || data.loan_details?.industry || 'Unknown',
+            originator: data.originator || data.originatorName || 'Unknown',
+            status: data.status || 'active',
+            phase: data.phase || 'open'
+        };
+    },
 
     /**
      * Initialize the orchestration page
@@ -97,17 +117,102 @@ const AgentOrchestration = {
 
     /**
      * Handle message from Python agent server
+     * Updated to handle new domain events from events.py
      */
     handleServerMessage(message) {
         console.log('📨 Agent message:', message);
 
-        switch (message.type) {
+        // Handle both legacy format (type) and new format (event_type)
+        const eventType = message.event_type || message.type;
+        const eventData = message.data || message;
+
+        switch (eventType) {
+            // === Connection Events ===
             case 'subscribed':
                 this.addLogEntry('system', 'Connected to LangGraph agents');
                 break;
 
+            // === New Domain Events (from events.py) ===
+            case 'SyndicationOpened':
+                this.activeSyndication = this.normalizeSyndication(eventData);
+                this.setStage('originator', 'complete');
+                this.addLogEntry('originator',
+                    `${eventData.originator} opened ${eventData.borrower} $${(eventData.amount / 1000000).toFixed(0)}M @ ${eventData.spread}bps`);
+                break;
+
+            case 'BidReceived':
+                this.setStage('participant', 'active');
+                this.addLogEntry('participant',
+                    `${eventData.institution_name} bid $${(eventData.amount / 1000000).toFixed(1)}M @ ${eventData.spread}bps (${(eventData.cumulative_subscription * 100).toFixed(0)}% subscribed)`);
+                break;
+
+            case 'BidRejected':
+                this.addLogEntry('participant',
+                    `⏰ ${eventData.institution_name} rejected: ${eventData.reason}`);
+                break;
+
+            case 'BiddingCompleted':
+                this.setStage('participant', 'complete');
+                this.addLogEntry('participant',
+                    `Bidding complete: ${eventData.total_bids} bids, ${(eventData.subscription_rate * 100).toFixed(0)}% subscribed`);
+                break;
+
+            case 'AuctionRoundCompleted':
+                this.setStage('negotiation', 'active');
+                this.addLogEntry('negotiation',
+                    `Round ${eventData.round_number}/${eventData.max_rounds}: ${eventData.current_spread}bps, ${(eventData.subscription_rate * 100).toFixed(0)}% subscribed`);
+                break;
+
+            case 'AuctionCompleted':
+                this.setStage('negotiation', 'complete');
+                this.addLogEntry('negotiation',
+                    `Auction closed: ${eventData.final_spread}bps (${eventData.spread_improvement}bps improvement), ${eventData.winning_bids} winners`);
+                break;
+
+            case 'AuctionFailed':
+                this.setStage('negotiation', 'complete');
+                this.addLogEntry('negotiation',
+                    `⚠️ Auction failed: ${eventData.reason} (${(eventData.final_subscription * 100).toFixed(0)}% subscribed)`);
+                break;
+
+            case 'SettlementStageCompleted':
+                this.setStage('settlement', 'active');
+                this.addLogEntry('settlement',
+                    `Stage ${eventData.stage_number}/${eventData.total_stages}: ${eventData.stage_name} complete`);
+                break;
+
+            case 'SettlementCompleted':
+                this.setStage('settlement', 'complete');
+                this.addLogEntry('settlement',
+                    `Settlement complete: ${eventData.allocations_confirmed} allocations, ${eventData.documents_signed} docs signed`);
+                break;
+
+            case 'SettlementFailed':
+                this.setStage('settlement', 'complete');
+                this.addLogEntry('settlement',
+                    `⚠️ Settlement failed at ${eventData.stage_name}: ${eventData.reason}`);
+                break;
+
+            case 'PaymentProcessed':
+                this.setStage('payment', 'active');
+                this.addLogEntry('payment',
+                    `${eventData.payment_type}: ${eventData.completed}/${eventData.total} processed ($${(eventData.amount_collected / 1000000).toFixed(2)}M)`);
+                break;
+
+            case 'PaymentFailed':
+                this.addLogEntry('payment',
+                    `⚠️ Payment failed: ${eventData.payer_institution} $${(eventData.amount / 1000000).toFixed(2)}M`);
+                break;
+
+            case 'SyndicationCompleted':
+                this.setStage('payment', 'complete');
+                this.addLogEntry('system',
+                    `✅ Syndication complete: $${(eventData.total_syndicated / 1000000).toFixed(0)}M, ${eventData.total_payments} payments`);
+                break;
+
+            // === Legacy Events (backward compatibility) ===
             case 'syndication_created':
-                this.activeSyndication = message.data;
+                this.activeSyndication = this.normalizeSyndication(message.data);
                 this.setStage('originator', 'active');
                 this.addLogEntry('originator', `Created syndication ${message.data.syndication_id}`);
                 break;
@@ -150,7 +255,7 @@ const AgentOrchestration = {
                 break;
 
             default:
-                console.log('Unknown message type:', message.type);
+                console.log('Unknown message type:', eventType);
         }
 
         this.renderWorkflow();
@@ -168,14 +273,17 @@ const AgentOrchestration = {
      * Handle new syndication from auto-generator
      */
     onNewSyndication(syndication) {
-        this.activeSyndication = syndication;
+        this.activeSyndication = this.normalizeSyndication(syndication);
         this.resetWorkflow();
         this.setStage('originator', 'complete');
-        this.addLogEntry('originator', `${syndication.originatorName || 'Originator'} announced ${syndication.borrower} $${syndication.amount}M`);
+
+        const s = this.activeSyndication;
+        this.addLogEntry('originator', `${s.originator} announced ${s.borrower} $${s.amount}M`);
 
         // Simulate workflow progression if not connected to Python server
         if (!this.isConnected) {
-            this.simulateWorkflow(syndication);
+            this.isSimulatedMode = true;
+            this.simulateWorkflow(this.activeSyndication);
         }
 
         this.renderWorkflow();
@@ -219,15 +327,31 @@ const AgentOrchestration = {
 
     /**
      * Simulate workflow when Python server is not connected
+     * Uses deterministic mock data instead of random values
      */
     simulateWorkflow(syndication) {
         const stages = ['participant', 'negotiation', 'settlement', 'payment'];
         let delay = 500;
 
+        // Mock workflow data (deterministic, not random)
+        const mockData = {
+            participant: {
+                bidCount: 7,
+                subscriptionRate: 105
+            },
+            negotiation: {
+                rounds: 3,
+                spreadImprovement: 15
+            },
+            settlement: {
+                allocations: 5
+            }
+        };
+
         stages.forEach((stage, i) => {
             setTimeout(() => {
                 this.setStage(stage, 'active');
-                this.addLogEntry(stage, this.getStageMessage(stage, syndication));
+                this.addLogEntry(stage, this.getStageMessage(stage, syndication, mockData));
                 this.renderWorkflow();
 
                 // Complete after a bit
@@ -241,15 +365,16 @@ const AgentOrchestration = {
 
     /**
      * Get appropriate message for a workflow stage
+     * Uses mock data object instead of Math.random()
      */
-    getStageMessage(stage, synd) {
+    getStageMessage(stage, synd, mockData = {}) {
         const messages = {
-            participant: `${Math.floor(Math.random() * 5 + 5)} participants submitted bids`,
-            negotiation: `Dutch auction completed at ${synd.spread}bps`,
-            settlement: `Allocations confirmed for ${synd.syndicationTarget}% target`,
+            participant: `${mockData.participant?.bidCount || 'Several'} participants submitted bids (${mockData.participant?.subscriptionRate || '~100'}% subscribed)`,
+            negotiation: `Dutch auction completed in ${mockData.negotiation?.rounds || 3} rounds at ${synd.spread || 'clearing'} bps`,
+            settlement: `Allocations confirmed for ${mockData.settlement?.allocations || 'all'} winning bidders`,
             payment: `Processing commitment fees via x402 USDC`
         };
-        return messages[stage] || 'Processing...';
+        return `[SIMULATED] ${messages[stage] || 'Processing...'}`;
     },
 
     /**
@@ -385,6 +510,7 @@ const AgentOrchestration = {
 
     /**
      * Render active syndication info
+     * Uses normalized data from normalizeSyndication()
      */
     renderActiveSyndication() {
         if (!this.activeSyndication) {
@@ -392,15 +518,21 @@ const AgentOrchestration = {
         }
 
         const s = this.activeSyndication;
+        const modeIndicator = this.isSimulatedMode
+            ? '<div class="simulated-badge">SIMULATED</div>'
+            : '';
+
         return `
             <div class="syndication-info">
-                <div class="syndication-id">${s.id || s.syndication_id}</div>
-                <div class="syndication-borrower">${s.borrower || s.loan_details?.borrower_name}</div>
+                ${modeIndicator}
+                <div class="syndication-id">${s.id}</div>
+                <div class="syndication-borrower">${s.borrower}</div>
                 <div class="syndication-details">
-                    <div><strong>Amount:</strong> $${s.amount || s.loan_details?.total_amount}M</div>
-                    <div><strong>Rating:</strong> ${s.rating || s.loan_details?.credit_rating || 'BBB'}</div>
-                    <div><strong>Spread:</strong> ${s.spread || s.loan_details?.spread || 420}bps</div>
-                    <div><strong>Status:</strong> ${s.status || 'Active'}</div>
+                    <div><strong>Amount:</strong> $${typeof s.amount === 'number' ? s.amount.toLocaleString() : s.amount}M</div>
+                    <div><strong>Rating:</strong> ${s.rating}</div>
+                    <div><strong>Spread:</strong> ${s.spread !== null ? s.spread + 'bps' : 'TBD'}</div>
+                    <div><strong>Industry:</strong> ${s.industry}</div>
+                    <div><strong>Status:</strong> ${s.status}</div>
                 </div>
             </div>
         `;
@@ -495,10 +627,12 @@ orchestrationStyles.textContent = `
     .log-message { color: var(--text-secondary); }
     .no-log, .no-syndication { color: var(--text-muted); font-size: 0.875rem; }
     
-    .syndication-info { background: var(--bg-main); padding: 1rem; border-radius: var(--radius-md); }
+    .syndication-info { background: var(--bg-main); padding: 1rem; border-radius: var(--radius-md); position: relative; }
     .syndication-id { font-size: 0.75rem; color: var(--primary-light); margin-bottom: 0.25rem; }
     .syndication-borrower { font-size: 1.125rem; font-weight: 600; margin-bottom: 0.75rem; }
     .syndication-details { font-size: 0.875rem; display: grid; gap: 0.25rem; }
+    
+    .simulated-badge { position: absolute; top: 0.5rem; right: 0.5rem; background: var(--warning); color: #000; font-size: 0.625rem; font-weight: 700; padding: 0.125rem 0.375rem; border-radius: 2px; letter-spacing: 0.5px; }
     
     .orchestration-actions { display: flex; gap: 1rem; }
 `;

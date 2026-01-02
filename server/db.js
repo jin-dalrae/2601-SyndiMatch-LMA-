@@ -8,14 +8,19 @@ let db = null;
 let client = null;
 
 async function connectDB() {
-    const uri = process.env.MONGODB_URI;
+    if (db) return db; // Reuse existing connection
 
+    const uri = process.env.MONGODB_URI;
     if (!uri) {
         throw new Error('MONGODB_URI environment variable is not set');
     }
 
     try {
-        client = new MongoClient(uri);
+        // Use recommended options and timeout
+        client = new MongoClient(uri, {
+            serverSelectionTimeoutMS: 5000
+        });
+
         await client.connect();
         db = client.db('syndimatch');
 
@@ -27,7 +32,7 @@ async function connectDB() {
 
         return db;
     } catch (error) {
-        console.error('❌ MongoDB connection error:', error.message);
+        console.error('❌ MongoDB connection error:', error);
         throw error;
     }
 }

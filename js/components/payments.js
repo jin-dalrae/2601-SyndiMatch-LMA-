@@ -499,7 +499,10 @@ const PaymentsComponent = {
         if (!container) return;
 
         const payments = SyndiData.payments['SYND-2025-001'];
-        if (!payments) return;
+        if (!payments || payments.length === 0) {
+            container.innerHTML = '<p style="color: var(--text-muted); padding: 1rem;">No payment data available</p>';
+            return;
+        }
 
         container.innerHTML = `
             <table class="payment-table">
@@ -514,16 +517,19 @@ const PaymentsComponent = {
                     </tr>
                 </thead>
                 <tbody>
-                    ${payments.map(p => `
+                    ${payments.map(p => {
+            const participantName = this._resolveParticipantName(p.participant);
+            return `
                         <tr>
-                            <td><strong>${p.participant}</strong></td>
-                            <td><span class="payment-status paid">✓ ${Utils.formatCurrency(p.commitment.amount)}</span></td>
-                            <td><span class="payment-status ${p.arrangement.status}">${this.getStatusIcon(p.arrangement.status)} ${Utils.formatCurrency(p.arrangement.amount)}</span></td>
-                            <td><span class="payment-status ${p.principal.status}">${this.getStatusIcon(p.principal.status)} ${Utils.formatCurrency(p.principal.amount)}</span></td>
-                            <td><strong>${Utils.formatCurrency(p.total)}</strong></td>
-                            <td><span class="status-badge ${p.overallStatus.toLowerCase()}">${p.overallStatus}</span></td>
+                            <td><strong>${participantName}</strong></td>
+                            <td><span class="payment-status paid">✓ ${Utils.formatCurrency(p.commitment?.amount || 0)}</span></td>
+                            <td><span class="payment-status ${p.arrangement?.status || 'pending'}">${this.getStatusIcon(p.arrangement?.status)} ${Utils.formatCurrency(p.arrangement?.amount || 0)}</span></td>
+                            <td><span class="payment-status ${p.principal?.status || 'pending'}">${this.getStatusIcon(p.principal?.status)} ${Utils.formatCurrency(p.principal?.amount || 0)}</span></td>
+                            <td><strong>${Utils.formatCurrency(p.total || 0)}</strong></td>
+                            <td><span class="status-badge ${(p.overallStatus || 'pending').toLowerCase()}">${p.overallStatus || 'PENDING'}</span></td>
                         </tr>
-                    `).join('')}
+                    `;
+        }).join('')}
                 </tbody>
             </table>
         `;
@@ -540,6 +546,20 @@ const PaymentsComponent = {
 
         const transactions = SyndiData.transactions || [];
 
+        if (transactions.length === 0) {
+            container.innerHTML = `
+                <div class="tx-feed">
+                    <div class="tx-feed-header">
+                        <span>Transaction Feed</span>
+                    </div>
+                    <div style="padding: 2rem; text-align: center; color: var(--text-muted);">
+                        No transactions yet
+                    </div>
+                </div>
+            `;
+            return;
+        }
+
         container.innerHTML = `
             <div class="tx-feed">
                 <div class="tx-feed-header">
@@ -550,26 +570,65 @@ const PaymentsComponent = {
                     </div>
                 </div>
                 <div class="tx-feed-list">
-                    ${transactions.map(tx => `
+                    ${transactions.map(tx => {
+            // Resolve participant name from ID or use direct name
+            const participantName = this._resolveParticipantName(tx.participant);
+            const amount = tx.amount || 0;
+            const type = tx.type || 'Payment';
+            const time = tx.time || tx.timestamp || '';
+            const txHash = tx.tx || tx.txHash || 'Pending';
+            const status = tx.status || 'confirmed';
+
+            return `
                         <div class="tx-feed-item">
-                            <div class="tx-status-icon tx-status-${tx.status === 'overdue' ? 'failed' : 'confirmed'}">
-                                ${tx.status === 'overdue' ? '⚠️' : '✓'}
+                            <div class="tx-status-icon tx-status-${status === 'overdue' || status === 'failed' ? 'failed' : status === 'pending' ? 'pending' : 'confirmed'}">
+                                ${status === 'overdue' || status === 'failed' ? '⚠️' : status === 'pending' ? '⏳' : '✓'}
                             </div>
                             <div class="tx-feed-content">
                                 <div class="tx-feed-main">
-                                    <span class="tx-feed-parties">${tx.participant} → Originator</span>
-                                    <span class="tx-feed-amount">+${Utils.formatCurrency(tx.amount)}</span>
+                                    <span class="tx-feed-parties">${participantName} → Originator</span>
+                                    <span class="tx-feed-amount">+${Utils.formatCurrency(amount)}</span>
                                 </div>
                                 <div class="tx-feed-meta">
-                                    <span>${tx.type}</span>
-                                    <span>${tx.tx || 'Pending'}</span>
-                                    <span>${tx.time}</span>
+                                    <span>${type}</span>
+                                    <span>${txHash}</span>
+                                    <span>${time}</span>
                                 </div>
                             </div>
                         </div>
-                    `).join('')}
+                    `;
+        }).join('')}
                 </div>
             </div>
         `;
+    },
+
+    /**
+     * Resolve participant name from ID or return the name directly
+     * Checks MongoDB-sourced SyndiData.participants first
+     */
+    _resolveParticipantName(participantIdOrName) {
+        if (!participantIdOrName) return 'Unknown';
+
+        // If it looks like an ID (starts with PA- or contains -), try to look up
+        if (participantIdOrName.startsWith('PA-') || participantIdOrName.includes('_agent')) {
+            // Look up in SyndiData.participants (from MongoDB)
+            const participants = SyndiData.participants || [];
+            const found = participants.find(p =>
+                p.id === participantIdOrName ||
+                p._id === participantIdOrName ||
+                p.participant_agent_id === participantIdOrName
+            );
+
+            if (found) {
+                return found.name || found.institution_name || found.entity || participantIdOrName;
+            }
+
+            // Not found - return the ID itself (better than undefined)
+            return participantIdOrName;
+        }
+
+        // Already a name, return as-is
+        return participantIdOrName;
     }
 };

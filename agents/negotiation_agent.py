@@ -57,7 +57,10 @@ class NegotiationAgent:
         
         # Calculate urgency using simulated time if provided
         now = datetime.fromisoformat(current_time_str) if current_time_str else datetime.utcnow()
-        target_close = datetime.fromisoformat(synd["timeline"]["target_close_date"].replace("Z", ""))
+        
+        # Use robust parsing
+        from dateutil.parser import isoparse
+        target_close = isoparse(synd["timeline"]["target_close_date"])
         hours_remaining = (target_close - now).total_seconds() / 3600
         
         if hours_remaining < 48:
@@ -129,6 +132,11 @@ class NegotiationAgent:
         # Lazy load config
         if not self.config:
             self.config = self._load_or_create_config(state.get("current_time"))
+        
+        # Ensure state contains required keys
+        state.setdefault("rejected_bids", [])
+        state.setdefault("allocations", [])
+        state.setdefault("auction_history", [])
         
         state["status"] = "negotiating"
         state["negotiation_agent_id"] = self.agent_id
@@ -335,6 +343,9 @@ class NegotiationAgent:
         """
         logger.info(f"[{self.agent_id}] Closing auction: {reason}")
         
+        # Ensure collections exist
+        state.setdefault("rejected_bids", [])
+        
         target = self.config["auction_config"]["target_subscription"]
         total_bids = sum(b["bid_amount"] for b in bids)
         
@@ -348,7 +359,7 @@ class NegotiationAgent:
                 allocations.append(alloc)
         else:
             # Pro-rata allocation
-            pro_rata_factor = target / total_bids
+            pro_rata_factor = target / total_bids if total_bids > 0 else 0
             for bid in bids:
                 alloc_amount = int(bid["bid_amount"] * pro_rata_factor)
                 # Respect minimum allocation
@@ -375,6 +386,11 @@ class NegotiationAgent:
                 {"$set": {"bid_status": "provisional_winner"}}
             )
         
+        # Calculate allocation percentages for analytics
+        total_allocated = sum(a["final_allocation"] for a in allocations)
+        for a in allocations:
+            a["allocation_percentage"] = round(a["final_allocation"] / total_allocated * 100, 2) if total_allocated > 0 else 0
+
         state["allocations"] = allocations
         state["status"] = "closing"
         
@@ -445,7 +461,8 @@ class NegotiationAgent:
         """Calculate fees for an allocation"""
         synd = db.syndications().find_one({"_id": self.syndication_id})
         commitment_fee_pct = synd.get("pricing", {}).get("commitment_fee", 0.5)
-        arrangement_fee_pct = 2.0  # Standard
+        # Arrangement fee should preferably come from syndication config
+        arrangement_fee_pct = synd.get("pricing", {}).get("arrangement_fee", 2.0)
         
         return {
             "commitment_fee": int(amount * commitment_fee_pct / 100),

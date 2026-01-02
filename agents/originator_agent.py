@@ -78,9 +78,10 @@ class OriginatorAgent:
         state["created_at"] = datetime.utcnow().isoformat()
         state["updated_at"] = datetime.utcnow().isoformat()
         
-        # Insert into MongoDB
+        # Insert into MongoDB with schema version for migration support
         db.syndications().insert_one({
             "_id": state["syndication_id"],
+            "schema_version": 1,  # For backward compatibility and migrations
             **state
         })
         
@@ -105,21 +106,19 @@ class OriginatorAgent:
         logger.info(f"[{self.agent_id}] Receiving {payment_type}: ${amount:,} from {from_participant}")
         
         # Update originator's financial state
-        update_fields = {}
+        # Build $inc updates correctly - no $ prefix on field names!
+        inc_updates = {"total_fees_ytd": amount}
         
         if payment_type == "commitment_fee":
-            update_fields["total_commitment_fees_received"] = amount
+            inc_updates["financial_metrics.total_commitment_fees_received"] = amount
         elif payment_type == "arrangement_fee":
-            update_fields["total_arrangement_fees_received"] = amount
+            inc_updates["financial_metrics.total_arrangement_fees_received"] = amount
         
-        # Increment total earnings
+        # Atomic increment of all fee fields
         db.originator_agents().update_one(
             {"_id": self.agent_id},
             {
-                "$inc": {
-                    "total_fees_ytd": amount,
-                    **{f"${k}": v for k, v in update_fields.items()}
-                },
+                "$inc": inc_updates,
                 "$set": {"updated_at": datetime.utcnow()}
             }
         )
@@ -135,23 +134,33 @@ class OriginatorAgent:
     def complete_syndication(self, syndication_id: str, success: bool, reason: Optional[str] = None) -> None:
         """
         Update originator state when syndication completes.
+        Uses atomic MongoDB update to prevent race conditions.
         """
+        # ATOMIC: Load profile and calculate in single read, then update
+        profile = self._load_profile()
+        track = profile.get("track_record", {})
+        
+        # Calculate success rate BEFORE the increment
+        current_completed = track.get("deals_closed_ytd", 0)
+        current_failed = track.get("deals_failed_ytd", 0)
+        
+        # After this syndication:
+        new_completed = current_completed + (1 if success else 0)
+        new_failed = current_failed + (0 if success else 1)
+        total = new_completed + new_failed
+        new_success_rate = (new_completed / total) if total > 0 else 0 # Result is 0.0-1.0 in originator schema
+        
         update = {
             "$inc": {
                 "active_loans": -1,
-                "completed_syndications_ytd": 1 if success else 0,
-                "failed_syndications_ytd": 0 if success else 1
+                "track_record.deals_closed_ytd": 1 if success else 0,
+                "track_record.deals_failed_ytd": 0 if success else 1
             },
-            "$set": {"updated_at": datetime.utcnow()}
+            "$set": {
+                "updated_at": datetime.utcnow(),
+                "track_record.success_rate": round(new_success_rate, 3)
+            }
         }
-        
-        # Calculate new success rate
-        profile = self._load_profile()
-        total = profile.get("completed_syndications_ytd", 0) + profile.get("failed_syndications_ytd", 0) + 1
-        successful = profile.get("completed_syndications_ytd", 0) + (1 if success else 0)
-        new_success_rate = successful / total if total > 0 else 0
-        
-        update["$set"]["success_rate"] = round(new_success_rate * 100, 1)
         
         db.originator_agents().update_one({"_id": self.agent_id}, update)
         
@@ -183,8 +192,8 @@ def generate_syndication(originator_id: str, loan_params: Optional[Dict] = None)
                   "Corporate Refinancing", "Bridge Loan"]
     ratings = ["BB-", "BB", "BB+", "BBB-", "BBB", "BBB+", "A-", "A"]
     
-    # Generate unique ID
-    synd_id = f"SYND-2025-{randint(100, 999)}"
+    # Generate unique ID using UUID to prevent collisions
+    synd_id = f"SYND-{datetime.utcnow().strftime('%Y%m%d')}-{uuid.uuid4().hex[:8].upper()}"
     
     # Calculate amounts
     total_amount = randint(200, 2000) * 1000000

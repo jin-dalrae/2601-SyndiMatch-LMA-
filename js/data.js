@@ -196,3 +196,207 @@ const Utils = {
 
     randomBetween: (min, max) => Math.floor(Math.random() * (max - min + 1)) + min
 };
+
+// ========================================
+// SyndiData Event System & Update Methods
+// ========================================
+
+// Event listeners for real-time updates
+SyndiData._listeners = {};
+
+SyndiData.on = function (event, callback) {
+    if (!this._listeners[event]) this._listeners[event] = [];
+    this._listeners[event].push(callback);
+};
+
+SyndiData.emit = function (event, data) {
+    if (this._listeners[event]) {
+        this._listeners[event].forEach(cb => cb(data));
+    }
+};
+
+// Add or update a syndication
+SyndiData.updateSyndication = function (syndId, updates) {
+    const idx = this.syndications.findIndex(s => s.id === syndId);
+    if (idx >= 0) {
+        Object.assign(this.syndications[idx], updates);
+        this.emit('syndicationUpdated', { syndId, syndication: this.syndications[idx] });
+        console.log(`📊 Updated ${syndId}:`, updates);
+    }
+};
+
+// Add a new syndication
+SyndiData.addSyndication = function (synd) {
+    // Check if it already exists
+    const exists = this.syndications.find(s => s.id === synd.id);
+    if (exists) {
+        return this.updateSyndication(synd.id, synd);
+    }
+    this.syndications.unshift(synd); // Add to top
+    this.emit('syndicationAdded', synd);
+    console.log(`🆕 New syndication: ${synd.id}`);
+};
+
+// Add a transaction
+SyndiData.addTransaction = function (tx) {
+    this.transactions.unshift(tx);
+    this.emit('transactionAdded', tx);
+};
+
+// Add a decision log entry
+SyndiData.addDecision = function (decision) {
+    this.decisions.unshift(decision);
+    this.emit('decisionAdded', decision);
+};
+
+// ========================================
+// WebSocket Manager for Real-Time Events
+// ========================================
+
+const WebSocketManager = {
+    ws: null,
+    isConnected: false,
+    reconnectAttempts: 0,
+    maxReconnectAttempts: 5,
+    reconnectDelay: 3000,
+
+    connect() {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
+
+        try {
+            this.ws = new WebSocket('ws://localhost:8000/ws');
+
+            this.ws.onopen = () => {
+                console.log('🔌 WebSocket connected to orchestrator');
+                this.isConnected = true;
+                this.reconnectAttempts = 0;
+
+                // Subscribe to all syndication events
+                this.ws.send(JSON.stringify({ type: 'subscribe', channel: 'syndication_events' }));
+            };
+
+            this.ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    this.handleEvent(data);
+                } catch (e) {
+                    console.warn('Failed to parse WebSocket message:', e);
+                }
+            };
+
+            this.ws.onclose = () => {
+                console.log('🔌 WebSocket disconnected');
+                this.isConnected = false;
+                this.attemptReconnect();
+            };
+
+            this.ws.onerror = (error) => {
+                console.warn('WebSocket error:', error);
+            };
+        } catch (e) {
+            console.warn('Failed to create WebSocket:', e);
+        }
+    },
+
+    attemptReconnect() {
+        if (this.reconnectAttempts < this.maxReconnectAttempts) {
+            this.reconnectAttempts++;
+            console.log(`🔄 Reconnecting... (attempt ${this.reconnectAttempts})`);
+            setTimeout(() => this.connect(), this.reconnectDelay);
+        }
+    },
+
+    handleEvent(data) {
+        const eventType = data.event_type || data.type;
+        const syndId = data.syndication_id || data.synd_id;
+
+        console.log(`📨 Event: ${eventType}`, data);
+
+        switch (eventType) {
+            case 'SYNDICATION_CREATED':
+            case 'syndication_created':
+                SyndiData.addSyndication({
+                    id: syndId,
+                    borrower: data.data?.borrower || 'New Deal',
+                    amount: data.data?.amount || 100,
+                    status: 'open',
+                    subscription: 0,
+                    participantCount: 0,
+                    spread: data.data?.spread || 400,
+                    rating: data.data?.rating || 'BB',
+                    originator: data.data?.originator || 'Platform'
+                });
+                break;
+
+            case 'BID_SUBMITTED':
+            case 'bid_submitted':
+                SyndiData.updateSyndication(syndId, {
+                    participantCount: (SyndiData.syndications.find(s => s.id === syndId)?.participantCount || 0) + 1
+                });
+                SyndiData.addDecision({
+                    time: new Date().toLocaleTimeString(),
+                    agent: `Participant ${data.data?.participant_id || 'Agent'}`,
+                    action: `BID on ${syndId}`,
+                    factors: [{ type: 'positive', text: `Amount: $${data.data?.amount || 0}M` }],
+                    result: 'Bid submitted'
+                });
+                break;
+
+            case 'BID_ACCEPTED':
+            case 'bid_accepted':
+                const currentSynd = SyndiData.syndications.find(s => s.id === syndId);
+                if (currentSynd) {
+                    const newSubscription = Math.min(100, (currentSynd.subscription || 0) + (data.data?.percentage || 10));
+                    SyndiData.updateSyndication(syndId, {
+                        subscription: newSubscription,
+                        status: newSubscription >= 100 ? 'closing' : 'negotiating'
+                    });
+                }
+                break;
+
+            case 'ALLOCATION_COMPLETE':
+            case 'allocation_complete':
+                SyndiData.updateSyndication(syndId, {
+                    status: 'settlement',
+                    subscription: 100
+                });
+                break;
+
+            case 'SYNDICATION_COMPLETE':
+            case 'syndication_complete':
+                SyndiData.updateSyndication(syndId, {
+                    status: 'completed',
+                    subscription: 100,
+                    timeRemaining: '—'
+                });
+                break;
+
+            default:
+                // Generic event - add to transactions
+                SyndiData.addTransaction({
+                    time: new Date().toLocaleTimeString(),
+                    type: eventType,
+                    participant: data.data?.agent_id || 'System',
+                    amount: data.data?.amount || 0,
+                    syndId: syndId
+                });
+        }
+
+        // Trigger UI refresh
+        if (window.PipelineComponent) {
+            PipelineComponent.render();
+        }
+    },
+
+    disconnect() {
+        if (this.ws) {
+            this.ws.close();
+            this.ws = null;
+            this.isConnected = false;
+        }
+    }
+};
+
+// Export
+window.WebSocketManager = WebSocketManager;
+

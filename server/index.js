@@ -5,6 +5,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const crypto = require('crypto');
 const { connectDB, getDB } = require('./db');
 
 const app = express();
@@ -24,24 +25,26 @@ app.get('/api/health', (req, res) => {
 app.get('/api/syndications', async (req, res) => {
     try {
         const db = getDB();
-        const syndications = await db.collection('syndications').find({}).toArray();
+        // Point to the richer syndication_original collection for the listing
+        const syndications = await db.collection('syndication_original').find({}).sort({ createdAt: -1 }).toArray();
         res.json(syndications);
     } catch (error) {
-        console.error('Error fetching syndications:', error);
-        res.status(500).json({ error: 'Failed to fetch syndications' });
+        console.error('❌ Failed to fetch syndications:', error);
+        res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch syndications' });
     }
 });
 
 app.get('/api/syndications/:id', async (req, res) => {
     try {
         const db = getDB();
-        const syndication = await db.collection('syndications').findOne({ id: req.params.id });
+        const syndication = await db.collection('syndication_original').findOne({ _id: req.params.id });
         if (!syndication) {
-            return res.status(404).json({ error: 'Syndication not found' });
+            return res.status(404).json({ error: 'Not Found', message: 'Syndication not found' });
         }
         res.json(syndication);
     } catch (error) {
-        res.status(500).json({ error: 'Failed to fetch syndication' });
+        console.error(`❌ Failed to fetch syndication ${req.params.id}:`, error);
+        res.status(500).json({ error: 'Internal Server Error' });
     }
 });
 
@@ -62,10 +65,12 @@ app.get('/api/bids', async (req, res) => {
 app.get('/api/participants', async (req, res) => {
     try {
         const db = getDB();
-        const participants = await db.collection('participant_agents').find({}).toArray();
+        // Use 'participants' collection which contains richer data (25 records)
+        const participants = await db.collection('participants').find({}).toArray();
         res.json(participants);
     } catch (error) {
-        res.status(500).json({ error: 'Failed to fetch participants' });
+        console.error('❌ Failed to fetch participants:', error);
+        res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch participants' });
     }
 });
 
@@ -90,20 +95,22 @@ app.get('/api/payments/summary/:syndId', async (req, res) => {
     }
 });
 
-// Agents
+// Agents Overview
 app.get('/api/agents', async (req, res) => {
     try {
         const db = getDB();
         const [originator, participant, negotiation, settlement, payment] = await Promise.all([
-            db.collection('originator_agents').find({}).toArray(),
-            db.collection('participant_agents').find({}).toArray(),
+            // Point to canonical richer collections
+            db.collection('originator').find({}).toArray(),
+            db.collection('participants').find({}).toArray(),
             db.collection('negotiation_agents').find({}).toArray(),
             db.collection('settlement_agents').find({}).toArray(),
             db.collection('payment_agents').find({}).toArray()
         ]);
         res.json({ originator, participant, negotiation, settlement, payment });
     } catch (error) {
-        res.status(500).json({ error: 'Failed to fetch agents' });
+        console.error('❌ Failed to fetch agents summary:', error);
+        res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch agents data' });
     }
 });
 
@@ -155,13 +162,9 @@ app.get('/api/syndication-events/:syndId', async (req, res) => {
 // Simulates Coinbase x402 Payment-Required flow
 // ========================================
 
-// In-memory payment state (demo only)
-const pendingPayments = new Map();
-const completedPayments = [];
-
 // Generate x402 payment header
 function generateX402PaymentHeader(paymentDetails) {
-    const paymentId = `x402-${Date.now()}-${Math.random().toString(36).substr(2, 8)}`;
+    const paymentId = `x402-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
     return {
         paymentId,
         payTo: 'platform-syndimatch-wallet',
@@ -173,12 +176,32 @@ function generateX402PaymentHeader(paymentDetails) {
     };
 }
 
+// Log payment events
+async function logPaymentEvent(type, data) {
+    try {
+        const db = getDB();
+        await db.collection('payment_events').insertOne({
+            type,
+            data,
+            timestamp: new Date()
+        });
+    } catch (error) {
+        console.error('❌ Failed to log payment event:', error);
+    }
+}
+
 // Protected resource - triggers HTTP 402
-app.post('/api/x402/join-syndication', (req, res) => {
+app.post('/api/x402/join-syndication', async (req, res) => {
     const { syndId, participantId, commitmentAmount } = req.body;
 
-    if (!syndId || !participantId || !commitmentAmount) {
-        return res.status(400).json({ error: 'Missing required fields' });
+    if (!syndId || typeof syndId !== 'string') {
+        return res.status(400).json({ error: 'Bad Request', message: 'Invalid or missing syndication ID' });
+    }
+    if (!participantId || typeof participantId !== 'string') {
+        return res.status(400).json({ error: 'Bad Request', message: 'Invalid or missing participant ID' });
+    }
+    if (!commitmentAmount || typeof commitmentAmount !== 'number') {
+        return res.status(400).json({ error: 'Bad Request', message: 'Invalid or missing commitment amount' });
     }
 
     // Calculate 0.5% commitment fee
@@ -197,102 +220,145 @@ app.post('/api/x402/join-syndication', (req, res) => {
     };
 
     const paymentHeader = generateX402PaymentHeader(paymentDetails);
-    pendingPayments.set(paymentHeader.paymentId, { ...paymentDetails, ...paymentHeader, status: 'pending', createdAt: new Date() });
 
-    // Return HTTP 402 Payment Required
-    res.status(402)
-        .set('X-Payment-Required', 'true')
-        .set('X-Payment-Id', paymentHeader.paymentId)
-        .set('X-Pay-To', paymentHeader.payTo)
-        .set('X-Amount', paymentHeader.amount)
-        .set('X-Currency', paymentHeader.currency)
-        .set('X-Network', paymentHeader.network)
-        .json({
-            error: 'Payment Required',
-            message: `Commitment fee of ${paymentDetails.amountFormatted} required to join syndication`,
-            payment: paymentHeader,
-            paymentInstructions: {
-                step1: 'Send USDC to the payment address',
-                step2: 'Include paymentId in transaction memo',
-                step3: 'Call /api/x402/confirm with paymentId and txHash'
-            }
-        });
+    try {
+        const db = getDB();
+        const pendingPayment = {
+            ...paymentDetails,
+            ...paymentHeader,
+            status: 'pending',
+            createdAt: new Date()
+        };
+
+        await db.collection('pending_payments').insertOne(pendingPayment);
+        await logPaymentEvent('join_syndication_request', { syndId, participantId, paymentId: paymentHeader.paymentId });
+
+        // Return HTTP 402 Payment Required
+        res.status(402)
+            .set('X-Payment-Required', 'true')
+            .set('X-Payment-Id', paymentHeader.paymentId)
+            .set('X-Pay-To', paymentHeader.payTo)
+            .set('X-Amount', paymentHeader.amount)
+            .set('X-Currency', paymentHeader.currency)
+            .set('X-Network', paymentHeader.network)
+            .json({
+                error: 'Payment Required',
+                message: `Commitment fee of ${paymentDetails.amountFormatted} required to join syndication`,
+                payment: paymentHeader,
+                paymentInstructions: {
+                    step1: 'Send USDC to the payment address',
+                    step2: 'Include paymentId in transaction memo',
+                    step3: 'Call /api/x402/confirm with paymentId and txHash'
+                }
+            });
+    } catch (error) {
+        console.error('Error creating pending payment:', error);
+        res.status(500).json({ error: 'Internal Server Error', message: 'Failed to initiate payment flow' });
+    }
 });
 
 // Simulate x402 payment (mock - no real blockchain)
-app.post('/api/x402/pay', (req, res) => {
+app.post('/api/x402/pay', async (req, res) => {
     const { paymentId, walletAddress } = req.body;
 
-    const payment = pendingPayments.get(paymentId);
-    if (!payment) {
-        return res.status(404).json({ error: 'Payment not found or expired' });
+    if (!paymentId) {
+        return res.status(400).json({ error: 'Bad Request', message: 'Missing payment ID' });
     }
 
-    // Simulate blockchain transaction
-    const txHash = '0x' + Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
-    const gasUsed = (0.00001 + Math.random() * 0.00005).toFixed(6);
+    try {
+        const db = getDB();
+        const payment = await db.collection('pending_payments').findOne({ paymentId });
 
-    // Update payment status
-    payment.status = 'completed';
-    payment.txHash = txHash;
-    payment.paidAt = new Date();
-    payment.paidFrom = walletAddress || 'mock-participant-wallet';
-    payment.gasUsed = gasUsed;
-    payment.confirmations = 12;
-
-    // Move to completed
-    completedPayments.push(payment);
-    pendingPayments.delete(paymentId);
-
-    console.log(`✅ x402 Payment completed: ${paymentId} | ${payment.amountFormatted} | ${txHash.slice(0, 16)}...`);
-
-    res.json({
-        success: true,
-        message: `Paid ${payment.amountFormatted} via x402 USDC on Base`,
-        transaction: {
-            paymentId,
-            txHash,
-            amount: payment.amount,
-            currency: 'USDC',
-            network: 'base',
-            gasUsed,
-            confirmations: 12,
-            timestamp: payment.paidAt.toISOString()
-        },
-        receipt: {
-            type: payment.type,
-            syndId: payment.syndId,
-            participantId: payment.participantId,
-            feePercentage: payment.feePercentage,
-            commitmentAmount: payment.commitmentAmount
+        if (!payment) {
+            return res.status(404).json({ error: 'Not Found', message: 'Payment not found or already processed' });
         }
-    });
+
+        // Simulate blockchain transaction
+        const txHash = '0x' + crypto.randomBytes(32).toString('hex');
+        const gasUsed = (0.00001 + Math.random() * 0.00005).toFixed(6);
+
+        // Update payment status
+        payment.status = 'completed';
+        payment.txHash = txHash;
+        payment.paidAt = new Date();
+        payment.paidFrom = walletAddress || 'mock-participant-wallet';
+        payment.gasUsed = gasUsed;
+        payment.confirmations = 12;
+
+        // Persist to completed and remove from pending
+        await db.collection('completed_payments').insertOne(payment);
+        await db.collection('pending_payments').deleteOne({ _id: payment._id });
+
+        await logPaymentEvent('payment_completed', { paymentId, txHash, syndId: payment.syndId });
+
+        console.log(`✅ x402 Payment completed: ${paymentId} | ${payment.amountFormatted} | ${txHash.slice(0, 16)}...`);
+
+        res.json({
+            success: true,
+            message: `Paid ${payment.amountFormatted} via x402 USDC on Base`,
+            transaction: {
+                paymentId,
+                txHash,
+                amount: payment.amount,
+                currency: 'USDC',
+                network: 'base',
+                gasUsed,
+                confirmations: 12,
+                timestamp: payment.paidAt.toISOString()
+            },
+            receipt: {
+                type: payment.type,
+                syndId: payment.syndId,
+                participantId: payment.participantId,
+                feePercentage: payment.feePercentage,
+                commitmentAmount: payment.commitmentAmount
+            }
+        });
+    } catch (error) {
+        console.error('Error processing payment:', error);
+        res.status(500).json({ error: 'Internal Server Error', message: 'Failed to process payment' });
+    }
 });
 
 // Check payment status
-app.get('/api/x402/status/:paymentId', (req, res) => {
+app.get('/api/x402/status/:paymentId', async (req, res) => {
     const { paymentId } = req.params;
 
-    let payment = pendingPayments.get(paymentId);
-    if (!payment) {
-        payment = completedPayments.find(p => p.paymentId === paymentId);
-    }
+    try {
+        const db = getDB();
+        let payment = await db.collection('pending_payments').findOne({ paymentId });
+        if (!payment) {
+            payment = await db.collection('completed_payments').findOne({ paymentId });
+        }
 
-    if (!payment) {
-        return res.status(404).json({ error: 'Payment not found' });
-    }
+        if (!payment) {
+            return res.status(404).json({ error: 'Not Found', message: 'Payment not found' });
+        }
 
-    res.json(payment);
+        res.json(payment);
+    } catch (error) {
+        res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch payment status' });
+    }
 });
 
 // Get all completed payments
-app.get('/api/x402/transactions', (req, res) => {
-    res.json(completedPayments);
+app.get('/api/x402/transactions', async (req, res) => {
+    try {
+        const db = getDB();
+        const payments = await db.collection('completed_payments').find({}).sort({ paidAt: -1 }).toArray();
+        res.json(payments);
+    } catch (error) {
+        res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch transactions' });
+    }
 });
 
 // Trigger break fee (for participant dropout)
-app.post('/api/x402/break-fee', (req, res) => {
+app.post('/api/x402/break-fee', async (req, res) => {
     const { syndId, participantId, allocatedAmount } = req.body;
+
+    if (!syndId || !participantId || !allocatedAmount) {
+        return res.status(400).json({ error: 'Bad Request', message: 'Missing required fields' });
+    }
 
     // 0.2% break fee
     const feeAmount = Math.round(allocatedAmount * 0.002);
@@ -303,25 +369,33 @@ app.post('/api/x402/break-fee', (req, res) => {
         memo: `Break fee for dropout from ${syndId}`
     });
 
-    pendingPayments.set(paymentHeader.paymentId, {
-        type: 'break_fee',
-        syndId,
-        participantId,
-        allocatedAmount,
-        amount: feeAmount,
-        ...paymentHeader,
-        status: 'pending',
-        createdAt: new Date()
-    });
+    try {
+        const db = getDB();
+        const pendingPayment = {
+            type: 'break_fee',
+            syndId,
+            participantId,
+            allocatedAmount,
+            amount: feeAmount,
+            ...paymentHeader,
+            status: 'pending',
+            createdAt: new Date()
+        };
 
-    res.status(402)
-        .set('X-Payment-Required', 'true')
-        .set('X-Payment-Id', paymentHeader.paymentId)
-        .json({
-            error: 'Break Fee Required',
-            message: `Break fee of $${feeAmount.toLocaleString()} USDC required for early withdrawal`,
-            payment: paymentHeader
-        });
+        await db.collection('pending_payments').insertOne(pendingPayment);
+        await logPaymentEvent('break_fee_request', { syndId, participantId, paymentId: paymentHeader.paymentId });
+
+        res.status(402)
+            .set('X-Payment-Required', 'true')
+            .set('X-Payment-Id', paymentHeader.paymentId)
+            .json({
+                error: 'Break Fee Required',
+                message: `Break fee of $${feeAmount.toLocaleString()} USDC required for early withdrawal`,
+                payment: paymentHeader
+            });
+    } catch (error) {
+        res.status(500).json({ error: 'Internal Server Error', message: 'Failed to initiate break fee flow' });
+    }
 });
 
 // Start server
