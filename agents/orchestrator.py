@@ -79,7 +79,7 @@ def participants_node(state: SyndicationState) -> SyndicationState:
     syndication_target = state["loan_details"]["syndication_target"]
     
     # Get all active participants - convert cursor to list FIRST
-    participants_cursor = db.get_collection("participant_agents").find({"status": "active"})
+    participants_cursor = db.get_collection("participants").find({"status": "active"})
     participants_list = list(participants_cursor)
     
     # Shuffle participants to randomize bid arrival order

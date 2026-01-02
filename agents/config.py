@@ -16,9 +16,12 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 SIMULATION_MODE = not (ANTHROPIC_API_KEY and ANTHROPIC_API_KEY.startswith("sk-"))
 AGENT_MODEL = "claude-sonnet-4-20250514"
 
-# Coinbase x402
+# Coinbase x402 / CDP
 COINBASE_API_KEY = os.getenv("COINBASE_API_KEY", "")
 COINBASE_API_SECRET = os.getenv("COINBASE_API_SECRET", "")
+CDP_API_KEY_NAME = os.getenv("CDP_API_KEY_NAME", "")
+CDP_API_KEY_PRIVATE_KEY = os.getenv("CDP_API_KEY_PRIVATE_KEY", "").replace('\\n', '\n')
+CDP_NETWORK = os.getenv("CDP_NETWORK", "base-sepolia")
 
 # WebSocket
 WS_PORT = int(os.getenv("WS_PORT", "8765"))

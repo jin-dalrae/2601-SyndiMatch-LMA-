@@ -137,6 +137,25 @@ async def run_full_syndication(request: RunSyndicationRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/orchestrator/reset")
+async def reset_orchestrator():
+    """Reset the orchestration engine state and events"""
+    try:
+        # Clear syndication_events collection
+        db.get_collection("syndication_events").delete_many({})
+        
+        # Broadcast reset to dashboard
+        await manager.broadcast({
+            "type": "engine_reset",
+            "message": "Orchestration engine state and events cleared"
+        })
+        
+        return {"success": True, "message": "Engine reset complete"}
+    except Exception as e:
+        logger.error(f"Reset engine error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/syndications")
 async def get_syndications():
     """Get all syndications"""
@@ -512,39 +531,42 @@ async def websocket_endpoint(websocket: WebSocket):
                 })
                 
                 # Run syndication in background as a task to avoid blocking the WS loop
-                asyncio.create_task(self._handle_run_syndication_ws(websocket, originator, synd_id))
+                asyncio.create_task(_handle_run_syndication_ws(websocket, originator, synd_id))
             
-            elif message.get("type") == "ping":
                 await websocket.send_json({"type": "pong"})
-    
-    async def _handle_run_syndication_ws(self, websocket: WebSocket, originator_id: str, synd_id: Optional[str] = None):
-        """Helper to run syndication and report back over WS without blocking loop"""
-        try:
-            # Use provided synd_id or create new one from originator
-            target_id = synd_id or originator_id
-            result = await run_syndication_async(target_id)
-            
-            await websocket.send_json({
-                "type": "syndication_complete",
-                "data": {
-                    "syndication_id": result.get("syndication_id"),
-                    "status": result.get("status"),
-                    "total_committed": result.get("total_committed"),
-                    "allocations_count": len(result.get("allocations", []))
-                }
-            })
-        except Exception as e:
-            logger.error(f"WS Syndication run error: {e}")
-            await websocket.send_json({
-                "type": "error",
-                "message": f"Syndication run failed: {str(e)}"
-            })
     
     except WebSocketDisconnect:
         manager.disconnect(websocket)
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
         manager.disconnect(websocket)
+
+
+async def _handle_run_syndication_ws(websocket: WebSocket, originator_id: str, synd_id: Optional[str] = None):
+    """Helper to run syndication and report back over WS without blocking loop"""
+    try:
+        # Use provided synd_id or create new one from originator
+        target_id = synd_id or originator_id
+        result = await run_syndication_async(target_id)
+        
+        await websocket.send_json({
+            "type": "syndication_complete",
+            "data": {
+                "syndication_id": result.get("syndication_id"),
+                "status": result.get("status"),
+                "total_committed": result.get("total_committed"),
+                "allocations_count": len(result.get("allocations", []))
+            }
+        })
+    except Exception as e:
+        logger.error(f"WS Syndication run error: {e}")
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "message": f"Syndication run failed: {str(e)}"
+            })
+        except:
+            pass # Socket might be closed
 
 
 # === Startup Events ===

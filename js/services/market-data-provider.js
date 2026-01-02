@@ -46,8 +46,7 @@ const MarketDataProvider = {
      */
     async getBaseRate(rateType = 'SOFR') {
         if (this.mode === 'live') {
-            // TODO: Fetch from actual rate service
-            // return await fetch('/api/rates/' + rateType).then(r => r.json());
+            throw new Error(`Live mode not yet implemented for getBaseRate(${rateType})`);
         }
 
         // Mock rates (as of late 2025)
@@ -69,7 +68,7 @@ const MarketDataProvider = {
      * Get current market condition
      * Used for demand/supply modeling
      */
-    getMarketCondition() {
+    async getMarketCondition() {
         if (this._cache.marketCondition) {
             return this._cache.marketCondition;
         }
@@ -83,10 +82,18 @@ const MarketDataProvider = {
     },
 
     /**
+     * Invalidate market condition cache to allow fluctuations
+     */
+    invalidateMarketCondition() {
+        delete this._cache.marketCondition;
+        console.log('📊 Market condition cache invalidated');
+    },
+
+    /**
      * Get demand multiplier based on market conditions
      */
-    getDemandMultiplier() {
-        const condition = this.getMarketCondition();
+    async getDemandMultiplier() {
+        const condition = await this.getMarketCondition();
         const multipliers = {
             'bull': 1.2,
             'neutral': 1.0,
@@ -122,7 +129,8 @@ const MarketDataProvider = {
             return sectors.map((sector, si) => {
                 const baseSpread = 150 + ri * 50;  // Rating effect
                 const sectorAdjust = si * 10;       // Sector effect
-                return baseSpread + sectorAdjust;
+                const noise = Math.floor(Math.random() * 5); // Add small variability for realism
+                return baseSpread + sectorAdjust + noise;
             });
         });
 
@@ -232,7 +240,7 @@ const MarketDataProvider = {
      */
     reset() {
         this.clearCache();
-        this.mode = 'mock';
+        console.log('📊 MarketDataProvider reset (mode preserved)');
     }
 };
 

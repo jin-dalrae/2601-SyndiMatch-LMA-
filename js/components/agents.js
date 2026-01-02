@@ -35,7 +35,21 @@ const AgentsComponent = {
         NEGOTIATION: 'Negotiation',
         SYSTEM: 'System',
         AUCTION: 'Auction',
-        SYNDICATION: 'Workflow'
+        SYNDICATION: 'Workflow',
+        // CamelCase support for newer domain events
+        SyndicationOpened: 'Originator',
+        BidReceived: 'Bidder',
+        BidRejected: 'Bidder',
+        BiddingCompleted: 'Workflow',
+        AuctionRoundCompleted: 'Negotiation',
+        AuctionCompleted: 'Negotiation',
+        AuctionFailed: 'Negotiation',
+        SettlementStageCompleted: 'Settlement',
+        SettlementCompleted: 'Settlement',
+        SettlementFailed: 'Settlement',
+        PaymentProcessed: 'Payment',
+        PaymentFailed: 'Payment',
+        SyndicationCompleted: 'Workflow'
     },
 
     init() {
@@ -100,15 +114,17 @@ const AgentsComponent = {
             const decisions = (allEvents || []).map(e => {
                 let actionType = 'neutral';
                 const type = e.event_type || 'SYSTEM';
-                if (type.includes('FAILED')) actionType = 'negative';
-                if (type.includes('COMPLETE') || type.includes('SUCCESS')) actionType = 'positive';
+                const upperType = type.toUpperCase();
+
+                if (upperType.includes('FAILED') || upperType.includes('REJECTED')) actionType = 'negative';
+                if (upperType.includes('COMPLETE') || upperType.includes('SUCCESS') || upperType.includes('OPENED') || upperType.includes('RECEIVED')) actionType = 'positive';
 
                 const dataStr = Object.entries(e.data || {})
-                    .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v, null, 2).substring(0, 100) : v}`)
+                    .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v, null, 2).substring(0, 50) + '...' : v}`)
                     .join(', ');
 
                 return {
-                    agent: this.agentLabelMap[type.split('_')[0]] || 'System',
+                    agent: this.agentLabelMap[type] || this.agentLabelMap[type.split('_')[0]] || 'System',
                     time: e.timestamp ? new Date(e.timestamp).toISOString().replace('T', ' ').substring(0, 19) : 'N/A',
                     action: type,
                     factors: [{ type: actionType, text: dataStr || 'No additional data' }],
@@ -194,20 +210,21 @@ const AgentsComponent = {
         }
 
         // Map backend events to decisions
-        const decisions = events.map(e => {
+        const decisions = (events || []).map(e => {
             let actionType = 'neutral';
             const type = e.event_type || 'SYSTEM';
+            const upperType = type.toUpperCase();
 
-            if (type.includes('FAILED')) actionType = 'negative';
-            if (type.includes('COMPLETE')) actionType = 'positive';
+            if (upperType.includes('FAILED') || upperType.includes('REJECTED')) actionType = 'negative';
+            if (upperType.includes('COMPLETE') || upperType.includes('SUCCESS') || upperType.includes('OPENED') || upperType.includes('RECEIVED')) actionType = 'positive';
 
             const dataStr = Object.entries(e.data || {})
-                .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v, null, 2).substring(0, 100) : v}`)
+                .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v, null, 2).substring(0, 50) + '...' : v}`)
                 .join(', ');
 
             return {
-                agent: this.agentLabelMap[type.split('_')[0]] || 'System',
-                time: new Date(e.timestamp).toISOString().replace('T', ' ').substring(0, 19),
+                agent: this.agentLabelMap[type] || this.agentLabelMap[type.split('_')[0]] || 'System',
+                time: e.timestamp ? new Date(e.timestamp).toISOString().replace('T', ' ').substring(0, 19) : 'N/A',
                 action: type,
                 factors: [{ type: actionType, text: dataStr || 'No data' }],
                 result: 'Processed'

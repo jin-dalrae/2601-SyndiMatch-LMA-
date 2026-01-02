@@ -15,7 +15,7 @@ Usage:
     EventBus.emit(BidReceived(syndication_id="S-001", ...))
 """
 
-from typing import Dict, List, Callable, Type
+from typing import Dict, List, Callable, Type, Any
 import logging
 
 from events import DomainEvent

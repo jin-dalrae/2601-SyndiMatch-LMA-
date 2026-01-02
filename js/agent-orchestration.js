@@ -49,7 +49,9 @@ const AgentOrchestration = {
      * Initialize the orchestration page
      */
     init() {
+        console.log('🤖 Agent Orchestration initialized');
         this.connectWebSocket();
+        this.setupControlHandlers();
 
         // Listen for simulation events
         if (window.SimulationEngine) {
@@ -397,9 +399,23 @@ const AgentOrchestration = {
     /**
      * Reset workflow to initial state
      */
-    resetWorkflow() {
+    async resetWorkflow() {
         this.workflowStages.forEach(s => s.status = 'pending');
         this.workflowLog = [];
+        this.addLogEntry('system', 'Resetting orchestration engine...');
+
+        if (this.isConnected && this.ws) {
+            this.ws.send(JSON.stringify({ type: 'reset_engine' }));
+        }
+
+        // Also try REST endpoint for full persistence clear
+        try {
+            await fetch('http://localhost:8000/api/orchestrator/reset', { method: 'POST' });
+        } catch (e) {
+            console.warn('REST reset failed (server might not support it yet)');
+        }
+
+        this.renderWorkflow();
     },
 
     /**
@@ -451,9 +467,23 @@ const AgentOrchestration = {
                     ${this.renderWorkflowDiagram()}
                 </div>
 
+                <div class="orchestration-controls">
+                    <button class="btn-control" id="btn-run-syndication" title="Start new LangGraph run">▶ Run Engine</button>
+                    <button class="btn-control btn-secondary" id="btn-reset-engine" title="Reset all stages">🔄 Reset</button>
+                    <button class="btn-control btn-secondary" id="btn-step-engine" title="Execute next node only">⚡ Step</button>
+                    <div class="control-spacer"></div>
+                    <label class="toggle-control">
+                        <input type="checkbox" id="check-manual-mode">
+                        <span class="toggle-label">Manual Step Mode</span>
+                    </label>
+                </div>
+
                 <div class="orchestration-grid">
                     <div class="workflow-log-section">
-                        <h3>Workflow Activity</h3>
+                        <div class="section-header-flex">
+                            <h3>Workflow Activity</h3>
+                            <button class="btn-xs" id="btn-clear-log">Clear</button>
+                        </div>
                         <div class="workflow-log" id="workflow-log">
                             ${this.renderWorkflowLog()}
                         </div>
@@ -461,7 +491,9 @@ const AgentOrchestration = {
 
                     <div class="active-syndication-section">
                         <h3>Active Syndication</h3>
-                        ${this.renderActiveSyndication()}
+                        <div id="active-syndication-container">
+                            ${this.renderActiveSyndication()}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -586,6 +618,41 @@ orchestrationStyles.textContent = `
     .connection-status { font-size: 0.875rem; }
     .status-connected { color: var(--success); }
     .status-disconnected { color: var(--warning); }
+    
+    .orchestration-controls { 
+        display: flex; 
+        align-items: center; 
+        gap: 0.75rem; 
+        background: var(--bg-card); 
+        padding: 0.75rem 1rem; 
+        border: 1px solid var(--border-color); 
+        border-radius: var(--radius-lg);
+        margin-bottom: 1.5rem;
+    }
+    .control-spacer { flex: 1; }
+    .btn-control { 
+        padding: 0.5rem 1rem; 
+        font-size: 0.8125rem; 
+        display: flex; 
+        align-items: center; 
+        gap: 0.5rem; 
+    }
+    .toggle-control { 
+        display: flex; 
+        align-items: center; 
+        gap: 0.5rem; 
+        cursor: pointer; 
+        font-size: 0.8125rem; 
+        color: var(--text-secondary); 
+    }
+    .toggle-control input { cursor: pointer; }
+    .section-header-flex { 
+        display: flex; 
+        justify-content: space-between; 
+        align-items: center; 
+        margin-bottom: 1rem; 
+    }
+    .section-header-flex h3 { margin-bottom: 0 !important; }
     
     .workflow-diagram { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 1.5rem; margin-bottom: 1.5rem; }
     .workflow-stages { display: flex; align-items: center; justify-content: center; gap: 0; margin-bottom: 1rem; }

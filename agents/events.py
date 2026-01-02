@@ -21,7 +21,7 @@ class Severity(str, Enum):
     CRITICAL = "critical"
 
 
-@dataclass
+@dataclass(kw_only=True)
 class DomainEvent:
     """Base class for all domain events"""
     syndication_id: str

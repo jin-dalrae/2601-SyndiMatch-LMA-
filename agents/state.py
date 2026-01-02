@@ -156,6 +156,11 @@ class SyndicationState(TypedDict):
     settlement_metrics: SettlementMetrics
     payment_metrics: PaymentMetrics
     metrics: Dict[str, Any]
+    
+    # Phase 4 Controls
+    step_mode: Optional[bool]
+    paused: Optional[bool]
+    next_node: Optional[str]
 
 
 # === Agent Decision Models (Stays as Pydantic for LLM integration) ===

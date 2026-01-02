@@ -15,6 +15,12 @@ from datetime import datetime
 from typing import Dict, Any, Optional, Literal
 from dataclasses import dataclass
 from enum import Enum
+import asyncio
+import db
+from config import (
+    CDP_API_KEY_NAME, CDP_API_KEY_PRIVATE_KEY, CDP_NETWORK,
+    COINBASE_API_KEY, COINBASE_API_SECRET
+)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -83,9 +89,9 @@ class CoinbaseX402Client:
         api_key_private_key: Optional[str] = None,
         network: str = "base-sepolia"
     ):
-        self.api_key_name = api_key_name or os.getenv("CDP_API_KEY_NAME")
-        self.api_key_private_key = api_key_private_key or os.getenv("CDP_API_KEY_PRIVATE_KEY")
-        self.network = network or os.getenv("CDP_NETWORK", "base-sepolia")
+        self.api_key_name = api_key_name or CDP_API_KEY_NAME
+        self.api_key_private_key = api_key_private_key or CDP_API_KEY_PRIVATE_KEY
+        self.network = network or CDP_NETWORK
         
         self.demo_mode = not CDP_AVAILABLE or not self.api_key_name
         self.client = None
@@ -96,18 +102,20 @@ class CoinbaseX402Client:
         else:
             self._initialize_cdp()
     
-    def _initialize_cdp(self):
-        """Initialize CDP SDK and account"""
+    async def initialize(self):
+        """Async initialization of CDP SDK and account"""
+        if self.demo_mode or self.client:
+            return
+            
         try:
             # Create CDP client with API credentials
             self.client = CdpClient(
-                api_key_name=self.api_key_name,
-                api_key_private_key=self.api_key_private_key
+                api_key_id=self.api_key_name,
+                api_key_secret=self.api_key_private_key
             )
             
-            # Create or load EVM account for the network
-            self.account = self.client.evm.create_account(
-                network=self.network,
+            # Create or load EVM account
+            self.account = await self.client.evm.create_account(
                 name="syndimatch-platform"
             )
             
@@ -116,41 +124,53 @@ class CoinbaseX402Client:
         except Exception as e:
             logger.error(f"CDP initialization failed: {e}")
             self.demo_mode = True
+
+    def _initialize_cdp(self):
+        """Legacy sync init - now just triggers async via run if possible"""
+        # This is primarily for backward compatibility during instantiation 
+        # Real initialization should happen via await client.initialize()
+        pass
     
     async def create_payment(
         self,
-        from_address: str, # Ignored in single-wallet setup, transfers from self.account
         to_address: str,
         amount: int,
+        from_address: Optional[str] = None,
         currency: str = "usdc",
-        network: Network = Network.BASE_SEPOLIA,
+        network: Optional[Network] = None,
         metadata: Optional[Dict[str, Any]] = None,
         gasless: bool = True
     ) -> PaymentResult:
         """
         Create and execute a payment transaction.
-        Transfers FROM the configured CDP Account.
+        Transfers FROM the configured CDP Account by default.
         """
-        logger.info(f"Creating x402 payment: {amount} {currency} to {to_address} on {network.value}")
+        # Ensure initialized
+        if not self.client and not self.demo_mode:
+            await self.initialize()
+
+        nw = network or Network(self.network)
+        from_addr = from_address or (self.account.address if self.account else "0x_vault")
+        
+        logger.info(f"Creating x402 payment: {amount} {currency} to {to_address} on {nw.value}")
         
         if self.demo_mode:
-            return self._simulate_payment(from_address, to_address, amount, currency, network, metadata)
+            return self._simulate_payment(from_addr, to_address, amount, currency, nw, metadata)
         
         try:
-            # 1. Ensure asset ID (CDP uses 'usdc' usually lowercase)
+            # 1. Asset identifier (usually 'usdc')
             asset_id = currency.lower()
             
             # 2. Execute Transfer
-            # Note: This transfers from the server-controlled account
-            transfer = self.account.transfer(
+            # Note: 1.35.0 uses to, amount, token, network
+            transfer = await self.account.transfer(
+                to=to_address,
                 amount=amount,
-                asset_id=asset_id,
-                destination=to_address,
-                gasless=gasless
+                token=asset_id,
+                network=nw.value
             )
             
-            # 3. Wait for transaction hash (CDP SDK handles signing/sending)
-            # transfer.wait() can be blocking, but usually returns quickly with status
+            # 3. Wait for transaction hash
             
             # 4. Construct Result
             tx_hash = transfer.transaction_hash
@@ -348,12 +368,25 @@ class X402Client:
     """Synchronous wrapper for CoinbaseX402Client"""
     
     def __init__(self, api_key: Optional[str] = None, api_secret: Optional[str] = None):
-        self.api_key = api_key or os.getenv("COINBASE_API_KEY")
-        self.api_secret = api_secret or os.getenv("COINBASE_API_SECRET")
-        self.demo_mode = not self.api_key or self.api_key == "your_coinbase_key"
+        self.api_key = api_key or COINBASE_API_KEY
+        self.api_secret = api_secret or COINBASE_API_SECRET
+        
+        # Use the async client internally
+        self.async_client = CoinbaseX402Client()
+        self.demo_mode = self.async_client.demo_mode
         
         if self.demo_mode:
             logger.warning("x402 Client running in DEMO mode")
+        else:
+            logger.info(f"x402 Client initialized in REAL mode on {self.async_client.network}")
+
+    @property
+    def account(self):
+        return self.async_client.account
+
+    @property
+    def network(self):
+        return self.async_client.network
     
     def create_payment(
         self,
@@ -361,34 +394,30 @@ class X402Client:
         to_address: str,
         amount: int,
         currency: str = "USDC",
-        network: str = "base",
+        network: str = "base-sepolia",
         metadata: Optional[Dict[str, Any]] = None
     ) -> PaymentResult:
-        """Synchronous payment creation"""
+        """Synchronous payment creation using async client"""
+        # Ensure we use keyword arguments for the internal async call
+        args = {
+            "from_address": from_address,
+            "to_address": to_address,
+            "amount": amount,
+            "currency": currency,
+            "network": Network(network),
+            "metadata": metadata
+        }
         
-        # Generate transaction details
-        tx_data = f"{from_address}:{to_address}:{amount}:{datetime.utcnow().isoformat()}"
-        tx_hash = "0x" + hashlib.sha256(tx_data.encode()).hexdigest()
-        tx_id = f"x402-tx-{secrets.token_hex(12)}"
-        gas_used = 0.00001 + secrets.randbelow(100) * 0.0000001
-        
-        logger.info(f"x402 Payment: ${amount:,} {currency} | {tx_hash[:16]}...")
-        
-        return PaymentResult(
-            transaction_id=tx_id,
-            transaction_hash=tx_hash,
-            status=PaymentStatus.CONFIRMED,
-            amount=amount,
-            currency=currency,
-            network=Network(network),
-            gas_used=round(gas_used, 8),
-            gas_currency="ETH",
-            confirmation_blocks=12,
-            from_address=from_address,
-            to_address=to_address,
-            metadata=metadata or {},
-            timestamp=datetime.utcnow()
-        )
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                return asyncio.run_coroutine_threadsafe(
+                    self.async_client.create_payment(**args), loop
+                ).result()
+        except RuntimeError:
+            pass
+            
+        return asyncio.run(self.async_client.create_payment(**args))
     
     def send_payment(
         self,
@@ -477,13 +506,8 @@ class X402Client:
     ) -> tuple[PaymentResult, PaymentResult]:
         """
         Release escrow funds to borrower, collecting platform fee.
-        Platform skims 0.1% on close.
-        
-        Returns:
-            Tuple of (borrower_payment, platform_fee_payment)
         """
-        escrow_wallet = f"escrow-{escrow_id}-wallet"
-        platform_wallet = "platform-syndimatch-wallet"
+        platform_wallet = "0x742d35Cc6634C0532925a3b844Bc454e4438f44e" # Platform vault address
         
         # Calculate platform fee
         platform_fee = int(total_amount * platform_fee_pct / 100)
@@ -491,25 +515,17 @@ class X402Client:
         
         # Pay borrower
         borrower_payment = self.create_payment(
-            from_address=escrow_wallet,
             to_address=borrower_wallet,
             amount=borrower_amount,
-            currency="USDC",
-            network="base",
             metadata={"type": "escrow_release", "escrow_id": escrow_id}
         )
         
         # Collect platform fee
         platform_payment = self.create_payment(
-            from_address=escrow_wallet,
             to_address=platform_wallet,
             amount=platform_fee,
-            currency="USDC",
-            network="base",
             metadata={"type": "platform_fee", "escrow_id": escrow_id}
         )
-        
-        logger.info(f"Escrow released: ${borrower_amount:,} to borrower, ${platform_fee:,} platform fee")
         
         return borrower_payment, platform_payment
     
@@ -546,5 +562,6 @@ class X402Client:
         return invoice
 
 
-# Module-level instance for easy imports
-x402 = X402Client()
+# Module-level instance for easy imports (async)
+x402 = CoinbaseX402Client()
+sync_x402 = X402Client()

@@ -104,16 +104,23 @@ const MetricsService = {
      */
     getRatingExpectedLoss(rating) {
         if (!rating) return 0.5;
-        const firstChar = rating.charAt(0).toUpperCase();
+        const normalizedRating = rating.toUpperCase();
 
-        // Rough annual expected loss by rating bucket
-        // Source: Historical averages (simplified)
-        const lossRates = {
-            'A': 0.10,   // Investment grade
-            'B': 1.50,   // Speculative grade
-            'C': 5.00    // High yield / distressed
-        };
-        return lossRates[firstChar] || 0.5;
+        // Granular expected loss mapping using numeric scale
+        const numeric = this.ratingToNumeric(normalizedRating);
+
+        // Heuristic: Loss decreases as credit quality increases
+        // AAA (21) -> ~0.02%
+        // BBB (13) -> ~0.35%
+        // B (7)   -> ~3.5%
+        // CCC (4) -> ~12.0%
+        if (numeric >= 18) return 0.02; // AA- to AAA
+        if (numeric >= 15) return 0.10; // A- to A+
+        if (numeric >= 12) return 0.35; // BBB- to BBB+
+        if (numeric >= 9) return 1.50; // BB- to BB+
+        if (numeric >= 6) return 4.50; // B- to B+
+        if (numeric >= 3) return 12.00; // CCC- to CCC+
+        return 25.00; // D / Defaulted
     },
 
     // ===========================================
@@ -127,7 +134,10 @@ const MetricsService = {
      * @returns {number} Subscription rate as decimal (e.g., 1.05 for 105%)
      */
     calculateSubscriptionRate(totalCommitted, syndicationTarget) {
-        if (syndicationTarget <= 0) return 0;
+        if (syndicationTarget <= 0) {
+            console.warn(`[Metrics] Invalid syndication target: ${syndicationTarget}`);
+            return 0;
+        }
         return totalCommitted / syndicationTarget;
     },
 
@@ -143,8 +153,9 @@ const MetricsService = {
      * Calculate pro-rata scale factor for allocation
      */
     calculateScaleFactor(totalBids, targetAmount) {
+        if (totalBids <= 0 || targetAmount <= 0) return 0;
         if (totalBids <= targetAmount) return 1.0;
-        return targetAmount / totalBids;
+        return Math.min(1.0, targetAmount / totalBids);
     },
 
     // ===========================================
@@ -254,7 +265,8 @@ const MetricsService = {
             .map(s => {
                 const created = new Date(s.created_at);
                 const completed = new Date(s.completed_at);
-                return (completed - created) / (1000 * 60 * 60); // Hours
+                const diff = (completed - created) / (1000 * 60 * 60); // Hours
+                return Math.max(0, diff); // Ensure no negative time due to clock drift or bad data
             });
 
         if (times.length === 0) return 0;
