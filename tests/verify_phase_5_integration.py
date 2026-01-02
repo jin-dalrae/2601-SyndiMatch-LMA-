@@ -10,7 +10,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'a
 
 import db
 from orchestrator import run_syndication
-from events import EventBus, SyndicationOpened, BidReceived, SettlementStageCompleted, PaymentProcessed, SyndicationCompleted
+from event_bus import EventBus
+from events import SyndicationOpened, BidReceived, SettlementStageCompleted, PaymentProcessed, SyndicationCompleted
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -40,43 +41,61 @@ async def verify_phase_5():
     
     # 2. Setup Event Listener
     verifier = EventVerifier()
-    EventBus.subscribe(SyndicationOpened, verifier.handle_event)
-    EventBus.subscribe(BidReceived, verifier.handle_event)
-    EventBus.subscribe(SettlementStageCompleted, verifier.handle_event)
-    EventBus.subscribe(PaymentProcessed, verifier.handle_event)
-    EventBus.subscribe(SyndicationCompleted, verifier.handle_event)
+    EventBus.subscribe_all(verifier.handle_event)
     
     # 3. Run a small syndication
-    originator_id = "ORG-JPM-001"
+    originator_id = "OA-001"
     logger.info(f"Running syndication for {originator_id}...")
     
     # We run it in a thread since it might be blocking or have its own loop
     try:
         # Note: run_syndication handles its own state and DB interactions
-        run_syndication(originator_id)
+        # It now returns the initial state which contains the syndication_id
+        initial_state = run_syndication(originator_id)
     except Exception as e:
         logger.error(f"Syndication run failed: {e}")
         return False
 
-    # 4. Analyze results
-    required_events = ['SyndicationOpened', 'BidReceived', 'SettlementStageCompleted', 'PaymentProcessed', 'SyndicationCompleted']
-    missing_events = [e for e in required_events if e not in verifier.received_events]
-    missing_reasoning = [e for e in required_events if e not in verifier.found_reasoning]
+    # 4. Wait for completion and verify via MongoDB Audit Log
+    import time
     
-    logger.info("--- Verification Summary ---")
-    logger.info(f"Total events received: {len(verifier.received_events)}")
+    # Wait a few seconds for all handlers to finish processing events into the audit log
+    time.sleep(2)
+    
+    synd_id = initial_state["syndication_id"]
+    audit_events = list(db.get_collection("audit_log").find({"syndication_id": synd_id}))
+    
+    logger.info(f"--- Verification Results for {synd_id} ---")
+    logger.info(f"Total audit events found: {len(audit_events)}")
+    
+    received_types = [e["event_type"] for e in audit_events]
+    found_reasoning = {}
+    
+    for event_doc in audit_events:
+        etype = event_doc["event_type"]
+        payload = event_doc.get("payload", {})
+        if "reasoning" in payload and payload["reasoning"]:
+            found_reasoning[etype] = True
+            logger.info(f"✅ Found {etype} with reasoning: {payload['reasoning'][:50]}...")
+        else:
+            logger.warning(f"❌ Found {etype} WITHOUT reasoning in audit log")
+            
+    required_events = ['SyndicationOpened', 'BidReceived', 'SettlementStageCompleted', 'PaymentProcessed', 'SyndicationCompleted']
+    missing_events = [e for e in required_events if e not in received_types]
+    missing_reasoning = [e for e in required_events if e not in found_reasoning]
     
     if not missing_events:
-        logger.info("✅ All required events were emitted.")
+        logger.info("✅ ALL required events were emitted")
     else:
         logger.error(f"❌ Missing events: {missing_events}")
         
     if not missing_reasoning:
-        logger.info("✅ All required events contained reasoning data.")
+        logger.info("✅ ALL events contain reasoning metadata")
     else:
-        logger.error(f"❌ Missing reasoning in: {missing_reasoning}")
+        logger.warning(f"❌ Missing reasoning in: {missing_reasoning}")
         
-    return not missing_events and not missing_reasoning
+    success = len(missing_events) == 0 and len(missing_reasoning) == 0
+    return success
 
 if __name__ == "__main__":
     success = asyncio.run(verify_phase_5())

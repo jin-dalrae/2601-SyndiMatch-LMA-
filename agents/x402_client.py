@@ -430,19 +430,24 @@ class X402Client:
         return result.transaction_hash
 
     def _run_sync(self, coro):
-        """Helper to run async code in sync context safely"""
+        """Helper to run async code in sync context safely with deadlock prevention"""
         try:
             loop = asyncio.get_event_loop()
             if loop.is_running():
-                # If we're already in a thread with a loop (like FastAPI), 
-                # we need to run it differently
-                future = asyncio.run_coroutine_threadsafe(coro, loop)
-                return future.result()
-        except (RuntimeError, ValueError):
+                # Check for nest_asyncio
+                import nest_asyncio
+                nest_asyncio.apply(loop)
+                return loop.run_until_complete(coro)
+        except (ImportError, RuntimeError, ValueError):
             # No event loop or loop not running
             pass
             
-        return asyncio.run(coro)
+        try:
+            return asyncio.run(coro)
+        except RuntimeError:
+            # Fallback if asyncio.run fails due to existing loop
+            loop = asyncio.get_event_loop()
+            return loop.run_until_complete(coro)
     
     def collect_commitment_fee(
         self,
@@ -529,6 +534,7 @@ class X402Client:
         
         # Pay borrower
         borrower_payment = self.create_payment(
+            from_address=f"escrow-{escrow_id}-wallet",
             to_address=borrower_wallet,
             amount=borrower_amount,
             metadata={"type": "escrow_release", "escrow_id": escrow_id}
@@ -536,6 +542,7 @@ class X402Client:
         
         # Collect platform fee
         platform_payment = self.create_payment(
+            from_address=f"escrow-{escrow_id}-wallet",
             to_address=platform_wallet,
             amount=platform_fee,
             metadata={"type": "platform_fee", "escrow_id": escrow_id}

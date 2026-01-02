@@ -212,7 +212,8 @@ class PaymentAgent:
         escrow_wallet = self.config["payment_config"]["escrow_wallet"]
 
         for alloc in allocation_doc.get("allocations", []):
-            payment_id = f"PAY-{self.syndication_id.split('-')[-1]}-{alloc['participant_agent_id'].split('-')[-1]}-{payment_type}"
+            p_id = str(alloc['participant_agent_id'])
+            payment_id = f"PAY-{self.syndication_id.split('-')[-1]}-{p_id.split('-')[-1]}-{payment_type}"
             
             # Determine amount and recipient
             amount = 0

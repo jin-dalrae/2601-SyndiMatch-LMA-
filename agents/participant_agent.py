@@ -30,7 +30,7 @@ class ParticipantAgent:
     """
     
     def __init__(self, agent_id: str):
-        self.agent_id = agent_id
+        self.agent_id = str(agent_id)
         
         # Initialize LLM only if API key is present
         if ANTHROPIC_API_KEY and ANTHROPIC_API_KEY.startswith("sk-"):

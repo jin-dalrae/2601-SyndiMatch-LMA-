@@ -6,6 +6,8 @@ Includes real-time metrics, dashboard updates, and robust error handling
 from typing import Dict, Any, Literal, List
 from datetime import datetime, timedelta
 import logging
+import uuid
+import os
 import asyncio
 
 from langgraph.graph import StateGraph, END
@@ -98,12 +100,14 @@ def participants_node(state: SyndicationState) -> SyndicationState:
     
     # Process participants sequentially with realistic delays
     for idx, participant in enumerate(participants_list):
-        participant_id = participant["_id"]
+        participant_id = str(participant["_id"])
         inst_name = participant.get("institution", {}).get("name", participant.get("entity", "Unknown"))
         
         # Simulate realistic delay between bids (3-10 seconds)
         if idx > 0:
-            delay = random.randint(3, 10)
+            # Use environment variable to expedite testing
+            is_test = os.getenv("SYNDIMATCH_TEST_MODE") == "true"
+            delay = random.randint(1, 2) if is_test else random.randint(3, 10)
             time.sleep(delay)
         
         # Calculate simulated "bid time" offset (in minutes, for logging)
