@@ -78,6 +78,9 @@ class OriginatorAgent:
         state["created_at"] = datetime.utcnow().isoformat()
         state["updated_at"] = datetime.utcnow().isoformat()
         
+        # Add AI recommendation reasoning for the dashboard
+        state["recommendation_reasoning"] = f"AI-Recommended: This {state['loan_details']['industry']} opportunity offers a competitive {state['pricing']['initial_spread']}bps spread relative to its {state['loan_details']['credit_rating']} rating."
+        
         # Insert into MongoDB with schema version for migration support
         db.syndications().insert_one({
             "_id": state["syndication_id"],

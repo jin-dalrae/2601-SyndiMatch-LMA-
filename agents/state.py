@@ -242,6 +242,7 @@ class SettlementDecision(BaseModel):
     tasks_completed: List[str]
     tasks_pending: List[str]
     issues: List[str] = Field(default_factory=list)
+    reasoning: str = ""
 
 
 class PaymentDecision(BaseModel):

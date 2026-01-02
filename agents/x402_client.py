@@ -104,9 +104,13 @@ class CoinbaseX402Client:
     
     async def initialize(self):
         """Async initialization of CDP SDK and account"""
-        if self.demo_mode or self.client:
+        if self.client:
             return
             
+        if self.demo_mode:
+            logger.info("CDP Client initializing in DEMO mode")
+            return
+
         try:
             # Create CDP client with API credentials
             self.client = CdpClient(
@@ -122,8 +126,9 @@ class CoinbaseX402Client:
             logger.info(f"CDP Account ready: {self.account.address[:16]}... on {self.network}")
                     
         except Exception as e:
-            logger.error(f"CDP initialization failed: {e}")
+            logger.error(f"CDP initialization failed: {e}. Falling back to DEMO mode.")
             self.demo_mode = True
+            self.client = None
 
     def _initialize_cdp(self):
         """Legacy sync init - now just triggers async via run if possible"""
@@ -398,7 +403,6 @@ class X402Client:
         metadata: Optional[Dict[str, Any]] = None
     ) -> PaymentResult:
         """Synchronous payment creation using async client"""
-        # Ensure we use keyword arguments for the internal async call
         args = {
             "from_address": from_address,
             "to_address": to_address,
@@ -408,17 +412,12 @@ class X402Client:
             "metadata": metadata
         }
         
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                return asyncio.run_coroutine_threadsafe(
-                    self.async_client.create_payment(**args), loop
-                ).result()
-        except RuntimeError:
-            pass
-            
-        return asyncio.run(self.async_client.create_payment(**args))
-    
+        return self._run_sync(self.async_client.create_payment(**args))
+
+    def get_transfer_status(self, transfer_id: str) -> Dict[str, Any]:
+        """Synchronous status check"""
+        return self._run_sync(self.async_client.get_transaction_status(transfer_id))
+
     def send_payment(
         self,
         from_wallet: str,
@@ -429,6 +428,21 @@ class X402Client:
         """Simple send payment, returns transaction hash"""
         result = self.create_payment(from_wallet, to_wallet, amount, currency)
         return result.transaction_hash
+
+    def _run_sync(self, coro):
+        """Helper to run async code in sync context safely"""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # If we're already in a thread with a loop (like FastAPI), 
+                # we need to run it differently
+                future = asyncio.run_coroutine_threadsafe(coro, loop)
+                return future.result()
+        except (RuntimeError, ValueError):
+            # No event loop or loop not running
+            pass
+            
+        return asyncio.run(coro)
     
     def collect_commitment_fee(
         self,

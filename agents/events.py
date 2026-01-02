@@ -52,6 +52,7 @@ class SyndicationOpened(DomainEvent):
     target_close: datetime  # Expected bidding end date
     industry: str
     credit_rating: str
+    reasoning: Optional[str] = None
 
 
 @dataclass
@@ -62,6 +63,8 @@ class BidReceived(DomainEvent):
     amount: int
     spread: int
     cumulative_subscription: float
+    reasoning: Optional[str] = None
+    sentiment: float = 0.5
     time_offset_minutes: int = 0
 
 
@@ -127,6 +130,8 @@ class SettlementStageCompleted(DomainEvent):
     stage_number: int
     total_stages: int
     completion_rate: float
+    reasoning: Optional[str] = None
+    sentiment: float = 0.5
 
 
 @dataclass
@@ -135,6 +140,8 @@ class SettlementCompleted(DomainEvent):
     allocations_confirmed: int
     documents_signed: int
     ready_for_funding: bool
+    reasoning: Optional[str] = None
+    sentiment: float = 0.8
 
 
 @dataclass
@@ -154,6 +161,8 @@ class PaymentProcessed(DomainEvent):
     total_payments: int      # Total number of payments expected in this batch
     amount_collected: int    # Cumulative amount collected in this batch
     completion_rate: float   # Percentage of total expected count (0.0 to 1.0)
+    reasoning: Optional[str] = None
+    sentiment: float = 0.7
 
 
 @dataclass
@@ -173,6 +182,8 @@ class SyndicationCompleted(DomainEvent):
     total_fees_collected: int
     total_payments: int
     duration_seconds: float
+    reasoning: Optional[str] = None
+    sentiment: float = 1.0
 
 
 # === Alert-Triggering Events ===
@@ -202,3 +213,9 @@ class ConcentrationRiskAlert(DomainEvent):
     concentration_percentage: float
     threshold_percentage: float
     severity: Severity = Severity.WARNING
+
+
+@dataclass
+class WorkflowPaused(DomainEvent):
+    """Emitted when the workflow is manually or automatically paused for stepping"""
+    next_node: str

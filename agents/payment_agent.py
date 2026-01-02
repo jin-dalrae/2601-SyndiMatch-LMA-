@@ -431,6 +431,70 @@ class PaymentAgent:
             penalties_applied=penalty,
             reasoning=f"Payment processed {'late' if is_late else 'on time'}"
         )
+
+    def poll_transaction_status(self, payment_id: str) -> Dict[str, Any]:
+        """
+        Poll x402 for transaction status and update database.
+        Returns fresh status information.
+        """
+        payment = db.payment_history().find_one({"_id": payment_id})
+        if not payment:
+            return {"status": "not_found"}
+        
+        # If already completed or failed, just return
+        if payment["payment_status"] in ["completed", "failed"]:
+            return {"status": payment["payment_status"]}
+            
+        tx_hash = payment.get("transaction", {}).get("transaction_hash")
+        if not tx_hash:
+            return {"status": "pending", "reason": "no_transaction_hash"}
+            
+        try:
+            status_info = x402.get_transfer_status(tx_hash)
+            new_status = status_info["status"] # 'confirmed', 'pending', 'failed'
+            
+            if new_status == "confirmed":
+                # Finalize the payment in DB
+                db.payment_history().update_one(
+                    {"_id": payment_id},
+                    {
+                        "$set": {
+                            "payment_status": "completed",
+                            "updated_at": datetime.utcnow(),
+                            "confirmation_received_at": datetime.utcnow(),
+                            "transaction.finalized": True,
+                            "transaction.confirmations": status_info.get("confirmations", 12)
+                        }
+                    }
+                )
+                logger.info(f"[{self.agent_id}] Payment {payment_id} CONFIRMED on-chain")
+                
+                # Update participant/originator as before
+                self._update_participant_after_payment(
+                    payment["payer"]["participant_agent_id"],
+                    payment["payment_type"],
+                    payment["amount_due"],
+                    is_on_time=payment.get("is_on_time", True)
+                )
+                
+            elif new_status == "failed":
+                db.payment_history().update_one(
+                    {"_id": payment_id},
+                    {
+                        "$set": {
+                            "payment_status": "failed",
+                            "updated_at": datetime.utcnow(),
+                            "failure_reason": status_info.get("error", "On-chain failure")
+                        }
+                    }
+                )
+                logger.error(f"[{self.agent_id}] Payment {payment_id} FAILED on-chain")
+                
+            return {"status": new_status, "confirmations": status_info.get("confirmations", 0)}
+            
+        except Exception as e:
+            logger.error(f"[{self.agent_id}] Failed to poll status for {payment_id}: {e}")
+            return {"status": "error", "reason": str(e)}
     
     def _simulate_x402_transaction(self, from_wallet: str, to_wallet: str, 
                                     amount: int) -> str:

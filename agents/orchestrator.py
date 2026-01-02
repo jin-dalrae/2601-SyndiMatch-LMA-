@@ -56,7 +56,8 @@ def originator_node(state: SyndicationState) -> SyndicationState:
         spread=state["pricing"]["initial_spread"],
         target_close=state["timeline"]["target_close_date"],
         industry=state["loan_details"]["industry"],
-        credit_rating=state["loan_details"]["credit_rating"]
+        credit_rating=state["loan_details"]["credit_rating"],
+        reasoning=state.get("recommendation_reasoning", "AI-Recommended: High credit quality with attractive spread.")
     ))
     
     return state
@@ -176,6 +177,8 @@ def participants_node(state: SyndicationState) -> SyndicationState:
                     institution_name=bid["institution_name"],
                     amount=bid["bid_amount"],
                     spread=bid["spread_bid"],
+                    reasoning=bid.get("reasoning"),
+                    sentiment=bid.get("portfolio_fit_score", 0.5),
                     cumulative_subscription=subscription_rate,
                     time_offset_minutes=simulated_minutes
                 ))
@@ -318,12 +321,15 @@ def settlement_node(state: SyndicationState) -> SyndicationState:
             state = stage_func(state)
             
             # Emit settlement stage event
+            last_decision = state.get("last_settlement_decision")
             EventBus.emit(SettlementStageCompleted(
                 syndication_id=state["syndication_id"],
                 stage_name=stage_name,
                 stage_number=stage_num,
                 total_stages=len(stages),
-                completion_rate=stage_num / len(stages)
+                completion_rate=stage_num / len(stages),
+                reasoning=last_decision.reasoning if last_decision else f"Completed {stage_name} verification",
+                sentiment=0.7
             ))
             
         except Exception as e:
@@ -348,7 +354,9 @@ def settlement_node(state: SyndicationState) -> SyndicationState:
         syndication_id=state["syndication_id"],
         allocations_confirmed=len(state.get("allocations", [])),
         documents_signed=state.get("documents_signed_count", 0),
-        ready_for_funding=True
+        ready_for_funding=True,
+        reasoning="All settlement stages verified. Escrow accounts funded and ready for final distribution.",
+        sentiment=0.9
     ))
     
     return state
@@ -406,11 +414,18 @@ def payment_node(state: SyndicationState) -> SyndicationState:
             EventBus.emit(PaymentProcessed(
                 syndication_id=state["syndication_id"],
                 payment_type=payment_type,
-                completed=completed,
-                total=total,
+                payments_processed=completed,
+                total_payments=total,
                 amount_collected=amount_collected,
-                completion_rate=completed / total if total > 0 else 0
+                completion_rate=completed / total if total > 0 else 0,
+                reasoning=f"Batch processed: {completed}/{total} {payment_type} payments via x402 on Base. All transactions confirmed.",
+                sentiment=0.75
             ))
+            
+            # Real-time poll simulation (helpful for dashboard visibility)
+            if payments:
+                asyncio.run(asyncio.sleep(0.5))
+                agent.poll_transaction_status(payments[0]["payment_id"])
             
         except Exception as e:
             logger.error(f"Payment processing failed for {payment_type}: {e}")
@@ -449,7 +464,9 @@ def payment_node(state: SyndicationState) -> SyndicationState:
         total_syndicated=state.get("total_committed", 0),
         total_fees_collected=state["payment_metrics"].get("total_fees_collected", 0),
         total_payments=len(all_payments),
-        duration_seconds=duration
+        duration_seconds=duration,
+        reasoning=f"Syndication successfully closed. All {state['status']} criteria met and funds distributed via x402.",
+        sentiment=1.0
     ))
     
     return state

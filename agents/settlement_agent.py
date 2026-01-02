@@ -126,18 +126,18 @@ class SettlementAgent:
 
     def confirm_allocations(self, state: SyndicationState) -> SyndicationState:
         """Step 1: Confirm allocations"""
-        self._execute_stage(state, self.WORKFLOW_STAGES[0])
+        state["last_settlement_decision"] = self._execute_stage(state, self.WORKFLOW_STAGES[0])
         return state
 
     def distribute_documents(self, state: SyndicationState) -> SyndicationState:
         """Step 2: Distribute legal documents"""
         # Mapping to legal_documentation stage
-        self._execute_stage(state, self.WORKFLOW_STAGES[2])
+        state["last_settlement_decision"] = self._execute_stage(state, self.WORKFLOW_STAGES[2])
         return state
 
     def verify_compliance(self, state: SyndicationState) -> SyndicationState:
         """Step 3: Verify compliance"""
-        self._execute_stage(state, self.WORKFLOW_STAGES[3])
+        state["last_settlement_decision"] = self._execute_stage(state, self.WORKFLOW_STAGES[3])
         return state
 
     def collect_signatures(self, state: SyndicationState) -> SyndicationState:
@@ -258,12 +258,22 @@ class SettlementAgent:
             }
         )
         
+        # Define reasoning based on stage
+        reasoning_map = {
+            "allocation_confirmation": f"Verifying allocations for {len(tasks_completed)} participants. All commitment letters generated.",
+            "payment_collection": f"Collecting commitment fees via x402. {len(tasks_pending)} payments pending.",
+            "legal_documentation": "Distributing and tracking legal documents. Automated e-signature collection active.",
+            "compliance_verification": "Performing KYC and sanctions screening on all participating institutions.",
+            "final_funding": "Verifying 100% principal collection before escrow release to borrower."
+        }
+        
         return SettlementDecision(
             stage_completed=stage_num,
             next_stage=stage_num + 1,
             tasks_completed=tasks_completed,
             tasks_pending=tasks_pending,
-            issues=issues
+            issues=issues,
+            reasoning=reasoning_map.get(stage_name, "")
         )
     
     def _stage_allocation_confirmation(self, state: SyndicationState) -> tuple:

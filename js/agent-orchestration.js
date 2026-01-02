@@ -175,11 +175,7 @@ const AgentOrchestration = {
 
     /**
      * Handle message from Python agent server
-<<<<<<< Updated upstream
-     * Updated to handle new domain events from events.py
-=======
-     * Updated for Phase 4 events
->>>>>>> Stashed changes
+     * Updated to handle new domain events from events.py including agent reasoning
      */
     handleServerMessage(message) {
         console.log('📨 Agent message:', message);
@@ -194,36 +190,30 @@ const AgentOrchestration = {
                 this.addLogEntry('system', 'Connected to LangGraph agents');
                 break;
 
-<<<<<<< Updated upstream
-            // === New Domain Events (from events.py) ===
-=======
             case 'engine_reset':
                 this.addLogEntry('system', '🔄 Engine state reset by server');
                 this.resetWorkflow(false); // don't re-send reset to server
                 break;
 
             // === Domain Events ===
->>>>>>> Stashed changes
             case 'SyndicationOpened':
                 this.activeSyndication = this.normalizeSyndication(eventData);
                 this.setStage('originator', 'complete');
                 this.addLogEntry('originator',
-                    `${eventData.originator} opened ${eventData.borrower} $${(eventData.amount / 1000000).toFixed(0)}M @ ${eventData.spread}bps`);
+                    `${eventData.originator} opened ${eventData.borrower} $${(eventData.amount / 1000000).toFixed(0)}M @ ${eventData.spread}bps`,
+                    eventData.reasoning);
                 break;
 
             case 'BidReceived':
                 this.setStage('participant', 'active');
                 this.addLogEntry('participant',
-                    `${eventData.institution_name} bid $${(eventData.amount / 1000000).toFixed(1)}M @ ${eventData.spread}bps (${(eventData.cumulative_subscription * 100).toFixed(0)}% subscribed)`);
+                    `${eventData.institution_name} bid $${(eventData.amount / 1000000).toFixed(1)}M @ ${eventData.spread}bps (${(eventData.cumulative_subscription * 100).toFixed(0)}% subscribed)`,
+                    eventData.reasoning,
+                    eventData.sentiment);
                 break;
 
             case 'BidRejected':
-<<<<<<< Updated upstream
-                this.addLogEntry('participant',
-                    `⏰ ${eventData.institution_name} rejected: ${eventData.reason}`);
-=======
                 this.addLogEntry('participant', `⏰ ${eventData.institution_name} rejected: ${eventData.reason}`);
->>>>>>> Stashed changes
                 break;
 
             case 'BiddingCompleted':
@@ -246,65 +236,40 @@ const AgentOrchestration = {
 
             case 'AuctionFailed':
                 this.setStage('negotiation', 'complete');
-<<<<<<< Updated upstream
-                this.addLogEntry('negotiation',
-                    `⚠️ Auction failed: ${eventData.reason} (${(eventData.final_subscription * 100).toFixed(0)}% subscribed)`);
-=======
-                this.addLogEntry('negotiation', `⚠️ Auction failed: ${eventData.reason}`);
->>>>>>> Stashed changes
+                this.addLogEntry('negotiation', `⚠️ Auction failed: ${eventData.reason} (${(eventData.final_subscription * 100).toFixed(0)}% subscribed)`);
                 break;
 
             case 'SettlementStageCompleted':
                 this.setStage('settlement', 'active');
-<<<<<<< Updated upstream
-                this.addLogEntry('settlement',
-                    `Stage ${eventData.stage_number}/${eventData.total_stages}: ${eventData.stage_name} complete`);
-=======
-                this.addLogEntry('settlement', `Stage ${eventData.stage_number}/${eventData.total_stages}: ${eventData.stage_name} complete`);
->>>>>>> Stashed changes
+                this.addLogEntry('settlement', `Stage ${eventData.stage_number}/${eventData.total_stages}: ${eventData.stage_name} complete`,
+                    eventData.reasoning, eventData.sentiment);
                 break;
 
             case 'SettlementCompleted':
                 this.setStage('settlement', 'complete');
-<<<<<<< Updated upstream
-                this.addLogEntry('settlement',
-                    `Settlement complete: ${eventData.allocations_confirmed} allocations, ${eventData.documents_signed} docs signed`);
+                this.addLogEntry('settlement', `Settlement complete: ${eventData.allocations_confirmed} allocations, ${eventData.documents_signed || 0} docs signed`,
+                    eventData.reasoning, eventData.sentiment);
                 break;
 
             case 'SettlementFailed':
                 this.setStage('settlement', 'complete');
-                this.addLogEntry('settlement',
-                    `⚠️ Settlement failed at ${eventData.stage_name}: ${eventData.reason}`);
-=======
-                this.addLogEntry('settlement', `Settlement complete: ${eventData.allocations_confirmed} allocations`);
->>>>>>> Stashed changes
+                this.addLogEntry('settlement', `⚠️ Settlement failed at ${eventData.stage_name}: ${eventData.reason}`);
                 break;
 
             case 'PaymentProcessed':
                 this.setStage('payment', 'active');
-<<<<<<< Updated upstream
-                this.addLogEntry('payment',
-                    `${eventData.payment_type}: ${eventData.completed}/${eventData.total} processed ($${(eventData.amount_collected / 1000000).toFixed(2)}M)`);
+                this.addLogEntry('payment', `${eventData.payment_type}: ${eventData.completed || eventData.payments_processed}/${eventData.total || eventData.total_payments} processed ($${(eventData.amount_collected / 1000000).toFixed(2)}M)`,
+                    eventData.reasoning, eventData.sentiment);
                 break;
 
             case 'PaymentFailed':
-                this.addLogEntry('payment',
-                    `⚠️ Payment failed: ${eventData.payer_institution} $${(eventData.amount / 1000000).toFixed(2)}M`);
-=======
-                this.addLogEntry('payment', `${eventData.payment_type} batch processed ($${(eventData.amount_collected / 1000000).toFixed(2)}M)`);
->>>>>>> Stashed changes
+                this.addLogEntry('payment', `⚠️ Payment failed: ${eventData.payer_institution} $${(eventData.amount / 1000000).toFixed(2)}M: ${eventData.reason}`);
                 break;
 
             case 'SyndicationCompleted':
                 this.setStage('payment', 'complete');
-<<<<<<< Updated upstream
-                this.addLogEntry('system',
-                    `✅ Syndication complete: $${(eventData.total_syndicated / 1000000).toFixed(0)}M, ${eventData.total_payments} payments`);
-                break;
-
-            // === Legacy Events (backward compatibility) ===
-=======
-                this.addLogEntry('system', `✅ Syndication complete: $${(eventData.total_syndicated / 1000000).toFixed(0)}M`);
+                this.addLogEntry('system', `✅ Syndication complete: $${(eventData.total_syndicated / 1000000).toFixed(0)}M`,
+                    eventData.reasoning, eventData.sentiment);
                 break;
 
             case 'WorkflowPaused':
@@ -312,8 +277,6 @@ const AgentOrchestration = {
                 this.setStage(this.getStageIdFromNodeName(eventData.next_node), 'active');
                 break;
 
-            // === Legacy Events ===
->>>>>>> Stashed changes
             case 'syndication_created':
                 this.activeSyndication = this.normalizeSyndication(message.data);
                 this.setStage('originator', 'active');
@@ -327,11 +290,7 @@ const AgentOrchestration = {
                 break;
 
             default:
-<<<<<<< Updated upstream
-                console.log('Unknown message type:', eventType);
-=======
-                console.log('Unknown event:', eventType);
->>>>>>> Stashed changes
+                console.log('Unknown event type:', eventType);
         }
 
         this.renderWorkflow();
@@ -509,13 +468,15 @@ const AgentOrchestration = {
     },
 
     /**
-     * Add entry to workflow log
+     * Add entry to workflow log including optional reasoning and sentiment
      */
-    addLogEntry(source, message) {
+    addLogEntry(source, message, reasoning = null, sentiment = 0.5) {
         const entry = {
             timestamp: new Date(),
             source,
-            message
+            message,
+            reasoning,
+            sentiment
         };
         this.workflowLog.push(entry);
 
@@ -631,13 +592,19 @@ const AgentOrchestration = {
             return '<p class="no-log">No activity yet. Start the simulation or trigger a syndication manually.</p>';
         }
 
-        return this.workflowLog.slice(-15).reverse().map(entry => `
-            <div class="log-entry ${entry.source}">
-                <span class="log-time">${entry.timestamp.toLocaleTimeString()}</span>
-                <span class="log-source">${entry.source}</span>
-                <span class="log-message">${entry.message}</span>
-            </div>
-        `).join('');
+        return this.workflowLog.slice(-20).map(entry => {
+            const isInsight = !!entry.reasoning;
+            return `
+                <div class="log-entry ${entry.source} ${isInsight ? 'insight' : ''}">
+                    <span class="log-time">${entry.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                    <span class="log-source">${entry.source}</span>
+                    <div class="log-content">
+                        <span class="log-message">${entry.message}</span>
+                        ${entry.reasoning ? `<span class="log-reasoning">💡 ${entry.reasoning}</span>` : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
     },
 
     /**
@@ -779,14 +746,20 @@ orchestrationStyles.textContent = `
     .stage-desc.active { color: var(--info); }
     .stage-desc.complete { color: var(--success); }
     
-    @keyframes pulseStage { 0%, 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.3); } 50% { box-shadow: 0 0 15px 5px rgba(37, 99, 235, 0.2); } }
-    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    @keyframes pulseStage { 
+        0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4); border-color: var(--info); } 
+        70% { box-shadow: 0 0 0 10px rgba(37, 99, 235, 0); border-color: var(--primary-light); } 
+        100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); border-color: var(--info); } 
+    }
+    @keyframes blink { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.3; transform: scale(0.8); } }
     
     .orchestration-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
     .workflow-log-section, .active-syndication-section { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 1rem; }
     .workflow-log-section h3, .active-syndication-section h3 { font-size: 0.875rem; margin-bottom: 1rem; color: var(--text-secondary); }
-    .workflow-log { max-height: 300px; overflow-y: auto; }
-    .log-entry { display: grid; grid-template-columns: 80px 80px 1fr; gap: 0.5rem; padding: 0.5rem; font-size: 0.8125rem; border-bottom: 1px solid var(--border-color); }
+    .workflow-log { max-height: 350px; overflow-y: auto; scroll-behavior: smooth; }
+    .log-entry { display: grid; grid-template-columns: 80px 80px 1fr; gap: 0.5rem; padding: 0.625rem 0.5rem; font-size: 0.8125rem; border-bottom: 1px solid var(--border-color); transition: background 0.2s ease; }
+    .log-entry:hover { background: var(--bg-card-hover); }
+    .log-entry.insight { border-left: 3px solid var(--info); background: var(--info-bg); }
     .log-time { color: var(--text-muted); font-family: monospace; }
     .log-source { font-weight: 500; text-transform: capitalize; }
     .log-source.originator { color: var(--primary-light); }
@@ -795,7 +768,9 @@ orchestrationStyles.textContent = `
     .log-source.settlement { color: #EC4899; }
     .log-source.payment { color: var(--success); }
     .log-source.system { color: var(--text-muted); }
-    .log-message { color: var(--text-secondary); }
+    .log-content { display: flex; flex-direction: column; gap: 0.25rem; }
+    .log-message { color: var(--text-primary); font-weight: 500; }
+    .log-reasoning { font-size: 0.75rem; color: var(--text-secondary); font-style: italic; line-height: 1.4; }
     .no-log, .no-syndication { color: var(--text-muted); font-size: 0.875rem; }
     
     .syndication-info { background: var(--bg-main); padding: 1rem; border-radius: var(--radius-md); position: relative; }
