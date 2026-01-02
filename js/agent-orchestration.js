@@ -24,13 +24,18 @@ const AgentOrchestration = {
     currentStage: null,
     workflowLog: [],
     activeSyndication: null,
+<<<<<<< Updated upstream
     isSimulatedMode: false,  // Track if we're in simulated mode
+=======
+    manualMode: false,
+>>>>>>> Stashed changes
 
     /**
      * Normalize syndication data from various sources to a consistent shape
      */
     normalizeSyndication(data) {
         if (!data) return null;
+<<<<<<< Updated upstream
 
         return {
             id: data.syndication_id || data.id || 'Unknown',
@@ -42,6 +47,18 @@ const AgentOrchestration = {
             originator: data.originator || data.originatorName || 'Unknown',
             status: data.status || 'active',
             phase: data.phase || 'open'
+=======
+        return {
+            id: data.syndication_id || data.id || data._id,
+            borrower: data.loan_details?.borrower_name || data.borrower || 'Unknown Borrower',
+            amount: (data.loan_details?.total_amount / 1000000) || data.amount || 0,
+            rating: data.loan_details?.credit_rating || data.rating || 'N/A',
+            spread: data.current_spread || data.pricing?.initial_spread || data.spread || 0,
+            industry: data.loan_details?.industry || data.industry || 'N/A',
+            status: data.status || 'pending',
+            subscription: (data.subscription_rate * 100) || data.subscription || 0,
+            round: data.current_round || data.round || 1
+>>>>>>> Stashed changes
         };
     },
 
@@ -61,8 +78,53 @@ const AgentOrchestration = {
 
         // Listen for manual syndication triggers
         window.addEventListener('newSyndication', (e) => this.onNewSyndication(e.detail));
+    },
 
-        console.log('🤖 Agent Orchestration initialized');
+    /**
+     * Set up event handlers for controls
+     */
+    setupControlHandlers() {
+        // Use event delegation for buttons that might be re-rendered
+        document.addEventListener('click', (e) => {
+            const id = e.target.id;
+            if (id === 'btn-run-syndication') {
+                this.triggerManualRun();
+            } else if (id === 'btn-reset-engine') {
+                this.resetWorkflow();
+            } else if (id === 'btn-step-engine') {
+                this.stepWorkflow();
+            } else if (id === 'btn-clear-log') {
+                this.workflowLog = [];
+                this.renderWorkflow();
+            }
+        });
+
+        document.addEventListener('change', (e) => {
+            if (e.target.id === 'check-manual-mode') {
+                this.manualMode = e.target.checked;
+                this.addLogEntry('system', `Manual Mode: ${this.manualMode ? 'ENABLED' : 'DISABLED'}`);
+            }
+        });
+    },
+
+    /**
+     * Step workflow (execute next node)
+     */
+    stepWorkflow() {
+        if (!this.activeSyndication) {
+            this.addLogEntry('system', '⚠️ No active syndication to step');
+            return;
+        }
+
+        this.addLogEntry('system', `Stepping workflow for ${this.activeSyndication.id}...`);
+        if (this.isConnected && this.ws) {
+            this.ws.send(JSON.stringify({
+                type: 'step_syndication',
+                syndication_id: this.activeSyndication.id
+            }));
+        } else {
+            this.addLogEntry('system', 'Step mode not supported in simulation');
+        }
     },
 
     /**
@@ -77,8 +139,6 @@ const AgentOrchestration = {
                 this.isConnected = true;
                 this.reconnectAttempts = 0;
                 this.updateConnectionStatus(true);
-
-                // Subscribe to updates
                 this.ws.send(JSON.stringify({ type: 'subscribe' }));
             };
 
@@ -88,16 +148,13 @@ const AgentOrchestration = {
             };
 
             this.ws.onclose = () => {
-                console.log('❌ Disconnected from Agent Server');
                 this.isConnected = false;
                 this.updateConnectionStatus(false);
                 this.attemptReconnect();
             };
 
             this.ws.onerror = (error) => {
-                console.warn('WebSocket error:', error);
-                this.isConnected = false;
-                this.updateConnectionStatus(false);
+                this.ws.close();
             };
 
         } catch (error) {
@@ -112,14 +169,17 @@ const AgentOrchestration = {
     attemptReconnect() {
         if (this.reconnectAttempts < this.maxReconnectAttempts) {
             this.reconnectAttempts++;
-            console.log(`Reconnecting... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
             setTimeout(() => this.connectWebSocket(), 3000);
         }
     },
 
     /**
      * Handle message from Python agent server
+<<<<<<< Updated upstream
      * Updated to handle new domain events from events.py
+=======
+     * Updated for Phase 4 events
+>>>>>>> Stashed changes
      */
     handleServerMessage(message) {
         console.log('📨 Agent message:', message);
@@ -134,7 +194,16 @@ const AgentOrchestration = {
                 this.addLogEntry('system', 'Connected to LangGraph agents');
                 break;
 
+<<<<<<< Updated upstream
             // === New Domain Events (from events.py) ===
+=======
+            case 'engine_reset':
+                this.addLogEntry('system', '🔄 Engine state reset by server');
+                this.resetWorkflow(false); // don't re-send reset to server
+                break;
+
+            // === Domain Events ===
+>>>>>>> Stashed changes
             case 'SyndicationOpened':
                 this.activeSyndication = this.normalizeSyndication(eventData);
                 this.setStage('originator', 'complete');
@@ -149,8 +218,12 @@ const AgentOrchestration = {
                 break;
 
             case 'BidRejected':
+<<<<<<< Updated upstream
                 this.addLogEntry('participant',
                     `⏰ ${eventData.institution_name} rejected: ${eventData.reason}`);
+=======
+                this.addLogEntry('participant', `⏰ ${eventData.institution_name} rejected: ${eventData.reason}`);
+>>>>>>> Stashed changes
                 break;
 
             case 'BiddingCompleted':
@@ -173,18 +246,27 @@ const AgentOrchestration = {
 
             case 'AuctionFailed':
                 this.setStage('negotiation', 'complete');
+<<<<<<< Updated upstream
                 this.addLogEntry('negotiation',
                     `⚠️ Auction failed: ${eventData.reason} (${(eventData.final_subscription * 100).toFixed(0)}% subscribed)`);
+=======
+                this.addLogEntry('negotiation', `⚠️ Auction failed: ${eventData.reason}`);
+>>>>>>> Stashed changes
                 break;
 
             case 'SettlementStageCompleted':
                 this.setStage('settlement', 'active');
+<<<<<<< Updated upstream
                 this.addLogEntry('settlement',
                     `Stage ${eventData.stage_number}/${eventData.total_stages}: ${eventData.stage_name} complete`);
+=======
+                this.addLogEntry('settlement', `Stage ${eventData.stage_number}/${eventData.total_stages}: ${eventData.stage_name} complete`);
+>>>>>>> Stashed changes
                 break;
 
             case 'SettlementCompleted':
                 this.setStage('settlement', 'complete');
+<<<<<<< Updated upstream
                 this.addLogEntry('settlement',
                     `Settlement complete: ${eventData.allocations_confirmed} allocations, ${eventData.documents_signed} docs signed`);
                 break;
@@ -193,10 +275,14 @@ const AgentOrchestration = {
                 this.setStage('settlement', 'complete');
                 this.addLogEntry('settlement',
                     `⚠️ Settlement failed at ${eventData.stage_name}: ${eventData.reason}`);
+=======
+                this.addLogEntry('settlement', `Settlement complete: ${eventData.allocations_confirmed} allocations`);
+>>>>>>> Stashed changes
                 break;
 
             case 'PaymentProcessed':
                 this.setStage('payment', 'active');
+<<<<<<< Updated upstream
                 this.addLogEntry('payment',
                     `${eventData.payment_type}: ${eventData.completed}/${eventData.total} processed ($${(eventData.amount_collected / 1000000).toFixed(2)}M)`);
                 break;
@@ -204,63 +290,67 @@ const AgentOrchestration = {
             case 'PaymentFailed':
                 this.addLogEntry('payment',
                     `⚠️ Payment failed: ${eventData.payer_institution} $${(eventData.amount / 1000000).toFixed(2)}M`);
+=======
+                this.addLogEntry('payment', `${eventData.payment_type} batch processed ($${(eventData.amount_collected / 1000000).toFixed(2)}M)`);
+>>>>>>> Stashed changes
                 break;
 
             case 'SyndicationCompleted':
                 this.setStage('payment', 'complete');
+<<<<<<< Updated upstream
                 this.addLogEntry('system',
                     `✅ Syndication complete: $${(eventData.total_syndicated / 1000000).toFixed(0)}M, ${eventData.total_payments} payments`);
                 break;
 
             // === Legacy Events (backward compatibility) ===
+=======
+                this.addLogEntry('system', `✅ Syndication complete: $${(eventData.total_syndicated / 1000000).toFixed(0)}M`);
+                break;
+
+            case 'WorkflowPaused':
+                this.addLogEntry('system', `⏸ PAUSED before ${eventData.next_node}. Click Step or Run to continue.`);
+                this.setStage(this.getStageIdFromNodeName(eventData.next_node), 'active');
+                break;
+
+            // === Legacy Events ===
+>>>>>>> Stashed changes
             case 'syndication_created':
                 this.activeSyndication = this.normalizeSyndication(message.data);
                 this.setStage('originator', 'active');
-                this.addLogEntry('originator', `Created syndication ${message.data.syndication_id}`);
                 break;
 
             case 'syndication_started':
                 this.addLogEntry('system', message.message);
                 break;
 
-            case 'bidding_started':
-                this.setStage('participant', 'active');
-                this.addLogEntry('participant', 'Participants evaluating opportunity...');
-                break;
-
-            case 'bid_received':
-                this.addLogEntry('participant', `${message.data.participant} bid $${message.data.amount}M`);
-                break;
-
-            case 'auction_round':
-                this.setStage('negotiation', 'active');
-                this.addLogEntry('negotiation', `Round ${message.data.round}: ${message.data.spread}bps, ${message.data.subscription}% subscribed`);
-                break;
-
-            case 'allocation_complete':
-                this.setStage('settlement', 'active');
-                this.addLogEntry('settlement', `Allocated ${message.data.allocations} participants`);
-                break;
-
-            case 'payment_processed':
-                this.setStage('payment', 'active');
-                this.addLogEntry('payment', `Payment ${message.data.payment_id} processed`);
-                break;
-
-            case 'syndication_complete':
-                this.setStage('payment', 'complete');
-                this.addLogEntry('system', `Syndication complete: $${message.data.total_committed}M committed`);
-                break;
-
             case 'pong':
-                // Heartbeat response
                 break;
 
             default:
+<<<<<<< Updated upstream
                 console.log('Unknown message type:', eventType);
+=======
+                console.log('Unknown event:', eventType);
+>>>>>>> Stashed changes
         }
 
         this.renderWorkflow();
+    },
+
+    /**
+     * Map internal node name to UI stage ID
+     */
+    getStageIdFromNodeName(nodeName) {
+        const map = {
+            'originator': 'originator',
+            'participants': 'participant',
+            'negotiation': 'negotiation',
+            'payment': 'payment',
+            'settlement': 'settlement',
+            'failed': 'negotiation', // If auction fails, it's still part of negotiation
+            'settlement_failed': 'settlement' // If settlement fails, it's still part of settlement
+        };
+        return map[nodeName] || 'originator';
     },
 
     /**
@@ -473,7 +563,11 @@ const AgentOrchestration = {
                     <button class="btn-control btn-secondary" id="btn-step-engine" title="Execute next node only">⚡ Step</button>
                     <div class="control-spacer"></div>
                     <label class="toggle-control">
+<<<<<<< Updated upstream
                         <input type="checkbox" id="check-manual-mode">
+=======
+                        <input type="checkbox" id="check-manual-mode" ${this.manualMode ? 'checked' : ''}>
+>>>>>>> Stashed changes
                         <span class="toggle-label">Manual Step Mode</span>
                     </label>
                 </div>
@@ -506,14 +600,20 @@ const AgentOrchestration = {
     renderWorkflowDiagram() {
         return `
             <div class="workflow-stages">
-                ${this.workflowStages.map((stage, i) => `
-                    <div class="workflow-stage ${stage.status || 'pending'}">
+                ${this.workflowStages.map((stage, i) => {
+            const status = stage.status || 'pending';
+            const statusText = status.charAt(0).toUpperCase() + status.slice(1);
+            const tooltip = `${stage.name}: ${statusText}\n${stage.description}`;
+
+            return `
+                    <div class="workflow-stage ${status}" title="${tooltip}" data-status="${status}" data-stage="${stage.id}">
                         <div class="stage-icon">${stage.icon}</div>
                         <div class="stage-name">${stage.name}</div>
                         <div class="stage-status-indicator"></div>
                     </div>
                     ${i < this.workflowStages.length - 1 ? '<div class="workflow-connector"></div>' : ''}
-                `).join('')}
+                `;
+        }).join('')}
             </div>
             <div class="workflow-descriptions">
                 ${this.workflowStages.map(stage => `
@@ -576,16 +676,18 @@ const AgentOrchestration = {
     renderWorkflow() {
         const diagramEl = document.querySelector('.workflow-diagram');
         const logEl = document.getElementById('workflow-log');
-        const syndEl = document.querySelector('.active-syndication-section');
+        const activeContainer = document.getElementById('active-syndication-container');
 
         if (diagramEl) {
             diagramEl.innerHTML = this.renderWorkflowDiagram();
         }
         if (logEl) {
             logEl.innerHTML = this.renderWorkflowLog();
+            // Auto-scroll to bottom for live monitor experience
+            logEl.scrollTop = logEl.scrollHeight;
         }
-        if (syndEl) {
-            syndEl.innerHTML = `<h3>Active Syndication</h3>${this.renderActiveSyndication()}`;
+        if (activeContainer) {
+            activeContainer.innerHTML = this.renderActiveSyndication();
         }
     },
 
@@ -593,12 +695,14 @@ const AgentOrchestration = {
      * Trigger a manual syndication run
      */
     triggerManualRun() {
+        const stepMode = !!this.manualMode;
         if (this.isConnected && this.ws) {
             this.ws.send(JSON.stringify({
                 type: 'run_syndication',
-                originator_id: 'OA-001'
+                originator_id: 'OA-001',
+                step_mode: stepMode
             }));
-            this.addLogEntry('system', 'Manual syndication triggered via LangGraph');
+            this.addLogEntry('system', `Manual syndication triggered via LangGraph (Step Mode: ${stepMode ? 'ON' : 'OFF'})`);
         } else {
             // Use auto-generator
             if (window.AutoGenerator) {

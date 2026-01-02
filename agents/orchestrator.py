@@ -777,6 +777,56 @@ async def run_syndication_async(originator_id: str = "OA-001",
     return await asyncio.to_thread(run_syndication, originator_id, loan_params)
 
 
+def resume_syndication(syndication_id: str) -> Dict[str, Any]:
+    """
+    Resume an interrupted/paused syndication workflow.
+    """
+    workflow = build_syndication_graph()
+    memory = MemorySaver()
+    app = workflow.compile(checkpointer=memory)
+    
+    config = {"configurable": {"thread_id": syndication_id}}
+    
+    # Check if we are really paused
+    state = app.get_state(config)
+    if not state.next:
+        logger.warning(f"Syndication {syndication_id} is not paused or already complete.")
+        return {"error": "Not paused"}
+    
+    logger.info(f"▶ RESUMING SYNDICATION: {syndication_id} at node {state.next}")
+    
+    final_state = None
+    node_count = 0
+    
+    # Resume by passing None to stream
+    for event in app.stream(None, config):
+        for node_name, node_state in event.items():
+            node_count += 1
+            status = node_state.get('status', 'unknown')
+            logger.info(f"[Resume Node {node_count}] {node_name.upper()} → Status: {status}")
+            final_state = node_state
+            
+            # Re-check for pause (if multiple steps)
+            snapshot = app.get_state(config)
+            if snapshot.next:
+                final_state["paused"] = True
+                final_state["next_node"] = snapshot.next[0]
+                from events import WorkflowPaused
+                from event_bus import EventBus
+                EventBus.emit(WorkflowPaused(
+                    syndication_id=syndication_id,
+                    next_node=snapshot.next[0]
+                ))
+                return final_state
+
+    return final_state
+
+
+async def resume_syndication_async(syndication_id: str) -> Dict[str, Any]:
+    """Async wrapper for resume_syndication"""
+    return await asyncio.to_thread(resume_syndication, syndication_id)
+
+
 async def run_multiple_syndications(count: int = 5, originator_ids: List[str] = None):
     """Run multiple syndications concurrently for demo"""
     if not originator_ids:
