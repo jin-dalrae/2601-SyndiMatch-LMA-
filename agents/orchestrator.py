@@ -565,19 +565,54 @@ def run_syndication(originator_id: str = "OA-001",
     # Build and compile graph
     workflow = build_syndication_graph()
     memory = MemorySaver()
-    app = workflow.compile(checkpointer=memory)
+    
+    # Enable stepping if requested
+    interrupt_before = []
+    if loan_params and loan_params.get("step_mode"):
+        interrupt_before = ["participants", "negotiation", "settlement", "payment"]
+        logger.info(f"🛑 STEP MODE ENABLED: Workflow will pause before {interrupt_before}")
+    
+    app = workflow.compile(checkpointer=memory, interrupt_before=interrupt_before)
     
     # Run the workflow with tracking
     config = {"configurable": {"thread_id": initial_state["syndication_id"]}}
-    final_state = None
+    final_state = initial_state
     node_count = 0
     
-    for event in app.stream(initial_state, config):
-        for node_name, node_state in event.items():
-            node_count += 1
-            status = node_state.get('status', 'unknown')
-            logger.info(f"[Node {node_count}] {node_name.upper()} → Status: {status}")
-            final_state = node_state
+    # Use while loop to handle interruptions
+    while True:
+        # Stream from None if resuming, or initial_state if starting
+        for event in app.stream(None if node_count > 0 else initial_state, config):
+            for node_name, node_state in event.items():
+                node_count += 1
+                status = node_state.get('status', 'unknown')
+                logger.info(f"[Node {node_count}] {node_name.upper()} → Status: {status}")
+                final_state = node_state
+
+        # Check if we are at an interruption point
+        snapshot = app.get_state(config)
+        if snapshot.next:
+            logger.info(f"⏸ WORKFLOW PAUSED: Waiting for step signal to execute node: {snapshot.next}")
+            # In a real async environment, we would wait for a signal.
+            # Here, since it's a thread-run synchronous function, we might need a way to block or just return partial state.
+            # But the requirement is "Manual Step Mode". 
+            # If we are in this thread, we need to wait for something or return.
+            # Let's assume we want to return partial results to the WS, and then the WS can call 'step' again.
+            
+            # To support this, run_syndication should be able to return a "paused" status.
+            final_state["paused"] = True
+            final_state["next_node"] = snapshot.next[0]
+            # Emit pause event
+            from events import WorkflowPaused
+            from event_bus import EventBus
+            EventBus.emit(WorkflowPaused(
+                syndication_id=initial_state["syndication_id"],
+                next_node=snapshot.next[0]
+            ))
+            return final_state
+        else:
+            # Reached END
+            break
     
     # Calculate final metrics
     end_time = datetime.utcnow()
