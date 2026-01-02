@@ -96,6 +96,12 @@ async def root():
     return {"status": "online", "service": "SyndiMatch Agent API"}
 
 
+@app.get("/health")
+async def health_check():
+    """Simple health check for Cloud Run"""
+    return {"status": "ok"}
+
+
 @app.get("/api/health")
 async def health():
     return {

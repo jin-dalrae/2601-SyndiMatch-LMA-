@@ -8,7 +8,7 @@ from typing import Dict, Any, List, Optional
 import logging
 
 from .state import SyndicationState, SettlementDecision
-from config import COMMITMENT_FEE_DUE_HOURS
+from .config import COMMITMENT_FEE_DUE_HOURS
 import db
 
 logger = logging.getLogger(__name__)

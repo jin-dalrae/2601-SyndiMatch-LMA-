@@ -7,7 +7,7 @@ from pymongo.database import Database
 from typing import Optional
 import logging
 
-from config import MONGODB_URI, DATABASE_NAME
+from .config import MONGODB_URI, DATABASE_NAME
 
 logger = logging.getLogger(__name__)
 
