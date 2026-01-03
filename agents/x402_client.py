@@ -16,7 +16,7 @@ from typing import Dict, Any, Optional, Literal
 from dataclasses import dataclass
 from enum import Enum
 import asyncio
-import db
+from . import db
 from .config import (
     CDP_API_KEY_NAME, CDP_API_KEY_PRIVATE_KEY, CDP_NETWORK,
     COINBASE_API_KEY, COINBASE_API_SECRET

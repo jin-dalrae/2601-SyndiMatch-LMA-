@@ -23,7 +23,7 @@ from typing import Callable, Dict, Any, Optional
 from datetime import datetime
 from collections.abc import Mapping
 
-import db
+from . import db
 from .state import SyndicationState
 
 logger = logging.getLogger(__name__)

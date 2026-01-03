@@ -9,7 +9,7 @@ import logging
 
 from .state import SyndicationState, SettlementDecision
 from .config import COMMITMENT_FEE_DUE_HOURS
-import db
+from . import db
 
 logger = logging.getLogger(__name__)
 

@@ -14,7 +14,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from .state import SyndicationState
 from .config import ANTHROPIC_API_KEY, AGENT_MODEL
-import db
+from . import db
 
 logger = logging.getLogger(__name__)
 

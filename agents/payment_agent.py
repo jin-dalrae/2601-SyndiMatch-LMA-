@@ -12,8 +12,8 @@ import uuid
 
 from .state import SyndicationState, PaymentDecision, PaymentStatus
 from .config import LATE_PAYMENT_PENALTY_BPS, GRACE_PERIOD_HOURS
-from x402_client import X402Client, PaymentResult
-import db
+from .x402_client import X402Client, PaymentResult
+from . import db
 
 logger = logging.getLogger(__name__)
 

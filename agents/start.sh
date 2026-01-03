@@ -5,5 +5,6 @@
 PORT=${PORT:-8080}
 
 # Run the FastAPI server
-exec uvicorn server:app --host 0.0.0.0 --port $PORT
+# Use python -m to ensure proper module resolution
+exec python -m uvicorn server:app --host 0.0.0.0 --port $PORT
 

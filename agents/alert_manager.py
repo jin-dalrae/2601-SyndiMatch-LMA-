@@ -6,7 +6,7 @@ Handles creation and storage of system alerts and notifications
 import logging
 from datetime import datetime
 from typing import Optional, Dict, Any
-import db
+from . import db
 
 logger = logging.getLogger(__name__)
 

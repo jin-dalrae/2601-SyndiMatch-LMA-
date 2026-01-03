@@ -15,8 +15,8 @@ import logging
 from datetime import datetime
 from typing import Any, Dict
 
-import db
-from events import (
+from . import db
+from .events import (
     DomainEvent,
     BiddingCompleted,
     AuctionCompleted,

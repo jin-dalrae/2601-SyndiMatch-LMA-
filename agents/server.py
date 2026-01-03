@@ -13,12 +13,14 @@ import json
 import logging
 import secrets
 
-from orchestrator import run_syndication, run_syndication_async, build_syndication_graph
-from originator_agent import generate_syndication
-from participant_agent import ParticipantAgent
-from x402_client import x402, PaymentStatus  # Import x402 client
-import db
-from event_bus import EventBus
+# Use absolute imports since all files are in the same directory (/app)
+# PYTHONPATH is set to /app in Dockerfile
+from .orchestrator import run_syndication, run_syndication_async, build_syndication_graph
+from .originator_agent import generate_syndication
+from .participant_agent import ParticipantAgent
+from .x402_client import x402, PaymentStatus  # Import x402 client
+from . import db
+from .event_bus import EventBus
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

@@ -8,7 +8,32 @@ const cors = require('cors');
 const crypto = require('crypto');
 const { connectDB, getDB } = require('./db');
 
+// Python Agents Service URL (Cloud Run or local)
+const AGENTS_SERVICE_URL = process.env.AGENTS_SERVICE_URL || 'http://localhost:8000';
+
+// Helper to call Python agents service
+async function callAgentsService(endpoint, method = 'GET', body = null) {
+    try {
+        const options = {
+            method,
+            headers: { 'Content-Type': 'application/json' }
+        };
+        if (body) {
+            options.body = JSON.stringify(body);
+        }
+        const response = await fetch(`${AGENTS_SERVICE_URL}${endpoint}`, options);
+        if (!response.ok) {
+            throw new Error(`Agents service returned ${response.status}: ${response.statusText}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.error(`❌ Agents service call failed (${endpoint}):`, error);
+        throw error;
+    }
+}
+
 const app = express();
+// Cloud Run sets PORT automatically, default to 3001 for local dev
 const PORT = process.env.PORT || 3001;
 
 // Middleware
@@ -54,8 +79,17 @@ app.post('/api/syndications', async (req, res) => {
         const db = getDB();
         const body = req.body || {};
 
+        // Basic role guard: only originators allowed
+        if (body.role && !String(body.role).startsWith('originator:')) {
+            return res.status(403).json({ error: 'Forbidden', message: 'Only originators can create syndications' });
+        }
+
         const id = body.id || body.syndication_id || `SYND-${Date.now()}`;
         const now = new Date();
+
+        if (!body.originator_agent_id) {
+            return res.status(400).json({ error: 'Bad Request', message: 'originator_agent_id is required' });
+        }
 
         const doc = {
             _id: id,
@@ -63,7 +97,7 @@ app.post('/api/syndications', async (req, res) => {
             borrower: body.borrower || 'Unknown Borrower',
             industry: body.industry || 'Unknown',
             originator: body.originator || 'Unknown',
-            originator_agent_id: body.originator_agent_id || 'OA-001',
+            originator_agent_id: body.originator_agent_id,
             amount: Number(body.amount) || 0,
             rating: body.rating || 'NR',
             spread: Number(body.spread) || 400,
@@ -170,6 +204,64 @@ app.get('/api/allocations/:syndId', async (req, res) => {
         res.json(allocation || {});
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch allocation' });
+    }
+});
+
+// ========================================
+// Python Agents Integration Endpoints
+// ========================================
+
+// Run a new syndication (calls Python agents)
+app.post('/api/syndications/run', async (req, res) => {
+    try {
+        const { originator_id = 'OA-001', loan_params } = req.body;
+        const result = await callAgentsService('/api/syndication/create', 'POST', {
+            originator_id,
+            loan_params
+        });
+        res.json(result);
+    } catch (error) {
+        console.error('❌ Failed to run syndication:', error);
+        res.status(500).json({ error: 'Failed to run syndication', message: error.message });
+    }
+});
+
+// Resume a syndication
+app.post('/api/syndications/resume', async (req, res) => {
+    try {
+        const { syndication_id } = req.body;
+        const result = await callAgentsService('/api/syndication/resume', 'POST', {
+            syndication_id
+        });
+        res.json(result);
+    } catch (error) {
+        console.error('❌ Failed to resume syndication:', error);
+        res.status(500).json({ error: 'Failed to resume syndication', message: error.message });
+    }
+});
+
+// Get syndication status from agents
+app.get('/api/syndications/:id/status', async (req, res) => {
+    try {
+        const result = await callAgentsService(`/api/syndication/${req.params.id}`);
+        res.json(result);
+    } catch (error) {
+        console.error('❌ Failed to get syndication status:', error);
+        res.status(500).json({ error: 'Failed to get status', message: error.message });
+    }
+});
+
+// Health check for agents service
+app.get('/api/agents/health', async (req, res) => {
+    try {
+        const result = await callAgentsService('/api/health');
+        res.json({ ...result, agents_service_url: AGENTS_SERVICE_URL });
+    } catch (error) {
+        res.status(503).json({ 
+            status: 'unhealthy', 
+            agents_service_url: AGENTS_SERVICE_URL,
+            error: 'Agents service unavailable' 
+        });
     }
 });
 
@@ -494,13 +586,15 @@ app.post('/api/x402/break-fee', async (req, res) => {
 async function startServer() {
     try {
         await connectDB();
-        app.listen(PORT, () => {
-            console.log(`🚀 SyndiMatch API running on http://localhost:${PORT}`);
-            console.log(`📊 Dashboard available at http://localhost:${PORT}`);
+        // Cloud Run requires listening on 0.0.0.0, not just localhost
+        app.listen(PORT, '0.0.0.0', () => {
+            console.log(`🚀 SyndiMatch API running on http://0.0.0.0:${PORT}`);
+            console.log(`📊 Dashboard available at http://0.0.0.0:${PORT}`);
             console.log(`💳 x402 Mock Payment endpoints active`);
+            console.log(`🔗 MongoDB connected`);
         });
     } catch (error) {
-        console.error('Failed to start server:', error);
+        console.error('❌ Failed to start server:', error);
         process.exit(1);
     }
 }

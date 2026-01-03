@@ -8,6 +8,13 @@ const OriginationForm = {
         const demoBtn = document.getElementById('btn-originate-demo');
         if (!form) return;
 
+        // Disable form if current role is not an originator
+        this._syncRoleGate();
+        const roleDropdown = document.getElementById('role-dropdown');
+        if (roleDropdown) {
+            roleDropdown.addEventListener('change', () => this._syncRoleGate());
+        }
+
         form.addEventListener('submit', (e) => this.handleSubmit(e));
         if (demoBtn) demoBtn.addEventListener('click', (e) => this.handleDemo(e));
     },
@@ -17,6 +24,16 @@ const OriginationForm = {
         const statusEl = document.getElementById('origination-status');
         const formData = new FormData(e.target);
         const payload = Object.fromEntries(formData.entries());
+
+        const roleDropdown = document.getElementById('role-dropdown');
+        const role = roleDropdown ? roleDropdown.value : '';
+        if (!role.startsWith('originator:')) {
+            statusEl.textContent = 'Only Originator roles can create deals.';
+            return;
+        }
+
+        payload.originator_agent_id = role.replace('originator:', '') || payload.originator_agent_id || 'OA-001';
+        payload.role = role;
 
         // Normalize numbers
         payload.amount = Number(payload.amount) || 0;
@@ -103,6 +120,31 @@ const OriginationForm = {
             'OA-008': 'MUFG Bank'
         };
         return map[id] || 'Unknown Originator';
+    },
+
+    _syncRoleGate() {
+        const form = document.getElementById('origination-form');
+        const demoBtn = document.getElementById('btn-originate-demo');
+        const statusEl = document.getElementById('origination-status');
+        const roleDropdown = document.getElementById('role-dropdown');
+
+        const role = roleDropdown ? roleDropdown.value : '';
+        const isOriginator = role.startsWith('originator:');
+
+        if (form) {
+            Array.from(form.elements).forEach(el => {
+                if (el.type !== 'button' && el.type !== 'submit') {
+                    el.disabled = !isOriginator;
+                }
+            });
+        }
+        if (demoBtn) demoBtn.disabled = !isOriginator;
+
+        if (!isOriginator) {
+            statusEl.textContent = 'Switch to an Originator role to create deals.';
+        } else {
+            statusEl.textContent = '';
+        }
     }
 };
 

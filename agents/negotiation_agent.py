@@ -16,7 +16,7 @@ from .config import (
     ANTHROPIC_API_KEY, AGENT_MODEL, 
     MAX_AUCTION_ROUNDS, MIN_SUBSCRIPTION_RATE, EARLY_CLOSE_THRESHOLD
 )
-import db
+from . import db
 
 logger = logging.getLogger(__name__)
 

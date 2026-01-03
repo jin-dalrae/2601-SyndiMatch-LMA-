@@ -18,7 +18,7 @@ Usage:
 from typing import Dict, List, Callable, Type, Any
 import logging
 
-from events import DomainEvent
+from .events import DomainEvent
 
 logger = logging.getLogger(__name__)
 
