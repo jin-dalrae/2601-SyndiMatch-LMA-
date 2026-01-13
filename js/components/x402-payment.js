@@ -197,12 +197,16 @@ const X402Payment = {
             statusEl.innerHTML = `<div class="x402-error">Error: No participant ID configured. Please select a role.</div>`;
             return;
         }
+        if (API.useMockData) {
+            statusEl.innerHTML = `<div class="x402-error">Demo mode enabled. Turn off Demo to use x402.</div>`;
+            return;
+        }
 
         statusEl.innerHTML = `<div class="x402-loading">Requesting access to ${context.syndId}...</div>`;
 
         try {
-            // Use API.agentClient for retries/throttling
-            const data = await API.agentClient.post('/x402/join-syndication', {
+            if (!API.serverClient) API.init();
+            const data = await API.serverClient.post('/x402/join-syndication', {
                 syndId: context.syndId,
                 participantId: context.participantId,
                 commitmentAmount: context.commitmentAmount
@@ -211,9 +215,9 @@ const X402Payment = {
             // If we're here, it was potentially a 200 OK (access already granted)
             statusEl.innerHTML = `<div class="x402-success-simple">✅ Access granted to ${context.syndId}!</div>`;
         } catch (error) {
-            if (error.status === 402 && error.data) {
+            if (error.status === 402 && error.details) {
                 // Payment Required!
-                const data = error.data;
+                const data = error.details;
                 this.pendingPayment = data.payment;
 
                 statusEl.innerHTML = `
@@ -268,6 +272,11 @@ const X402Payment = {
             statusEl.innerHTML = `<div class="x402-error">No pending payment. Click "Join Syndication" first.</div>`;
             return;
         }
+        if (API.useMockData) {
+            const statusEl = document.getElementById('x402-status');
+            statusEl.innerHTML = `<div class="x402-error">Demo mode enabled. Turn off Demo to use x402.</div>`;
+            return;
+        }
 
         const statusEl = document.getElementById('x402-status');
         const triggerBtn = document.getElementById('btn-trigger-x402');
@@ -288,7 +297,8 @@ const X402Payment = {
         triggerBtn.disabled = true;
 
         try {
-            const data = await API.agentClient.post('/x402/pay', {
+            if (!API.serverClient) API.init();
+            const data = await API.serverClient.post('/x402/pay', {
                 paymentId: this.pendingPayment.paymentId,
                 walletAddress: walletAddress
             });
@@ -367,13 +377,8 @@ const X402Payment = {
      */
     async loadTransactions() {
         try {
-            const response = await fetch(`${API.agentUrl}/x402/transactions`);
-
-            if (!response.ok) {
-                throw new Error(`Server returned ${response.status}`);
-            }
-
-            const transactions = await response.json();
+            const transactions = await API.get('server', '/x402/transactions');
+            if (!transactions) return;
 
             const receiptsEl = document.getElementById('x402-receipts');
             if (!receiptsEl || !Array.isArray(transactions) || transactions.length === 0) return;

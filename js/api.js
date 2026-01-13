@@ -88,7 +88,7 @@ const API = {
 
     // x402/CDP Data (from Python Agent Server)
     async getX402Balance(address) {
-        return await this.get('agent', `/x402/balance/${address}`);
+        return await this.get('server', `/x402/balance/${address}`);
     },
 
     async getSyndicationEvents(syndId) {
@@ -102,7 +102,7 @@ const API = {
     },
 
     async getEscrowDetails(syndId) {
-        return await this.get('agent', `/x402/escrow/${syndId}`);
+        return await this.get('server', `/x402/escrow/${syndId}`);
     },
 
     // Trigger AI Agent Bid (POST)
@@ -114,7 +114,7 @@ const API = {
                 ? window.SimulationEngine.getCurrentDate().toISOString()
                 : new Date().toISOString()
         };
-        return await this.post('agent', '/agents/bid', payload);
+        return await this.post('server', '/agents/bid', payload);
     },
 
     // Notify Agent of Allocation (POST)
@@ -124,7 +124,7 @@ const API = {
             syndication_id: syndId,
             allocation: allocation
         };
-        return await this.post('agent', '/agents/allocate', payload);
+        return await this.post('server', '/agents/allocate', payload);
     },
 
     // Check if API is available

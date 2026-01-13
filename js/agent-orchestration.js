@@ -6,10 +6,14 @@
 const AgentOrchestration = {
     // WebSocket connection to Python agent server
     ws: null,
-    wsUrl: 'ws://localhost:8000/ws',
+    wsUrl: null,
     isConnected: false,
     reconnectAttempts: 0,
     maxReconnectAttempts: 5,
+    usePolling: true,
+    pollIntervalMs: 3000,
+    pollTimer: null,
+    seenEventIds: new Set(),
 
     // Agent workflow stages
     workflowStages: [
@@ -55,7 +59,11 @@ const AgentOrchestration = {
      */
     init() {
         console.log('🤖 Agent Orchestration initialized');
-        this.connectWebSocket();
+        if (this.usePolling) {
+            this.startPolling();
+        } else {
+            this.connectWebSocket();
+        }
         this.setupControlHandlers();
 
         // Listen for simulation events
@@ -111,7 +119,9 @@ const AgentOrchestration = {
                 syndication_id: this.activeSyndication.id
             }));
         } else {
-            this.addLogEntry('system', 'Step mode not supported in simulation');
+            API.post('server', '/syndications/resume', {
+                syndication_id: this.activeSyndication.id
+            });
         }
     },
 
@@ -159,6 +169,35 @@ const AgentOrchestration = {
             this.reconnectAttempts++;
             setTimeout(() => this.connectWebSocket(), 3000);
         }
+    },
+
+    /**
+     * Poll syndication events via Node API (no direct agent calls from browser)
+     */
+    startPolling() {
+        if (this.pollTimer) clearInterval(this.pollTimer);
+        const poll = async () => {
+            const events = await API.get('server', '/syndication-events?limit=100');
+            if (!events) {
+                this.isConnected = false;
+                this.updateConnectionStatus(false);
+                return;
+            }
+            this.isConnected = true;
+            this.updateConnectionStatus(true);
+            const ordered = [...events].reverse();
+            ordered.forEach((event) => {
+                const key = event._id || `${event.event_type}-${event.timestamp}`;
+                if (this.seenEventIds.has(key)) return;
+                this.seenEventIds.add(key);
+                this.handleServerMessage(event);
+            });
+            if (this.seenEventIds.size > 1000) {
+                this.seenEventIds.clear();
+            }
+        };
+        poll();
+        this.pollTimer = setInterval(poll, this.pollIntervalMs);
     },
 
     /**
@@ -446,11 +485,7 @@ const AgentOrchestration = {
         }
 
         // Also try REST endpoint for full persistence clear
-        try {
-            await fetch('http://localhost:8000/api/orchestrator/reset', { method: 'POST' });
-        } catch (e) {
-            console.warn('REST reset failed (server might not support it yet)');
-        }
+        await API.post('server', '/orchestrator/reset', {});
 
         this.renderWorkflow();
     },
@@ -655,11 +690,8 @@ const AgentOrchestration = {
             }));
             this.addLogEntry('system', `Manual syndication triggered via LangGraph (Step Mode: ${stepMode ? 'ON' : 'OFF'})`);
         } else {
-            // Use auto-generator
-            if (window.AutoGenerator) {
-                const synd = AutoGenerator.generateSyndication(SimulationEngine?.getCurrentDate() || new Date());
-                this.addLogEntry('system', 'Manual syndication triggered (simulated)');
-            }
+            API.post('server', '/syndications/run', { originator_id: 'OA-001' });
+            this.addLogEntry('system', `Manual syndication triggered via API (Step Mode: ${stepMode ? 'ON' : 'OFF'})`);
         }
         this.renderWorkflow();
     }

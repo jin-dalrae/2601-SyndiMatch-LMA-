@@ -116,6 +116,11 @@ Or:
 
 Use the “Demo” toggle in the header to force mock data when the backend isn’t running. The setting is stored in local storage and skips API calls until turned off.
 
+## Security
+
+- Do not commit real secrets in `.env`. Use `.env.example` as a template.
+- Rotate any keys that were previously stored locally.
+
 ## API highlights
 
 - `GET /api/health`
@@ -130,6 +135,7 @@ See `server/index.js` for the full list.
 
 ## Deployment notes
 
+- Combined guide: `DEPLOYMENT.md`
 - Node.js deployment guide: `NODEJS_DEPLOYMENT.md`
 - Cloud Run troubleshooting: `TROUBLESHOOTING.md`
 - Quick fixes: `QUICK_FIX.md`

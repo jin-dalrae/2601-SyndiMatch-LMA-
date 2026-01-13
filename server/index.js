@@ -236,6 +236,71 @@ app.post('/api/syndications/run', async (req, res) => {
     }
 });
 
+// Proxy: Agent data and actions
+app.get('/api/agents/participants', async (req, res) => {
+    try {
+        const result = await callAgentsService('/api/agents/participants');
+        res.json(result);
+    } catch (error) {
+        res.status(502).json({ error: 'Agents service unavailable' });
+    }
+});
+
+app.get('/api/agents/originators', async (req, res) => {
+    try {
+        const result = await callAgentsService('/api/agents/originators');
+        res.json(result);
+    } catch (error) {
+        res.status(502).json({ error: 'Agents service unavailable' });
+    }
+});
+
+app.post('/api/agents/bid', async (req, res) => {
+    try {
+        const result = await callAgentsService('/api/agents/bid', 'POST', req.body);
+        res.json(result);
+    } catch (error) {
+        res.status(502).json({ error: 'Agents service unavailable' });
+    }
+});
+
+app.post('/api/agents/allocate', async (req, res) => {
+    try {
+        const result = await callAgentsService('/api/agents/allocate', 'POST', req.body);
+        res.json(result);
+    } catch (error) {
+        res.status(502).json({ error: 'Agents service unavailable' });
+    }
+});
+
+// Proxy: x402 read-only lookups
+app.get('/api/x402/balance/:wallet', async (req, res) => {
+    try {
+        const result = await callAgentsService(`/api/x402/balance/${req.params.wallet}`);
+        res.json(result);
+    } catch (error) {
+        res.status(502).json({ error: 'Agents service unavailable' });
+    }
+});
+
+app.get('/api/x402/escrow/:syndId', async (req, res) => {
+    try {
+        const result = await callAgentsService(`/api/x402/escrow/${req.params.syndId}`);
+        res.json(result);
+    } catch (error) {
+        res.status(502).json({ error: 'Agents service unavailable' });
+    }
+});
+
+app.post('/api/orchestrator/reset', async (req, res) => {
+    try {
+        const result = await callAgentsService('/api/orchestrator/reset', 'POST', {});
+        res.json(result);
+    } catch (error) {
+        res.status(502).json({ error: 'Agents service unavailable' });
+    }
+});
+
 // Resume a syndication
 app.post('/api/syndications/resume', async (req, res) => {
     try {

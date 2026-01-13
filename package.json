@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node server/index.js",
     "dev": "node server/index.js",
-    "serve": "npx serve . -p 3456"
+    "serve": "npx serve . -p 3456",
+    "smoke:node": "./scripts/smoke-node.sh",
+    "smoke:agents": "./scripts/smoke-agents.sh"
   },
   "repository": {
     "type": "git",

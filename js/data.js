@@ -259,43 +259,17 @@ const WebSocketManager = {
     reconnectAttempts: 0,
     maxReconnectAttempts: 5,
     reconnectDelay: 3000,
+    usePolling: true,
+    pollIntervalMs: 3000,
+    pollTimer: null,
+    seenEventIds: new Set(),
 
     connect() {
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
-
-        try {
-            this.ws = new WebSocket('ws://localhost:8000/ws');
-
-            this.ws.onopen = () => {
-                console.log('🔌 WebSocket connected to orchestrator');
-                this.isConnected = true;
-                this.reconnectAttempts = 0;
-
-                // Subscribe to all syndication events
-                this.ws.send(JSON.stringify({ type: 'subscribe', channel: 'syndication_events' }));
-            };
-
-            this.ws.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    this.handleEvent(data);
-                } catch (e) {
-                    console.warn('Failed to parse WebSocket message:', e);
-                }
-            };
-
-            this.ws.onclose = () => {
-                console.log('🔌 WebSocket disconnected');
-                this.isConnected = false;
-                this.attemptReconnect();
-            };
-
-            this.ws.onerror = (error) => {
-                console.warn('WebSocket error:', error);
-            };
-        } catch (e) {
-            console.warn('Failed to create WebSocket:', e);
+        if (this.usePolling) {
+            this.startPolling();
+            return;
         }
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
     },
 
     attemptReconnect() {
@@ -304,6 +278,30 @@ const WebSocketManager = {
             console.log(`🔄 Reconnecting... (attempt ${this.reconnectAttempts})`);
             setTimeout(() => this.connect(), this.reconnectDelay);
         }
+    },
+
+    startPolling() {
+        if (this.pollTimer) clearInterval(this.pollTimer);
+        const poll = async () => {
+            const events = await API.get('server', '/syndication-events?limit=100');
+            if (!events) {
+                this.isConnected = false;
+                return;
+            }
+            this.isConnected = true;
+            const ordered = [...events].reverse();
+            ordered.forEach((event) => {
+                const key = event._id || `${event.event_type}-${event.timestamp}`;
+                if (this.seenEventIds.has(key)) return;
+                this.seenEventIds.add(key);
+                this.handleEvent(event);
+            });
+            if (this.seenEventIds.size > 1000) {
+                this.seenEventIds.clear();
+            }
+        };
+        poll();
+        this.pollTimer = setInterval(poll, this.pollIntervalMs);
     },
 
     handleEvent(data) {
@@ -399,4 +397,3 @@ const WebSocketManager = {
 
 // Export
 window.WebSocketManager = WebSocketManager;
-

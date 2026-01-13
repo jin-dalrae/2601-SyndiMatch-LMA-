@@ -179,23 +179,17 @@ const SimulationEngine = {
      */
     async triggerNewSyndication() {
         try {
-            const agentEndpoint = (window.API && API.agentUrl)
-                ? `${API.agentUrl}/syndication/create`
-                : 'http://localhost:8000/api/syndication/create';
-            const response = await fetch(agentEndpoint, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    originator_id: 'OA-001',
-                    loan_params: {
-                        borrower_name: this.getRandomBorrower(),
-                        amount: Utils.randomBetween(100, 500),
-                        rating: this.getRandomRating(),
-                        spread: Utils.randomBetween(350, 550)
-                    }
-                })
-            });
-            if (response.ok) {
+            const payload = {
+                borrower: this.getRandomBorrower(),
+                amount: Utils.randomBetween(100, 500),
+                rating: this.getRandomRating(),
+                spread: Utils.randomBetween(350, 550),
+                industry: this.getRandomIndustry(),
+                originator_agent_id: 'OA-001',
+                role: 'originator:OA-001'
+            };
+            const data = await API.post('server', '/syndications', payload);
+            if (data) {
                 console.log('🚀 New syndication triggered');
             }
         } catch (e) {
@@ -223,6 +217,14 @@ const SimulationEngine = {
             'Nova Pharma', 'Titan Industries', 'Stellar Corp', 'Frontier Holdings'
         ];
         return borrowers[Utils.randomBetween(0, borrowers.length - 1)];
+    },
+
+    getRandomIndustry() {
+        const industries = [
+            'Technology', 'Healthcare', 'Energy', 'Real Estate', 'Industrial',
+            'Financial Services', 'Telecom', 'Consumer', 'Infrastructure'
+        ];
+        return industries[Utils.randomBetween(0, industries.length - 1)];
     },
 
     getRandomRating() {
