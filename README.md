@@ -2,6 +2,21 @@
 
 AI-powered loan syndication platform with a real-time dashboard, multi-agent orchestration, and a mock x402 payment flow.
 
+## Problem
+
+Loan syndication is slow, manual, and opaque. Originators coordinate dozens of counterparties over weeks, pricing discovery is inefficient, and operational overhead is high. Participants struggle to evaluate deals quickly and consistently while staying within portfolio and risk constraints.
+
+## Solution
+
+SyndiMatch automates the workflow with specialized AI agents that broadcast opportunities, run Dutch auctions for price discovery, and manage settlement. A real-time dashboard surfaces pipeline status, bids, and payments, while a mock x402 flow simulates blockchain-based fee collection and reconciliation.
+
+## Impact
+
+- Faster syndication timelines (weeks to hours).
+- More transparent pricing and allocation decisions.
+- Lower operational cost through end-to-end automation.
+- Better matching between originators and institutional participants.
+
 ## What this repo contains
 
 - Node.js API server that serves the frontend and reads/writes MongoDB.
