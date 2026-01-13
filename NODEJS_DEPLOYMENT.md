@@ -152,3 +152,4 @@ Your frontend (`index.html`) already calls `/api/*` endpoints, so it will automa
 - Node.js server has CORS enabled
 - Python service should also have CORS enabled
 
+

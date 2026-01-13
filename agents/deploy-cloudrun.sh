@@ -45,3 +45,4 @@ echo "✅ Deployment complete!"
 echo "📍 Service URL: ${SERVICE_URL}"
 echo "📊 View logs: gcloud run services logs read ${SERVICE_NAME} --region ${REGION}"
 
+

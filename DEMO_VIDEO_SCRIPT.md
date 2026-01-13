@@ -115,3 +115,4 @@
 - Highlight important numbers/statuses
 - Show the "magic" of automation happening in real-time
 
+
