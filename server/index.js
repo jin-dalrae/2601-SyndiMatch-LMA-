@@ -6,7 +6,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
-const { connectDB, getDB } = require('./db');
+const { connectDB, getDB, pingDB } = require('./db');
 
 // Python Agents Service URL (Cloud Run or local)
 const AGENTS_SERVICE_URL = process.env.AGENTS_SERVICE_URL || 'http://localhost:8000';
@@ -44,6 +44,15 @@ app.use(express.static('.'));
 // API Routes
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+app.get('/api/ready', async (req, res) => {
+    try {
+        await pingDB();
+        res.json({ status: 'ready' });
+    } catch (error) {
+        res.status(503).json({ status: 'not_ready', error: 'Database not reachable' });
+    }
 });
 
 // Syndications
@@ -214,9 +223,10 @@ app.get('/api/allocations/:syndId', async (req, res) => {
 // Run a new syndication (calls Python agents)
 app.post('/api/syndications/run', async (req, res) => {
     try {
-        const { originator_id = 'OA-001', loan_params } = req.body;
-        const result = await callAgentsService('/api/syndication/create', 'POST', {
+        const { originator_id = 'OA-001', syndication_id, loan_params } = req.body;
+        const result = await callAgentsService('/api/syndication/run', 'POST', {
             originator_id,
+            syndication_id,
             loan_params
         });
         res.json(result);

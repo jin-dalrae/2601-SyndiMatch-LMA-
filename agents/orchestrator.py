@@ -723,8 +723,20 @@ def run_syndication(originator_id: str = "OA-001",
     
     start_time = datetime.utcnow()
     
-    # Generate initial syndication
-    initial_state = generate_syndication(originator_id, loan_params)
+    # Reuse an existing syndication if the provided ID matches one in the DB.
+    existing = db.syndications().find_one({"_id": originator_id})
+    if not existing:
+        existing = db.syndications().find_one({"syndication_id": originator_id})
+
+    if existing:
+        initial_state = existing
+        initial_state["syndication_id"] = existing.get("syndication_id") or existing.get("_id")
+        if "originator_agent_id" not in initial_state:
+            if isinstance(originator_id, str) and originator_id.startswith("OA-"):
+                initial_state["originator_agent_id"] = originator_id
+    else:
+        # Generate initial syndication for a new run
+        initial_state = generate_syndication(originator_id, loan_params)
     
     logger.info(f"\n{'='*80}")
     logger.info(f"🚀 STARTING SYNDICATION WORKFLOW")

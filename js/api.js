@@ -6,6 +6,7 @@ const API = {
     baseUrl: 'http://localhost:3001/api',
     agentUrl: 'http://localhost:8000/api',
     useMockData: false,
+    demoModeKey: 'syndimatch_demo_mode',
 
     // Initialize clients
     init() {
@@ -13,6 +14,8 @@ const API = {
             this.serverClient = new window.APIClient(this.baseUrl);
             this.agentClient = new window.APIClient(this.agentUrl);
         }
+        const demoMode = localStorage.getItem(this.demoModeKey) === 'true';
+        this.useMockData = demoMode;
     },
 
     async get(client, endpoint) {
@@ -126,6 +129,11 @@ const API = {
 
     // Check if API is available
     async checkConnection() {
+        if (localStorage.getItem(this.demoModeKey) === 'true') {
+            this.useMockData = true;
+            console.log('🎛️ Demo mode enabled (mock data)');
+            return false;
+        }
         if (!this.serverClient) this.init();
 
         try {
@@ -140,6 +148,14 @@ const API = {
         }
         this.useMockData = true;
         return false;
+    },
+    async setDemoMode(enabled) {
+        localStorage.setItem(this.demoModeKey, enabled ? 'true' : 'false');
+        this.useMockData = enabled;
+        if (!enabled) {
+            return await this.checkConnection();
+        }
+        return true;
     }
 };
 

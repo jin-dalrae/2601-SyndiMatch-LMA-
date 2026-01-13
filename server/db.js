@@ -51,4 +51,12 @@ async function closeDB() {
     }
 }
 
-module.exports = { connectDB, getDB, closeDB };
+async function pingDB() {
+    if (!db) {
+        throw new Error('Database not connected. Call connectDB() first.');
+    }
+    await db.command({ ping: 1 });
+    return true;
+}
+
+module.exports = { connectDB, getDB, closeDB, pingDB };

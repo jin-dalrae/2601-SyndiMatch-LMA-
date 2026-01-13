@@ -16,7 +16,7 @@ import secrets
 # Use absolute imports since all files are in the same directory (/app)
 # PYTHONPATH is set to /app in Dockerfile
 from .orchestrator import run_syndication, run_syndication_async, build_syndication_graph
-from .originator_agent import generate_syndication
+from .originator_agent import OriginatorAgent, generate_syndication
 from .participant_agent import ParticipantAgent
 from .x402_client import x402, PaymentStatus  # Import x402 client
 from . import db
@@ -88,7 +88,9 @@ class CreateSyndicationRequest(BaseModel):
 
 
 class RunSyndicationRequest(BaseModel):
-    syndication_id: str
+    syndication_id: Optional[str] = None
+    originator_id: str = "OA-001"
+    loan_params: Optional[Dict[str, Any]] = None
 
 
 # === REST Endpoints ===
@@ -106,11 +108,21 @@ async def health_check():
 
 @app.get("/api/health")
 async def health():
+    db_ok = db.ping_database()
+    status = "healthy" if db_ok else "degraded"
     return {
-        "status": "healthy",
+        "status": status,
         "timestamp": datetime.utcnow().isoformat(),
-        "database": "connected"
+        "database": "connected" if db_ok else "unreachable"
     }
+
+
+@app.get("/api/ready")
+async def readiness():
+    """Readiness check that validates database connectivity."""
+    if not db.ping_database():
+        raise HTTPException(status_code=503, detail="Database not ready")
+    return {"status": "ready"}
 
 
 @app.post("/api/syndication/create")
@@ -118,6 +130,9 @@ async def create_syndication(request: CreateSyndicationRequest):
     """Create a new syndication without running the workflow"""
     try:
         state = generate_syndication(request.originator_id, request.loan_params)
+        # Persist the new syndication for the dashboard and later runs
+        agent = OriginatorAgent(state["originator_agent_id"])
+        state = agent.broadcast_loan(state)
         
         # Broadcast to connected clients
         await manager.broadcast({
@@ -140,17 +155,9 @@ async def create_syndication(request: CreateSyndicationRequest):
 async def run_full_syndication(request: RunSyndicationRequest):
     """Run a complete syndication workflow"""
     try:
-        # Check if exists
-        synd = db.syndications().find_one({"_id": request.syndication_id})
-        if not synd:
-            # If not found, check if it's an originator ID (legacy behavior)
-            # and create it first
-            synd_id = request.syndication_id
-        else:
-            synd_id = synd["_id"]
-
+        target_id = request.syndication_id or request.originator_id
         # Run in background
-        result = await run_syndication_async(synd_id)
+        result = await run_syndication_async(target_id, request.loan_params)
         
         return {
             "success": True,
@@ -650,6 +657,8 @@ async def startup():
     # Register WS bridge as a sticky global handler (survives setup_event_handlers clears)
     EventBus.subscribe_all_sticky(_broadcast_domain_event)
     db.get_database()
+    if not db.ping_database():
+        raise RuntimeError("MongoDB not reachable on startup")
     logger.info("Database connected")
 
 

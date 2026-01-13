@@ -21,6 +21,7 @@ const App = {
         AgentsComponent.init();
         AnalyticsComponent.init();
         AlertsComponent.init();
+        this.setupDemoToggle();
 
         // Setup navigation
         this.setupNavigation();
@@ -33,6 +34,22 @@ const App = {
         this.handleHashChange();
 
         console.log('✅ SyndiMatch Dashboard ready');
+    },
+
+    setupDemoToggle() {
+        const toggle = document.getElementById('demo-mode-toggle');
+        const label = document.getElementById('demo-mode-status');
+        if (!toggle || !label || !window.API) return;
+
+        const isDemo = localStorage.getItem(API.demoModeKey) === 'true';
+        toggle.checked = isDemo;
+        label.textContent = isDemo ? 'Demo On' : 'Demo';
+
+        toggle.addEventListener('change', async () => {
+            const enabled = toggle.checked;
+            await API.setDemoMode(enabled);
+            label.textContent = enabled ? 'Demo On' : 'Demo';
+        });
     },
 
     setupNavigation() {

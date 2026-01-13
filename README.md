@@ -94,10 +94,27 @@ Open `http://localhost:3001`.
 python agents/seed_all.py
 ```
 
+Or:
+
+```bash
+./scripts/seed-db.sh
+```
+
+### 5) Smoke tests (optional)
+
+```bash
+./scripts/smoke-node.sh
+./scripts/smoke-agents.sh
+```
+
 ## Scripts
 
 - `npm start` / `npm run dev`: run the Node.js server.
 - `npm run serve`: serve the frontend statically (no API).
+
+## Demo mode
+
+Use the “Demo” toggle in the header to force mock data when the backend isn’t running. The setting is stored in local storage and skips API calls until turned off.
 
 ## API highlights
 

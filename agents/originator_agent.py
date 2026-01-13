@@ -81,12 +81,17 @@ class OriginatorAgent:
         # Add AI recommendation reasoning for the dashboard
         state["recommendation_reasoning"] = f"AI-Recommended: This {state['loan_details']['industry']} opportunity offers a competitive {state['pricing']['initial_spread']}bps spread relative to its {state['loan_details']['credit_rating']} rating."
         
-        # Insert into MongoDB with schema version for migration support
-        db.syndications().insert_one({
-            "_id": state["syndication_id"],
-            "schema_version": 1,  # For backward compatibility and migrations
-            **state
-        })
+        # Upsert into MongoDB (supports existing records created by other services)
+        db.syndications().update_one(
+            {"_id": state["syndication_id"]},
+            {
+                "$set": {
+                    "schema_version": 1,  # For backward compatibility and migrations
+                    **state
+                }
+            },
+            upsert=True
+        )
         
         # Update originator's active loans count
         db.originator_agents().update_one(

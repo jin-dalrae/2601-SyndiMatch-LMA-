@@ -20,7 +20,7 @@ def get_database() -> Database:
     global _client, _db
     
     if _db is None:
-        _client = MongoClient(MONGODB_URI)
+        _client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=5000)
         _db = _client[DATABASE_NAME]
         logger.info(f"Connected to MongoDB: {DATABASE_NAME}")
     
@@ -72,3 +72,14 @@ def close_connection():
         _client = None
         _db = None
         logger.info("MongoDB connection closed")
+
+
+def ping_database() -> bool:
+    """Ping MongoDB to verify connectivity."""
+    try:
+        db = get_database()
+        db.command({"ping": 1})
+        return True
+    except Exception as exc:
+        logger.error(f"MongoDB ping failed: {exc}")
+        return False

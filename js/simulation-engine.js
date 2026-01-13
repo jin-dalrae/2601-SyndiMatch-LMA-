@@ -179,14 +179,20 @@ const SimulationEngine = {
      */
     async triggerNewSyndication() {
         try {
-            const response = await fetch('http://localhost:8000/api/syndications/new', {
+            const agentEndpoint = (window.API && API.agentUrl)
+                ? `${API.agentUrl}/syndication/create`
+                : 'http://localhost:8000/api/syndication/create';
+            const response = await fetch(agentEndpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    borrower: this.getRandomBorrower(),
-                    amount: Utils.randomBetween(100, 500),
-                    rating: this.getRandomRating(),
-                    spread: Utils.randomBetween(350, 550)
+                    originator_id: 'OA-001',
+                    loan_params: {
+                        borrower_name: this.getRandomBorrower(),
+                        amount: Utils.randomBetween(100, 500),
+                        rating: this.getRandomRating(),
+                        spread: Utils.randomBetween(350, 550)
+                    }
                 })
             });
             if (response.ok) {
