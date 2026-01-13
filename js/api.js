@@ -137,7 +137,10 @@ const API = {
         if (!this.serverClient) this.init();
 
         try {
-            const response = await fetch(`${this.baseUrl}/health`);
+            let response = await fetch(`${this.baseUrl}/ready`);
+            if (!response.ok) {
+                response = await fetch(`${this.baseUrl}/health`);
+            }
             if (response.ok) {
                 this.useMockData = false;
                 console.log('✅ Connected to API backend');

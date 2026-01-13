@@ -119,6 +119,7 @@ Use the “Demo” toggle in the header to force mock data when the backend isn�
 ## API highlights
 
 - `GET /api/health`
+- `GET /api/ready`
 - `GET /api/syndications`
 - `POST /api/syndications` (originator-only)
 - `POST /api/syndications/run` (calls agents service)
