@@ -31,22 +31,11 @@ DATABASE_NAME = os.getenv("DATABASE_NAME", "syndimatch" if IS_PRODUCTION else "s
 
 # ============== Anthropic (Claude) ==============
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-<<<<<<< HEAD
 AGENT_MODEL = os.getenv("AGENT_MODEL", "claude-sonnet-4-20250514")
+SIMULATION_MODE = not (ANTHROPIC_API_KEY and ANTHROPIC_API_KEY.startswith("sk-"))
 
 if not ANTHROPIC_API_KEY and IS_PRODUCTION:
     logger.warning("ANTHROPIC_API_KEY not set - AI features will be disabled")
-=======
-SIMULATION_MODE = not (ANTHROPIC_API_KEY and ANTHROPIC_API_KEY.startswith("sk-"))
-AGENT_MODEL = "claude-sonnet-4-20250514"
-
-# Coinbase x402 / CDP
-COINBASE_API_KEY = os.getenv("COINBASE_API_KEY", "")
-COINBASE_API_SECRET = os.getenv("COINBASE_API_SECRET", "")
-CDP_API_KEY_NAME = os.getenv("CDP_API_KEY_NAME", "")
-CDP_API_KEY_PRIVATE_KEY = os.getenv("CDP_API_KEY_PRIVATE_KEY", "").replace('\\n', '\n')
-CDP_NETWORK = os.getenv("CDP_NETWORK", "base-sepolia")
->>>>>>> syndication-change
 
 # ============== Google Gemini ==============
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
@@ -54,7 +43,7 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-exp")
 
 # ============== Coinbase CDP (x402) ==============
 CDP_API_KEY_NAME = os.getenv("CDP_API_KEY_NAME", "")
-CDP_API_KEY_PRIVATE_KEY = os.getenv("CDP_API_KEY_PRIVATE_KEY", "")
+CDP_API_KEY_PRIVATE_KEY = os.getenv("CDP_API_KEY_PRIVATE_KEY", "").replace("\\n", "\n")
 CDP_NETWORK = os.getenv("CDP_NETWORK", "base-sepolia" if IS_DEVELOPMENT else "base")
 
 # Legacy variable names (backward compatibility)

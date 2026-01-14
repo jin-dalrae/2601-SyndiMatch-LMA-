@@ -24,7 +24,6 @@ def get_database() -> Database:
     global _client, _db
     
     if _db is None:
-<<<<<<< HEAD
         try:
             _client = MongoClient(
                 MONGODB_URI,
@@ -52,11 +51,6 @@ def get_database() -> Database:
         except Exception as e:
             logger.error(f"❌ MongoDB error: {e}")
             raise
-=======
-        _client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=5000)
-        _db = _client[DATABASE_NAME]
-        logger.info(f"Connected to MongoDB: {DATABASE_NAME}")
->>>>>>> syndication-change
     
     return _db
 

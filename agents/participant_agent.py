@@ -47,16 +47,6 @@ class ParticipantAgent:
     """
     
     def __init__(self, agent_id: str):
-<<<<<<< HEAD
-        self.agent_id = agent_id
-        self.llm = ChatAnthropic(
-            model=AGENT_MODEL,
-            api_key=ANTHROPIC_API_KEY,
-            temperature=0.7
-        )
-        self.profile = self._load_profile()
-        self._cached_capacity = None
-=======
         self.agent_id = str(agent_id)
         
         # Initialize LLM only if API key is present
@@ -84,7 +74,7 @@ class ParticipantAgent:
                 },
                 "strategy": {"investment_style": "balanced"}
             }
->>>>>>> syndication-change
+        self._cached_capacity = None
     
     def _load_profile(self) -> Dict[str, Any]:
         """Load participant profile from MongoDB"""
@@ -105,29 +95,12 @@ class ParticipantAgent:
                 self.profile["risk_appetite"]["available_capacity"] = self._cached_capacity
     
     def _refresh_profile(self):
-<<<<<<< HEAD
-        """Full profile refresh (use sparingly)"""
-        self.profile = self._load_profile()
-=======
         """Refresh profile from database to get latest state"""
         try:
             self.profile = self._load_profile()
         except Exception as e:
             # Log warning instead of silently swallowing
             logger.warning(f"[{self.agent_id}] Profile refresh failed: {e}. Keeping existing.")
-
-    def evaluate_opportunity(self, state: SyndicationState) -> Optional[Dict[str, Any]]:
-        """
-        Evaluate opportunity and submit bid if applicable.
-        Used by the enhanced orchestrator for parallel execution.
-        """
-        decision = self.evaluate_loan(state)
-        
-        if decision and decision.decision == "bid":
-            return self.submit_bid(state, decision)
-        
-        return None
->>>>>>> syndication-change
     
     def evaluate_opportunity(self, state: SyndicationState) -> Optional[Dict[str, Any]]:
         """
@@ -175,24 +148,6 @@ Respond ONLY with valid JSON in this exact format:
     "risk_adjusted_return": <float percentage or null>
 }
 """)
-<<<<<<< HEAD
-        
-        try:
-            response = self.llm.invoke([system_message, HumanMessage(content=prompt)])
-            decision_data = json.loads(response.content)
-            
-            return BidDecision(
-                decision=decision_data["decision"],
-                amount=decision_data.get("amount", 0),
-                spread=decision_data.get("spread", state.get("current_spread", 0)),
-                reasoning=decision_data["reasoning"],
-                portfolio_fit_score=decision_data.get("portfolio_fit_score", 0.5),
-                risk_adjusted_return=decision_data.get("risk_adjusted_return")
-            )
-        except Exception as e:
-            logger.error(f"[{self.agent_id}] LLM evaluation failed: {e}")
-            return self._rule_based_evaluation(state)
-=======
                 prompt = self._build_evaluation_prompt(state)
                 response = self.llm.invoke([system_message, HumanMessage(content=prompt)])
                 decision_data = json.loads(response.content)
@@ -200,7 +155,7 @@ Respond ONLY with valid JSON in this exact format:
                 return BidDecision(
                     decision=decision_data["decision"],
                     amount=decision_data.get("amount", 0),
-                    spread=decision_data.get("spread", state["current_spread"]),
+                    spread=decision_data.get("spread", state.get("current_spread", 0)),
                     reasoning=decision_data["reasoning"],
                     portfolio_fit_score=decision_data.get("portfolio_fit_score", 0.5),
                     risk_adjusted_return=decision_data.get("risk_adjusted_return")
@@ -217,7 +172,6 @@ Respond ONLY with valid JSON in this exact format:
         
         # Fallback / Simulation Mode
         return self._rule_based_evaluation(state)
->>>>>>> syndication-change
     
     def _check_all_constraints(self, state: SyndicationState) -> List[str]:
         """Comprehensive constraint checking - returns list of violations"""
