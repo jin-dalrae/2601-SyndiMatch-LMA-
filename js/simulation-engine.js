@@ -148,12 +148,88 @@ const SimulationEngine = {
         this.state.isRunning = true;
         this.state.lastTickTime = Date.now();
 
+        // Connect to WebSocket for real-time events
+        if (window.WebSocketManager) {
+            WebSocketManager.connect();
+        }
+
         // Tick every 100ms real time
         this.state.tickInterval = setInterval(() => this.tick(), 100);
+
+        // Listen for day changes to potentially trigger new syndications
+        this.on('dayChange', (data) => this.onDayChange(data));
 
         this.emit('simulationStart', { date: this.state.currentDate });
         this.updateControls();
         console.log('▶️ Simulation started at', this.formatDate(this.state.currentDate));
+    },
+
+    /**
+     * Handle day change - potentially trigger new syndications
+     */
+    onDayChange(data) {
+        // Random chance to trigger a new syndication each day (20% chance)
+        if (Math.random() < 0.2) {
+            this.triggerNewSyndication();
+        }
+    },
+
+    /**
+     * Trigger a new syndication via the backend
+     */
+    async triggerNewSyndication() {
+        try {
+            const payload = {
+                borrower: this.getRandomBorrower(),
+                amount: Utils.randomBetween(100, 500),
+                rating: this.getRandomRating(),
+                spread: Utils.randomBetween(350, 550),
+                industry: this.getRandomIndustry(),
+                originator_agent_id: 'OA-001',
+                role: 'originator:OA-001'
+            };
+            const data = await API.post('server', '/syndications', payload);
+            if (data) {
+                console.log('🚀 New syndication triggered');
+            }
+        } catch (e) {
+            // Fallback: create locally if backend unavailable
+            const syndId = `SYND-${new Date().getFullYear()}-${String(Date.now()).slice(-3)}`;
+            SyndiData.addSyndication({
+                id: syndId,
+                borrower: this.getRandomBorrower(),
+                amount: Utils.randomBetween(100, 500),
+                rating: this.getRandomRating(),
+                spread: Utils.randomBetween(350, 550),
+                status: 'open',
+                subscription: 0,
+                participantCount: 0,
+                originator: ['JPMorgan', 'BofA', 'Citi', 'Goldman'][Utils.randomBetween(0, 3)]
+            });
+            if (window.PipelineComponent) PipelineComponent.render();
+        }
+    },
+
+    getRandomBorrower() {
+        const borrowers = [
+            'Apex Technologies', 'Horizon Medical', 'Summit Logistics', 'Vertex Energy',
+            'Pinnacle Software', 'Atlas Manufacturing', 'Meridian Foods', 'Quantum Systems',
+            'Nova Pharma', 'Titan Industries', 'Stellar Corp', 'Frontier Holdings'
+        ];
+        return borrowers[Utils.randomBetween(0, borrowers.length - 1)];
+    },
+
+    getRandomIndustry() {
+        const industries = [
+            'Technology', 'Healthcare', 'Energy', 'Real Estate', 'Industrial',
+            'Financial Services', 'Telecom', 'Consumer', 'Infrastructure'
+        ];
+        return industries[Utils.randomBetween(0, industries.length - 1)];
+    },
+
+    getRandomRating() {
+        const ratings = ['BBB+', 'BBB', 'BBB-', 'BB+', 'BB', 'BB-', 'B+'];
+        return ratings[Utils.randomBetween(0, ratings.length - 1)];
     },
 
     /**
@@ -410,10 +486,9 @@ const SimulationEngine = {
 
         container.innerHTML = `
             <div class="sim-time-display">
+                <span class="sim-logo">SyndiMatch</span>
+                <span class="sim-divider">|</span>
                 <div class="sim-date" id="sim-date">${this.formatDate(this.state.currentDate)}</div>
-                <div class="sim-progress">
-                    <div class="sim-progress-bar" id="sim-progress-bar"></div>
-                </div>
             </div>
             <div class="sim-market-display" id="sim-market-display">
                 <span class="market-icon">${marketIcon}</span>
@@ -422,8 +497,8 @@ const SimulationEngine = {
             </div>
             <div class="sim-speed-control">
                 <label>Speed:</label>
-                <input type="range" id="sim-speed-slider" min="1" max="50" value="${this.state.speedMultiplier}" step="1">
-                <span class="sim-speed-value" id="sim-speed-value">${(this.state.speedMultiplier / 2.4).toFixed(1)} d/s</span>
+                <input type="range" id="sim-speed-slider" min="5" max="24" value="${Math.max(5, Math.min(24, this.state.speedMultiplier))}" step="1">
+                <span class="sim-speed-value" id="sim-speed-value">${Math.round(this.state.speedMultiplier / 2.4)} Days/s</span>
             </div>
             <div class="sim-buttons">
                 <button class="btn-sim btn-start" id="btn-sim-start" ${this.state.isRunning ? 'disabled' : ''}>▶ Start</button>
@@ -501,10 +576,9 @@ const SimulationEngine = {
     updateSpeedDisplay() {
         const speedValue = document.getElementById('sim-speed-value');
         if (speedValue) {
-            // Calculate days per second: (Speed * 10 ticks/sec * 1 hour/tick) / 24 hours/day
-            // Simplified: Speed / 2.4
-            const daysPerSec = (this.state.speedMultiplier / 2.4).toFixed(1);
-            speedValue.textContent = `${daysPerSec} d/s`;
+            // Calculate days per second: Speed / 2.4, rounded to integer (range 2-10)
+            const daysPerSec = Math.round(this.state.speedMultiplier / 2.4);
+            speedValue.textContent = `${daysPerSec} Days/s`;
         }
     },
 
@@ -555,8 +629,18 @@ simStyles.textContent = `
         display: flex;
         flex-direction: row;
         align-items: center;
-        gap: 1rem;
+        gap: 0.75rem;
         min-width: auto;
+    }
+    .sim-logo {
+        font-size: 1.125rem;
+        font-weight: 800;
+        color: var(--primary);
+        letter-spacing: -0.025em;
+    }
+    .sim-divider {
+        color: var(--border-color);
+        font-weight: 300;
     }
     .sim-date {
         font-size: 0.875rem;
@@ -565,11 +649,6 @@ simStyles.textContent = `
         font-family: monospace;
         line-height: 1;
         white-space: nowrap;
-        min-width: 160px;
-    }
-    .sim-progress,
-    .sim-progress-bar {
-        display: none; 
     }
     .sim-market-display {
         display: flex;

@@ -279,7 +279,9 @@ const agentSeedData = {
             tier: 'minor',
             institution: { name: 'PNC Bank', type: 'US Regional Bank', headquarters: 'Pittsburgh, PA', aum: 560000000000 },
             risk_appetite: { total_capital_available: 800000000, current_deployed: 580000000, available_capacity: 220000000, max_single_ticket: 100000000, min_ticket: 15000000, credit_rating_range: { min: 'BBB-', max: 'A+', sweet_spot: 'BBB to A-' }, target_all_in_yield: 5.8, min_acceptable_yield: 4.5 },
+            sector_preferences: { preferred: ['Industrial', 'TMT'], neutral: ['Healthcare'], avoid: ['Retail'] },
             strategy: { investment_style: 'moderate', bidding_behavior: 'relationship_price_conscious', spread_sensitivity: 'moderate' },
+            constraints: { esg_requirements: false, sector_concentration_limit: 0.20, single_borrower_limit: 0.04 },
             decision_making: { speed: 'moderate', autonomy_level: 'moderate', typical_response_time_hours: 12 },
             performance_history: { bids_submitted_ytd: 89, allocations_won: 40, win_rate: 0.45, average_spread_paid: 365 },
             status: 'active'
@@ -289,7 +291,9 @@ const agentSeedData = {
             tier: 'minor',
             institution: { name: 'Ares Management', type: 'Private Credit Fund', headquarters: 'Los Angeles, CA', aum: 420000000000 },
             risk_appetite: { total_capital_available: 1100000000, current_deployed: 780000000, available_capacity: 320000000, max_single_ticket: 200000000, min_ticket: 20000000, credit_rating_range: { min: 'B', max: 'BB+', sweet_spot: 'B+ to BB' }, target_all_in_yield: 11.0, min_acceptable_yield: 9.0 },
+            sector_preferences: { preferred: ['Software', 'Business Services'], neutral: ['Industrial'], avoid: ['Real Estate'] },
             strategy: { investment_style: 'aggressive', bidding_behavior: 'fast_decisive', spread_sensitivity: 'low' },
+            constraints: { esg_requirements: false, sector_concentration_limit: 0.25, single_borrower_limit: 0.05 },
             decision_making: { speed: 'fast', autonomy_level: 'high', typical_response_time_hours: 4 },
             performance_history: { bids_submitted_ytd: 198, allocations_won: 81, win_rate: 0.41, average_spread_paid: 475 },
             status: 'active'
@@ -299,8 +303,9 @@ const agentSeedData = {
             tier: 'minor',
             institution: { name: 'MetLife Investment Management', type: 'Insurance Company', headquarters: 'New York, NY', aum: 680000000000 },
             risk_appetite: { total_capital_available: 1500000000, current_deployed: 1200000000, available_capacity: 300000000, max_single_ticket: 250000000, min_ticket: 40000000, credit_rating_range: { min: 'A-', max: 'AAA', sweet_spot: 'A to AA' }, target_all_in_yield: 4.8, min_acceptable_yield: 3.8 },
+            sector_preferences: { preferred: ['Utilities', 'Infrastructure'], neutral: ['Financial Services'], avoid: ['TMT'] },
             strategy: { investment_style: 'conservative', bidding_behavior: 'methodical_selective', spread_sensitivity: 'high' },
-            constraints: { esg_requirements: true, min_esg_score: 72 },
+            constraints: { esg_requirements: true, min_esg_score: 72, sector_concentration_limit: 0.15, single_borrower_limit: 0.03 },
             decision_making: { speed: 'slow', autonomy_level: 'moderate', typical_response_time_hours: 36 },
             performance_history: { bids_submitted_ytd: 156, allocations_won: 81, win_rate: 0.52, average_spread_paid: 295 },
             status: 'active'
@@ -310,7 +315,9 @@ const agentSeedData = {
             tier: 'minor',
             institution: { name: 'Golub Capital', type: 'Business Development Company (BDC)', headquarters: 'New York, NY', aum: 65000000000 },
             risk_appetite: { total_capital_available: 700000000, current_deployed: 520000000, available_capacity: 180000000, max_single_ticket: 80000000, min_ticket: 10000000, credit_rating_range: { min: 'B', max: 'BB+', sweet_spot: 'B+ to BB' }, target_all_in_yield: 10.0, min_acceptable_yield: 8.5 },
+            sector_preferences: { preferred: ['Healthcare', 'Business Services'], neutral: ['Technology'], avoid: ['Retail'] },
             strategy: { investment_style: 'moderate', bidding_behavior: 'competitive_fast', spread_sensitivity: 'low' },
+            constraints: { esg_requirements: false, sector_concentration_limit: 0.15, single_borrower_limit: 0.03 },
             decision_making: { speed: 'fast', autonomy_level: 'high', typical_response_time_hours: 6 },
             performance_history: { bids_submitted_ytd: 245, allocations_won: 88, win_rate: 0.36, average_spread_paid: 435 },
             status: 'active'
@@ -320,7 +327,9 @@ const agentSeedData = {
             tier: 'minor',
             institution: { name: 'Davidson Kempner', type: 'Hedge Fund - Distressed', headquarters: 'New York, NY', aum: 38000000000 },
             risk_appetite: { total_capital_available: 600000000, current_deployed: 380000000, available_capacity: 220000000, max_single_ticket: 100000000, min_ticket: 15000000, credit_rating_range: { min: 'CCC', max: 'BB-', sweet_spot: 'CCC+ to B' }, target_all_in_yield: 16.0, min_acceptable_yield: 12.0 },
+            sector_preferences: { preferred: ['Retail', 'Media', 'Consumer'], neutral: ['Energy'], avoid: ['SaaS'] },
             strategy: { investment_style: 'very_aggressive', bidding_behavior: 'opportunistic', spread_sensitivity: 'very_low' },
+            constraints: { esg_requirements: false, sector_concentration_limit: 0.30, single_borrower_limit: 0.10 },
             decision_making: { speed: 'very_fast', autonomy_level: 'very_high', typical_response_time_hours: 2 },
             performance_history: { bids_submitted_ytd: 42, allocations_won: 18, win_rate: 0.43, average_spread_paid: 680 },
             status: 'active'
@@ -441,7 +450,7 @@ const agentSeedData = {
             },
             allocations: [
                 {
-                    _id: 'ALLOC-001',
+                    _id: 'ALLOC-SYND-2025-001-PA-001',
                     participant_agent_id: 'PA-001',
                     institution_name: 'Apollo Global Management',
                     institution_type: 'Private Credit Fund',
@@ -472,7 +481,7 @@ const agentSeedData = {
                     settlement_progress: { allocation_confirmed: true, commitment_letter_signed: true, fees_paid: true, legal_docs_signed: true, compliance_cleared: true, funded: false }
                 },
                 {
-                    _id: 'ALLOC-002',
+                    _id: 'ALLOC-SYND-2025-001-PA-003',
                     participant_agent_id: 'PA-003',
                     institution_name: 'BNP Paribas',
                     institution_type: 'European Bank',
@@ -490,7 +499,7 @@ const agentSeedData = {
                     settlement_progress: { allocation_confirmed: true, commitment_letter_signed: true, fees_paid: true, legal_docs_signed: false, compliance_cleared: false, funded: false }
                 },
                 {
-                    _id: 'ALLOC-003',
+                    _id: 'ALLOC-SYND-2025-001-PA-005',
                     participant_agent_id: 'PA-005',
                     institution_name: 'Palmer Square Capital',
                     institution_type: 'CLO Manager',
@@ -506,7 +515,7 @@ const agentSeedData = {
                     settlement_progress: { allocation_confirmed: true, commitment_letter_signed: true, fees_paid: false, legal_docs_signed: false, compliance_cleared: false, funded: false }
                 },
                 {
-                    _id: 'ALLOC-004',
+                    _id: 'ALLOC-SYND-2025-001-PA-101',
                     participant_agent_id: 'PA-101',
                     institution_name: 'PNC Bank',
                     institution_type: 'US Regional Bank',

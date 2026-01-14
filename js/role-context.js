@@ -34,7 +34,7 @@ const RoleContext = {
     /**
      * Set the current viewing role
      */
-    setRole(roleValue, refresh = true) {
+    async setRole(roleValue, refresh = true) {
         localStorage.setItem('syndimatch_role', roleValue);
 
         if (roleValue === 'platform') {
@@ -49,7 +49,7 @@ const RoleContext = {
             this.currentAgentType = type;
 
             // Load agent profile
-            this.loadAgentProfile(agentId, type);
+            await this.loadAgentProfile(agentId, type);
         }
 
         // Update UI to reflect role
@@ -69,9 +69,15 @@ const RoleContext = {
     async loadAgentProfile(agentId, type) {
         try {
             if (type === 'participant') {
-                // Try API first, fall back to mock
-                const participants = SyndiData?.participants || [];
-                this.agentProfile = participants.find(p => p.id === agentId || p.name?.includes(agentId.split('-')[1]));
+                // Try API first
+                const agentsData = await API.getAgents();
+                const participants = agentsData?.participant || SyndiData?.participants || [];
+
+                // Exact ID match first, then fallback to name prefix match
+                this.agentProfile = participants.find(p =>
+                    (p.agent_id === agentId || p.id === agentId) ||
+                    (p.name?.split(' ')[0] === agentId.split('-')[1])
+                );
             } else if (type === 'originator') {
                 // Create originator profile from data
                 this.agentProfile = {
@@ -205,12 +211,12 @@ const RoleContext = {
      */
     updateMetricLabels(labels) {
         const cards = document.querySelectorAll('.metric-card');
-        const keys = Object.keys(labels);
 
-        cards.forEach((card, idx) => {
-            const label = card.querySelector('.metric-label');
-            if (label && keys[idx]) {
-                label.textContent = labels[keys[idx]];
+        cards.forEach((card) => {
+            const metricId = card.dataset.metricId;
+            const labelEl = card.querySelector('.metric-label');
+            if (labelEl && metricId && labels[metricId]) {
+                labelEl.textContent = labels[metricId];
             }
         });
     },
@@ -219,16 +225,19 @@ const RoleContext = {
      * Refresh dashboard with filtered data
      */
     refreshDashboard() {
-        // Trigger re-render of components
-        if (typeof PipelineComponent !== 'undefined') {
-            PipelineComponent.render();
-        }
-        if (typeof MetricsComponent !== 'undefined') {
-            MetricsComponent.update();
-        }
-        if (typeof AgentsComponent !== 'undefined') {
-            AgentsComponent.render();
-        }
+        // Dispatch global event for components to listen to
+        window.dispatchEvent(new CustomEvent('roleChanged', {
+            detail: {
+                role: this.currentRole,
+                agentId: this.currentAgentId,
+                profile: this.agentProfile
+            }
+        }));
+
+        // Fallback for direct update if event listeners not yet widespread
+        if (typeof PipelineComponent !== 'undefined') PipelineComponent.render();
+        if (typeof MetricsComponent !== 'undefined') MetricsComponent.update();
+        if (typeof AgentsComponent !== 'undefined') AgentsComponent.render();
     },
 
     /**
