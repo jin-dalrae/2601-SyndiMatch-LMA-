@@ -40,82 +40,6 @@ class SettlementAgent:
     
     def _load_or_create_config(self) -> Dict[str, Any]:
         """Load existing config or create new settlement agent config"""
-<<<<<<< HEAD
-        existing = db.settlement_agents().find_one({"_id": self.agent_id})
-        if existing:
-            return existing
-        
-        synd = db.syndications().find_one({"_id": self.syndication_id})
-        if not synd:
-            raise ValueError(f"Syndication {self.syndication_id} not found")
-        
-        neg = db.negotiation_agents().find_one({"syndication_id": self.syndication_id})
-        
-        loan_type = synd.get("loan_details", {}).get("loan_type", "Corporate")
-        if "Bridge" in loan_type or "Revolver" in loan_type:
-            settlement_days = 3
-        elif "Project" in loan_type:
-            settlement_days = 7
-        else:
-            settlement_days = 5
-        
-        now = datetime.utcnow()
-        funding_date = now + timedelta(days=settlement_days)
-        
-        rating = synd.get("loan_details", {}).get("credit_rating", "BBB")
-        if rating.startswith("A"):
-            arrangement_fee = 1.5
-        elif rating.startswith("BBB"):
-            arrangement_fee = 2.0
-        else:
-            arrangement_fee = 2.5
-        
-        config = {
-            "_id": self.agent_id,
-            "agent_type": "settlement",
-            "syndication_id": self.syndication_id,
-            "negotiation_agent_id": neg["_id"] if neg else None,
-            "originator_agent_id": synd["originator_agent_id"],
-            "originator": synd["originator"],
-            "created_at": now,
-            "status": "active",
-            "activated_at": now,
-            "settlement_config": {
-                "settlement_period_days": settlement_days,
-                "funding_date": funding_date,
-                "payment_method": "coinbase_x402",
-                "escrow_required": True,
-                "legal_doc_platform": "docusign"
-            },
-            "payment_schedule": {
-                "commitment_fee_percentage": synd.get("pricing", {}).get("commitment_fee", 0.5),
-                "commitment_fee_due": "t+1_business_day",
-                "arrangement_fee_percentage": arrangement_fee,
-                "arrangement_fee_due": "funding_date",
-                "upfront_fee_percentage": synd.get("pricing", {}).get("upfront_fee", 1.0),
-                "upfront_fee_due": "funding_date",
-                "break_fee_percentage": 2.0,
-                "payment_currency": synd.get("loan_details", {}).get("currency", "USD")
-            },
-            "x402_payment_config": {
-                "originator_wallet": f"originator-{synd['originator_agent_id']}-wallet",
-                "escrow_wallet": f"escrow-{self.syndication_id}-wallet",
-                "enable_smart_contract": True,
-                "penalty_for_late_payment": 0.5
-            },
-            "workflow_stages": self.WORKFLOW_STAGES,
-            "participant_statuses": {},
-            "performance_tracking": {
-                "current_stage": 0,
-                "stages_completed": 0,
-                "payments_received": 0,
-                "payments_pending": 0,
-                "documents_signed": 0,
-                "documents_pending": 0,
-                "compliance_checks_passed": 0,
-                "estimated_completion_date": funding_date,
-                "actual_completion_date": None
-=======
         try:
             existing = db.settlement_agents().find_one({"_id": self.agent_id})
             if existing:
@@ -171,6 +95,8 @@ class SettlementAgent:
                     "commitment_fee_due": "t+1_business_day",
                     "arrangement_fee_percentage": arrangement_fee,
                     "arrangement_fee_due": "funding_date",
+                    "upfront_fee_percentage": synd.get("pricing", {}).get("upfront_fee", 1.0),
+                    "upfront_fee_due": "funding_date",
                     "break_fee_percentage": 2.0,
                     "payment_currency": synd.get("loan_details", {}).get("currency", "USD")
                 },
@@ -181,6 +107,7 @@ class SettlementAgent:
                     "penalty_for_late_payment": 0.5
                 },
                 "workflow_stages": self.WORKFLOW_STAGES,
+                "participant_statuses": {},
                 "performance_tracking": {
                     "current_stage": 0,
                     "stages_completed": 0,
@@ -192,7 +119,6 @@ class SettlementAgent:
                     "estimated_completion_date": funding_date,
                     "actual_completion_date": None
                 }
->>>>>>> syndication-change
             }
             
             db.settlement_agents().insert_one(config)
@@ -222,11 +148,13 @@ class SettlementAgent:
         # In this simplified agent, signatures are collected during legal doc stage
         # We perform a verification here
         logger.info(f"[{self.agent_id}] Verifying signatures collected")
+
+        # Check if actually signed (from previous stage logic)
+        signed_count = db.settlement_agents().find_one({"_id": self.agent_id}).get("performance_tracking", {}).get("documents_signed", 0)
+        state["documents_signed_count"] = signed_count
         
-<<<<<<< HEAD
-        db.settlement_agents().insert_one(config)
-        return config
-    
+        return state
+
     def initialize_participant_tracking(self, state: SyndicationState) -> None:
         """Initialize per-participant status tracking"""
         allocation_doc = db.allocations().find_one({"syndication_id": self.syndication_id})
@@ -256,14 +184,6 @@ class SettlementAgent:
             {"_id": self.agent_id},
             {"$set": {"participant_statuses": self.participant_status}}
         )
-    
-=======
-        # Check if actually signed (from previous stage logic)
-        signed_count = db.settlement_agents().find_one({"_id": self.agent_id}).get("performance_tracking", {}).get("documents_signed", 0)
-        state["documents_signed_count"] = signed_count
-        
-        return state
-
     def rollback_settlement(self, state: SyndicationState) -> SyndicationState:
         """Rollback settlement on failure"""
         logger.warning(f"[{self.agent_id}] Rolling back settlement")
@@ -286,7 +206,6 @@ class SettlementAgent:
         
         self._update_syndication(state)
         return state
->>>>>>> syndication-change
     def run_settlement(self, state: SyndicationState) -> SyndicationState:
         """Run the full settlement workflow with recovery support"""
         logger.info(f"[{self.agent_id}] Starting settlement for {self.syndication_id}")
@@ -520,12 +439,9 @@ class SettlementAgent:
             tasks_completed=tasks_completed,
             tasks_pending=tasks_pending,
             issues=issues,
-<<<<<<< HEAD
             participants_ready=len([p for p in self.participant_status.values() if p.get("ready_to_fund")]),
-            participants_pending=len([p for p in self.participant_status.values() if not p.get("ready_to_fund")])
-=======
+            participants_pending=len([p for p in self.participant_status.values() if not p.get("ready_to_fund")]),
             reasoning=reasoning_map.get(stage_name, "")
->>>>>>> syndication-change
         )
     
     def _stage_allocation_confirmation(self, state: SyndicationState) -> Tuple[List, List, List]:
@@ -579,7 +495,9 @@ class SettlementAgent:
         pending = []
         issues = []
         
-<<<<<<< HEAD
+        from pymongo import ReplaceOne
+        bulk_payments = []
+        
         allocation_doc = db.allocations().find_one({"syndication_id": self.syndication_id})
         if not allocation_doc:
             issues.append("No allocations found for payment creation")
@@ -587,6 +505,7 @@ class SettlementAgent:
         
         now = datetime.utcnow()
         funding_date = self.config["settlement_config"]["funding_date"]
+        originator_id = state.get("originator_agent_id") or self.config.get("originator_agent_id", "system")
         
         payment_types = [
             {
@@ -608,25 +527,11 @@ class SettlementAgent:
         
         for alloc in allocation_doc.get("allocations", []):
             for payment_config in payment_types:
-                payment_id = f"PAY-{self.syndication_id.split('-')[-1]}-{alloc['participant_agent_id'].split('-')[-1]}-{payment_config['type'][:4].upper()}"
-                
-                # Get fee amount
                 fee_amount = alloc.get("fees", {}).get(payment_config["fee_key"], 0)
                 if fee_amount == 0:
-                    continue  # Skip if no fee
-=======
-        from pymongo import ReplaceOne
-        bulk_payments = []
-        
-        # Calculate all fees
-        allocation_doc = db.allocations().find_one({"syndication_id": self.syndication_id})
-        if allocation_doc:
-            originator_id = state.get("originator_agent_id") or self.config.get("originator_agent_id", "system")
-            
-            for alloc in allocation_doc.get("allocations", []):
-                # Use safe ID generation to prevent collisions
-                payment_id = f"PAYHIST-{self.syndication_id}-{alloc['_id']}"
->>>>>>> syndication-change
+                    continue
+                
+                payment_id = f"PAYHIST-{self.syndication_id}-{alloc['_id']}-{payment_config['type']}"
                 
                 payment = {
                     "_id": payment_id,
@@ -656,14 +561,10 @@ class SettlementAgent:
                 bulk_payments.append(
                     ReplaceOne({"_id": payment_id}, payment, upsert=True)
                 )
-<<<<<<< HEAD
                 pending.append(f"{payment_config['type']}_{alloc['participant_agent_id']}")
-=======
-                pending.append(f"commitment_fee_{alloc['participant_agent_id']}")
-            
-            if bulk_payments:
-                db.payment_history().bulk_write(bulk_payments)
->>>>>>> syndication-change
+        
+        if bulk_payments:
+            db.payment_history().bulk_write(bulk_payments)
         
         completed.append("calculate_all_fees")
         completed.append("create_payment_records")
@@ -683,25 +584,12 @@ class SettlementAgent:
         pending = []
         issues = []
         
-<<<<<<< HEAD
-        allocation_doc = db.allocations().find_one({"syndication_id": self.syndication_id})
-        if allocation_doc:
-            now = datetime.utcnow()
-            for alloc in allocation_doc.get("allocations", []):
-                # Update commitment letter as signed
-                db.allocations().update_one(
-                    {"_id": allocation_doc["_id"], "allocations._id": alloc["_id"]},
-                    {
-                        "$set": {
-                            "allocations.$.commitment_letter_signed": True,
-                            "allocations.$.commitment_letter_signed_at": now,
-                            "allocations.$.commitment_status": "confirmed"
-=======
         # Simulated document signing (In production, this would be an async hook)
         allocation_doc = db.allocations().find_one({"syndication_id": self.syndication_id})
         if allocation_doc:
             from pymongo import UpdateOne
             bulk_docs = []
+            now = datetime.utcnow()
             
             for alloc in allocation_doc.get("allocations", []):
                 bulk_docs.append(
@@ -710,9 +598,9 @@ class SettlementAgent:
                         {
                             "$set": {
                                 "allocations.$.commitment_letter_signed": True,
+                                "allocations.$.commitment_letter_signed_at": now,
                                 "allocations.$.commitment_status": "confirmed"
                             }
->>>>>>> syndication-change
                         }
                     )
                 )

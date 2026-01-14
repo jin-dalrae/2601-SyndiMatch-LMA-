@@ -8,15 +8,11 @@ from typing import Dict, Any, List, Optional, Tuple
 import logging
 import hashlib
 import secrets
-<<<<<<< HEAD
-from concurrent.futures import ThreadPoolExecutor
-=======
 import uuid
->>>>>>> syndication-change
 
 from .state import SyndicationState, PaymentDecision, PaymentStatus
 from .config import LATE_PAYMENT_PENALTY_BPS, GRACE_PERIOD_HOURS
-from .x402_client import X402Client, PaymentResult
+from .x402_client import X402Client, PaymentResult, PaymentStatus as X402PaymentStatus
 from . import db
 
 logger = logging.getLogger(__name__)
@@ -364,36 +360,11 @@ class PaymentAgent:
         payer_wallet = payment.get("payer", {}).get("wallet_address", f"participant-{payment.get('payer', {}).get('participant_agent_id', 'unknown')}-wallet")
         recipient_wallet = payment.get("recipient", {}).get("wallet_address", self.config["payment_config"]["originator_wallet"])
         
-<<<<<<< HEAD
-        payment_result = x402.create_payment(
-            from_address=payer_wallet,
-            to_address=recipient_wallet,
-            amount=amount,
-            currency="USDC",
-            network="base",
-            metadata={
-                "syndication_id": self.syndication_id,
-                "payment_type": payment["payment_type"],
-                "payment_id": payment_id
-            }
-        )
-        
-        if payment_result.status != PaymentStatus.CONFIRMED:
-            return PaymentDecision(
-                payment_id=payment_id,
-                status="failed",
-                amount_processed=0,
-                amount_due=amount,
-                reasoning=f"Payment not confirmed: {payment_result.error or 'Unknown error'}"
-            )
-        
-        tx_hash = payment_result.transaction_hash
-=======
         # Execute x402 payment via client
         try:
             payment_result = x402.create_payment(
-                from_address=payment["payer"]["wallet_address"],
-                to_address=payment["recipient"]["wallet_address"],
+                from_address=payer_wallet,
+                to_address=recipient_wallet,
                 amount=amount,
                 currency="USDC",
                 network="base",
@@ -403,14 +374,8 @@ class PaymentAgent:
                     "payment_id": payment_id
                 }
             )
-            tx_hash = payment_result.transaction_hash
-            payment_status = "completed"
         except Exception as e:
             logger.error(f"[{self.agent_id}] Payment {payment_id} FAILED: {e}")
-            tx_hash = None
-            payment_status = "failed"
-            
-            # Record failure
             db.payment_history().update_one(
                 {"_id": payment_id},
                 {
@@ -423,7 +388,6 @@ class PaymentAgent:
                     "$inc": {"retry_count": 1}
                 }
             )
-            
             return PaymentDecision(
                 payment_id=payment_id,
                 status="failed",
@@ -432,7 +396,17 @@ class PaymentAgent:
                 penalties_applied=0,
                 reasoning=f"Payment failed: {e}"
             )
->>>>>>> syndication-change
+        
+        if payment_result.status != X402PaymentStatus.CONFIRMED:
+            return PaymentDecision(
+                payment_id=payment_id,
+                status="failed",
+                amount_processed=0,
+                amount_due=amount,
+                reasoning=f"Payment not confirmed: {payment_result.error or 'Unknown error'}"
+            )
+        
+        tx_hash = payment_result.transaction_hash
         
         # Update payment record (SUCCESS path)
         db.payment_history().update_one(
@@ -457,9 +431,6 @@ class PaymentAgent:
                         "amount_received": amount,
                         "transaction_fee": round(amount * 0.00001, 2)
                     },
-<<<<<<< HEAD
-                    "penalties": {"late_fee": round(penalty, 2), "total_penalty": round(penalty, 2)},
-=======
                     "penalties": {
                         "late_fee": round(penalty, 2),
                         "other_adjustments": 0,
@@ -472,20 +443,14 @@ class PaymentAgent:
                         "reconciled_by": self.agent_id,
                         "discrepancies": []
                     },
->>>>>>> syndication-change
                     "updated_at": now
                 }
             }
         )
         
-<<<<<<< HEAD
-        # Update participant and originator
-        self._update_participant_after_payment(payment.get("payer", {}).get("participant_agent_id"), payment["payment_type"], amount, not is_late)
-        self._update_originator_after_payment(payment.get("recipient", {}).get("agent_id"), payment["payment_type"], amount)
-=======
         # Update participant state (only on success, with correct on-time tracking)
         self._update_participant_after_payment(
-            payment["payer"]["participant_agent_id"],
+            payment.get("payer", {}).get("participant_agent_id"),
             payment["payment_type"],
             amount,
             is_on_time=not is_late  # Pass actual on-time status
@@ -493,11 +458,10 @@ class PaymentAgent:
         
         # Update originator state
         self._update_originator_after_payment(
-            payment["recipient"]["agent_id"],
+            payment.get("recipient", {}).get("agent_id"),
             payment["payment_type"],
             amount
         )
->>>>>>> syndication-change
         
         return PaymentDecision(
             payment_id=payment_id,
@@ -580,7 +544,6 @@ class PaymentAgent:
         payment_id = payment["_id"]
         participant_id = payment.get("payer", {}).get("participant_agent_id")
         
-<<<<<<< HEAD
         logger.warning(f"[{self.agent_id}] Handling payment failure for {payment_id}")
         
         # Mark payment as failed
@@ -805,6 +768,9 @@ class PaymentAgent:
         if is_on_time:
             update["$inc"]["performance_history.payments_on_time"] = 1
             update["$inc"]["payment_stats.on_time_payments"] = 1
+        else:
+            update["$inc"]["performance_history.payments_late"] = 1
+            update["$inc"]["payment_stats.late_payments"] = 1
         
         db.participant_agents().update_one({"_id": participant_id}, update)
         
@@ -815,70 +781,17 @@ class PaymentAgent:
             total = stats.get("total_payments", 1)
             on_time = stats.get("on_time_payments", total)
             reliability = round((on_time / total) * 100, 1) if total > 0 else 100
-            
-            db.participant_agents().update_one(
-                {"_id": participant_id},
-                {"$set": {"payment_stats.reliability_score": reliability}}
-            )
-=======
-        logger.info(f"[{self.agent_id}] x402 Transaction: {tx_hash[:20]}...")
-        return tx_hash
-    
-    def _update_participant_after_payment(self, participant_id: str, 
-                                          payment_type: str, amount: int,
-                                          is_on_time: bool = True) -> None:
-        """
-        Update participant agent state after making a payment.
-        
-        Args:
-            participant_id: Participant agent ID
-            payment_type: Type of payment
-            amount: Amount paid
-            is_on_time: Whether payment was made on time (default True for backward compat)
-        """
-        now = datetime.utcnow()
-        
-        # Build increment based on on-time status
-        inc_updates = {
-            f"fees_paid_ytd.{payment_type}": amount,
-            "performance_history.payments_made": 1
-        }
-        
-        # Only increment on-time counter if actually on-time
-        if is_on_time:
-            inc_updates["performance_history.payments_on_time"] = 1
-        else:
-            inc_updates["performance_history.payments_late"] = 1
-        
-        db.participant_agents().update_one(
-            {"_id": participant_id},
-            {
-                "$inc": inc_updates,
-                "$set": {
-                    "last_payment_at": now,
-                    "updated_at": now
-                }
-            }
-        )
-        
-        # Recalculate on-time rate atomically (fetch after increment)
-        participant = db.participant_agents().find_one({"_id": participant_id})
-        if participant:
-            perf = participant.get("performance_history", {})
-            on_time = perf.get("payments_on_time", 0)
-            total = perf.get("payments_made", 1)
+            on_time_rate = round(on_time / total, 3) if total > 0 else 1.0
             
             db.participant_agents().update_one(
                 {"_id": participant_id},
                 {
                     "$set": {
-                        "performance_history.on_time_rate": round(on_time / total, 3) if total > 0 else 1.0
+                        "payment_stats.reliability_score": reliability,
+                        "performance_history.on_time_rate": on_time_rate
                     }
                 }
             )
-        
-        logger.info(f"[{self.agent_id}] Updated participant {participant_id} after {payment_type} ({'on-time' if is_on_time else 'LATE'})")
->>>>>>> syndication-change
     
     def _update_originator_after_payment(self, originator_id: str, payment_type: str, amount: int) -> None:
         """Update originator state after receiving payment"""
@@ -1083,15 +996,12 @@ class PaymentAgent:
     def complete_syndication(self, state: SyndicationState) -> SyndicationState:
         """Finalize syndication after all payments complete"""
         logger.info(f"[{self.agent_id}] Completing syndication {self.syndication_id}")
-        
-<<<<<<< HEAD
-=======
+
         # Release escrow funds to borrower
         escrow_result = self.release_escrow(state)
         state["payment_metrics"]["escrow_release"] = escrow_result
         
         # Mark syndication as completed
->>>>>>> syndication-change
         state["status"] = "completed"
         state["updated_at"] = datetime.utcnow().isoformat()
         

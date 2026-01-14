@@ -259,16 +259,10 @@ class OriginatorAgent:
         state["created_at"] = datetime.utcnow().isoformat()
         state["updated_at"] = datetime.utcnow().isoformat()
         
-<<<<<<< HEAD
         # Identify target participants
         targets = self.identify_target_participants(state["loan_details"])
         state["target_participants"] = [t["participant_id"] for t in targets[:15]]
         
-        # Insert into MongoDB
-        db.syndications().update_one(
-            {"_id": state["syndication_id"]},
-            {"$set": state},
-=======
         # Add AI recommendation reasoning for the dashboard
         state["recommendation_reasoning"] = f"AI-Recommended: This {state['loan_details']['industry']} opportunity offers a competitive {state['pricing']['initial_spread']}bps spread relative to its {state['loan_details']['credit_rating']} rating."
         
@@ -281,7 +275,6 @@ class OriginatorAgent:
                     **state
                 }
             },
->>>>>>> syndication-change
             upsert=True
         )
         
@@ -317,16 +310,6 @@ class OriginatorAgent:
                 logger.warning(f"Payment discrepancy: expected ${expected_amount:,}, received ${amount:,}")
         
         # Update originator's financial state
-<<<<<<< HEAD
-        db.originator_agents().update_one(
-            {"_id": self.agent_id},
-            {
-                "$inc": {
-                    "total_fees_ytd": amount,
-                    f"fees_by_type.{payment_type}": amount
-                },
-                "$set": {"updated_at": now}
-=======
         # Build $inc updates correctly - no $ prefix on field names!
         inc_updates = {"total_fees_ytd": amount}
         
@@ -334,6 +317,8 @@ class OriginatorAgent:
             inc_updates["financial_metrics.total_commitment_fees_received"] = amount
         elif payment_type == "arrangement_fee":
             inc_updates["financial_metrics.total_arrangement_fees_received"] = amount
+        else:
+            inc_updates[f"fees_by_type.{payment_type}"] = amount
         
         # Atomic increment of all fee fields
         db.originator_agents().update_one(
@@ -341,7 +326,6 @@ class OriginatorAgent:
             {
                 "$inc": inc_updates,
                 "$set": {"updated_at": datetime.utcnow()}
->>>>>>> syndication-change
             }
         )
         
@@ -359,7 +343,6 @@ class OriginatorAgent:
             "timestamp": now.isoformat()
         }
     
-<<<<<<< HEAD
     def _update_participant_relationship(self, participant_id: str, payment_type: str, 
                                           amount: int, on_time: bool):
         """Update relationship tracking with participant"""
@@ -377,9 +360,6 @@ class OriginatorAgent:
             upsert=True
         )
     
-    def complete_syndication(self, syndication_id: str, success: bool, reason: str = None) -> None:
-        """Update originator state when syndication completes."""
-=======
     def complete_syndication(self, syndication_id: str, success: bool, reason: Optional[str] = None) -> None:
         """
         Update originator state when syndication completes.
@@ -399,7 +379,6 @@ class OriginatorAgent:
         total = new_completed + new_failed
         new_success_rate = (new_completed / total) if total > 0 else 0 # Result is 0.0-1.0 in originator schema
         
->>>>>>> syndication-change
         update = {
             "$inc": {
                 "active_loans": -1,
@@ -411,25 +390,10 @@ class OriginatorAgent:
                 "track_record.success_rate": round(new_success_rate, 3)
             }
         }
-        
-<<<<<<< HEAD
-        # Calculate new success rate
-        self._refresh_profile()
-        total = self.profile.get("completed_syndications_ytd", 0) + self.profile.get("failed_syndications_ytd", 0) + 1
-        successful = self.profile.get("completed_syndications_ytd", 0) + (1 if success else 0)
-        new_success_rate = successful / total if total > 0 else 0
-        
-        update["$set"]["success_rate"] = round(new_success_rate * 100, 1)
-        
-        db.originator_agents().update_one({"_id": self.agent_id}, update)
-        logger.info(f"[{self.agent_id}] Syndication {syndication_id} marked as {'success' if success else 'failed'}" +
-                   (f": {reason}" if reason else ""))
-=======
         db.originator_agents().update_one({"_id": self.agent_id}, update)
         
         status_msg = 'success' if success else f'failed ({reason})'
         logger.info(f"[{self.agent_id}] Syndication {syndication_id} marked as {status_msg}")
->>>>>>> syndication-change
 
 
 def generate_syndication(originator_id: str, loan_params: Optional[Dict] = None) -> SyndicationState:

@@ -560,14 +560,11 @@ class NegotiationAgent:
                        reason: str) -> SyndicationState:
         """Close auction with uniform price (all pay clearing spread)"""
         logger.info(f"[{self.agent_id}] Closing auction: {reason}")
-        
-<<<<<<< HEAD
+
         if not self.config:
             self.config = self._load_or_create_config(state.get("current_time"))
-=======
         # Ensure collections exist
         state.setdefault("rejected_bids", [])
->>>>>>> syndication-change
         
         target = self.config["auction_config"]["target_subscription"]
         total_bids = sum(b["bid_amount"] for b in bids)
@@ -585,13 +582,8 @@ class NegotiationAgent:
                 allocations.append(alloc)
         else:
             # Pro-rata allocation
-<<<<<<< HEAD
-            pro_rata_factor = target / total_bids
-            for bid in sorted_bids:
-=======
             pro_rata_factor = target / total_bids if total_bids > 0 else 0
-            for bid in bids:
->>>>>>> syndication-change
+            for bid in sorted_bids:
                 alloc_amount = int(bid["bid_amount"] * pro_rata_factor)
                 if alloc_amount >= bid.get("min_allocation", 0):
                     alloc = self._create_allocation(bid, alloc_amount, final_spread, "pro_rata", target)
@@ -694,17 +686,10 @@ class NegotiationAgent:
     def _calculate_fees(self, amount: int) -> Dict[str, Any]:
         """Calculate fees for an allocation"""
         synd = db.syndications().find_one({"_id": self.syndication_id})
-<<<<<<< HEAD
-        pricing = synd.get("pricing", {})
-        
+        pricing = synd.get("pricing", {}) if synd else {}
         commitment_fee_pct = pricing.get("commitment_fee", 0.5)
         arrangement_fee_pct = pricing.get("arrangement_fee", 2.0)
         upfront_fee_pct = pricing.get("upfront_fee", 1.0)
-=======
-        commitment_fee_pct = synd.get("pricing", {}).get("commitment_fee", 0.5)
-        # Arrangement fee should preferably come from syndication config
-        arrangement_fee_pct = synd.get("pricing", {}).get("arrangement_fee", 2.0)
->>>>>>> syndication-change
         
         return {
             "commitment_fee": int(amount * commitment_fee_pct / 100),

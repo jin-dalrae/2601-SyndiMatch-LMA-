@@ -280,19 +280,11 @@ Respond ONLY with valid JSON in this exact format:
 - Credit Rating: {state['loan_details']['credit_rating']}
 - Total Amount: ${state['loan_details']['total_amount']:,}
 - Syndication Target: ${state['loan_details']['syndication_target']:,}
-<<<<<<< HEAD
 - Current Spread: {state.get('current_spread', state.get('pricing', {}).get('initial_spread', 0))} bps
 - Base Rate: {state.get('pricing', {}).get('base_rate', 'SOFR')}
-- All-in Yield (estimated): {4.5 + state.get('current_spread', 0)/100:.2f}%
+- All-in Yield (estimated): {self._calculate_yield(state, state.get('current_spread', state.get('pricing', {}).get('initial_spread', 0))):.2f}%
 - Current Subscription: {state.get('subscription_rate', 0)*100:.1f}%
 - Auction Round: {state.get('current_round', 1)}
-=======
-- Current Spread: {state['current_spread']} bps
-- Base Rate: {state['pricing']['base_rate']}
-- All-in Yield (estimated): {self._calculate_yield(state):.2f}%
-- Current Subscription: {state['subscription_rate']*100:.1f}%
-- Auction Round: {state['current_round']}
->>>>>>> syndication-change
 - Originator: {state['originator']}
 
 ## Decision Required
@@ -305,73 +297,15 @@ Remember: Your available capital is ${risk.get('available_capacity', 0):,}.
 Do not bid more than you have available.
 """
     
-<<<<<<< HEAD
-=======
-    def _passes_hard_constraints(self, state: SyndicationState) -> bool:
-        """Check if loan passes basic eligibility"""
-        risk = self.profile.get("risk_appetite", {})
-        sector_prefs = self.profile.get("sector_preferences", {})
-        rating_pref = risk.get("credit_rating_range", {})
-        
-        # Check available capacity with 2% buffer for fees
-        available_cap = risk.get("available_capacity", 0) - risk.get("reserved_for_bids", 0)
-        fee_buffer = available_cap * 0.02
-        if (available_cap - fee_buffer) < risk.get("min_ticket", 0):
-            return False
-        
-        # Check if sector is avoided
-        if state["loan_details"]["industry"] in sector_prefs.get("avoid", []):
-            return False
-
-        # Check rating against range if provided
-        loan_rating = state["loan_details"].get("credit_rating")
-        if loan_rating and rating_pref:
-            # Simple lexical check for min/max buckets if present
-            min_rating = rating_pref.get("min")
-            max_rating = rating_pref.get("max")
-            # If min/max exist and loan outside, fail
-            if min_rating and loan_rating < min_rating:
-                return False
-            if max_rating and loan_rating > max_rating:
-                return False
-        
-        return True
-    
-    def _get_violated_constraints(self, state: SyndicationState) -> List[str]:
-        """Get list of violated constraints"""
-        violations = []
-        risk = self.profile.get("risk_appetite", {})
-        sector_prefs = self.profile.get("sector_preferences", {})
-        
-        if risk.get("available_capacity", 0) < risk.get("min_ticket", 0):
-            violations.append("insufficient_capacity")
-        
-        if state["loan_details"]["industry"] in sector_prefs.get("avoid", []):
-            violations.append("sector_excluded")
-        
-        return violations
-    
     def _calculate_yield(self, state: SyndicationState, spread: Optional[int] = None) -> float:
         """
-        Calculate all-in yield using actual base rate from state.
-        
-        Args:
-            state: Syndication state containing pricing info
-            spread: Optional spread override (bps), defaults to current_spread
-        
-        Returns:
-            All-in yield as percentage (e.g., 7.5 for 7.5%)
+        Calculate all-in yield using base rate from state.
         """
-        # Get base rate - handle both numeric and string (e.g., "SOFR")
-        base_rate = state["pricing"].get("base_rate", 4.5)
-        
-        # If base_rate is a string like "SOFR", use current SOFR approximation
-        # In production, this would fetch from a rate service
+        base_rate = state.get("pricing", {}).get("base_rate", 4.5)
         if isinstance(base_rate, str):
-            # Current market approximations (should be fetched from rate service)
             rate_lookup = {
                 "SOFR": 4.35,
-                "LIBOR": 4.50,  # Deprecated but may exist in legacy
+                "LIBOR": 4.50,
                 "PRIME": 7.50,
                 "T-BILL": 4.25
             }
@@ -379,20 +313,13 @@ Do not bid more than you have available.
         
         spread_bps = spread if spread is not None else state.get("current_spread", 0)
         return float(base_rate) + (spread_bps / 100)
-    
->>>>>>> syndication-change
+
     def _rule_based_evaluation(self, state: SyndicationState) -> BidDecision:
         """Fallback rule-based evaluation if LLM fails"""
         risk = self.profile.get("risk_appetite", {})
-        
-<<<<<<< HEAD
-        # Simple yield check
+
         current_spread = state.get("current_spread", state.get("pricing", {}).get("initial_spread", 0))
-        estimated_yield = 4.5 + current_spread / 100
-=======
-        # Calculate yield using ACTUAL base rate, not hardcoded 4.5
-        estimated_yield = self._calculate_yield(state)
->>>>>>> syndication-change
+        estimated_yield = self._calculate_yield(state, current_spread)
         min_yield = risk.get("min_acceptable_yield", 0)
         
         if estimated_yield >= min_yield:
