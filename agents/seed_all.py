@@ -131,19 +131,32 @@ def seed_originator_agents():
         }
     ]
     
+    # Canonical collection name used by app: originator
+    db["originator"].delete_many({})
+    db["originator"].insert_many(originators)
+    # Backward compatibility for older scripts
     db.originator_agents.delete_many({})
     db.originator_agents.insert_many(originators)
-    print(f"✅ Seeded {len(originators)} originator agents")
+    print(f"✅ Seeded {len(originators)} originator agents (originator + originator_agents)")
 
 
 def seed_participant_agents():
+<<<<<<< HEAD
     """Seed 15 diverse participant agents with full profiles"""
+=======
+    """Seed diverse participant agents"""
+    # Base participants
+>>>>>>> syndication-change
     participants = [
         # MAJOR (5)
         {
             "_id": "PA-001", "tier": "major",
             "institution": {"name": "Apollo Global Management", "type": "Private Credit Fund", "headquarters": "New York, NY"},
+<<<<<<< HEAD
             "risk_appetite": {"total_capital_available": 2500000000, "current_deployed": 1800000000, "available_capacity": 700000000, "max_single_ticket": 300000000, "min_ticket": 25000000, "credit_rating_range": {"min": "B-", "max": "BBB+", "minimum": "B-", "maximum": "BBB+", "sweet_spot": "BB to BB+"}, "target_all_in_yield": 10.5, "min_acceptable_yield": 8.0},
+=======
+            "risk_appetite": {"total_capital_available": 2500000000, "max_single_ticket": 300000000, "min_ticket": 25000000, "credit_rating_range": {"min": "B-", "max": "BBB+", "sweet_spot": "BB to BB+"}, "target_all_in_yield": 10.5, "min_acceptable_yield": 8.0},
+>>>>>>> syndication-change
             "sector_preferences": {"preferred": ["Technology", "Healthcare", "Business Services"], "neutral": ["Industrial", "Consumer"], "avoid": ["Oil & Gas", "Retail"]},
             "geographic_preferences": {"preferred": ["North America"], "neutral": ["Europe"], "avoid": ["Middle East"]},
             "constraints": {"esg_requirements": False},
@@ -157,7 +170,11 @@ def seed_participant_agents():
         {
             "_id": "PA-002", "tier": "major",
             "institution": {"name": "CalPERS", "type": "Public Pension Fund", "headquarters": "Sacramento, CA"},
+<<<<<<< HEAD
             "risk_appetite": {"total_capital_available": 3000000000, "current_deployed": 2100000000, "available_capacity": 900000000, "max_single_ticket": 400000000, "min_ticket": 50000000, "credit_rating_range": {"min": "A-", "max": "AAA", "minimum": "A-", "maximum": "AAA", "sweet_spot": "A to AA"}, "target_all_in_yield": 5.5, "min_acceptable_yield": 4.0},
+=======
+            "risk_appetite": {"total_capital_available": 3000000000, "max_single_ticket": 400000000, "min_ticket": 50000000, "credit_rating_range": {"min": "A-", "max": "AAA", "sweet_spot": "A to AA"}, "target_all_in_yield": 5.5, "min_acceptable_yield": 4.0},
+>>>>>>> syndication-change
             "sector_preferences": {"preferred": ["Infrastructure", "Utilities", "Healthcare"], "neutral": ["Industrial"], "avoid": ["Cannabis", "Weapons", "Tobacco"]},
             "geographic_preferences": {"preferred": ["North America", "Europe"], "neutral": ["Asia Pacific"], "avoid": []},
             "constraints": {"esg_requirements": True, "min_esg_score": 75},
@@ -171,7 +188,11 @@ def seed_participant_agents():
         {
             "_id": "PA-003", "tier": "major",
             "institution": {"name": "BNP Paribas Asset Management", "type": "European Bank", "headquarters": "Paris, France"},
+<<<<<<< HEAD
             "risk_appetite": {"total_capital_available": 4000000000, "current_deployed": 2900000000, "available_capacity": 1100000000, "max_single_ticket": 500000000, "min_ticket": 30000000, "credit_rating_range": {"min": "BBB-", "max": "AAA", "minimum": "BBB-", "maximum": "AAA", "sweet_spot": "BBB+ to A"}, "target_all_in_yield": 5.0, "min_acceptable_yield": 3.8},
+=======
+            "risk_appetite": {"total_capital_available": 4000000000, "max_single_ticket": 500000000, "min_ticket": 30000000, "credit_rating_range": {"min": "BBB-", "max": "AAA", "sweet_spot": "BBB+ to A"}, "target_all_in_yield": 5.0, "min_acceptable_yield": 3.8},
+>>>>>>> syndication-change
             "sector_preferences": {"preferred": ["Renewable Energy", "Infrastructure", "Industrial"], "neutral": ["Healthcare", "Consumer"], "avoid": ["Coal", "Weapons"]},
             "geographic_preferences": {"preferred": ["Europe", "North America"], "neutral": ["Asia Pacific"], "avoid": []},
             "constraints": {"esg_requirements": True, "min_esg_score": 70},
@@ -185,7 +206,11 @@ def seed_participant_agents():
         {
             "_id": "PA-004", "tier": "major",
             "institution": {"name": "MUFG Bank", "type": "Japanese Bank", "headquarters": "Tokyo, Japan"},
+<<<<<<< HEAD
             "risk_appetite": {"total_capital_available": 5000000000, "current_deployed": 3200000000, "available_capacity": 1800000000, "max_single_ticket": 600000000, "min_ticket": 75000000, "credit_rating_range": {"min": "BBB", "max": "AAA", "minimum": "BBB", "maximum": "AAA", "sweet_spot": "A- to AA"}, "target_all_in_yield": 4.5, "min_acceptable_yield": 3.5},
+=======
+            "risk_appetite": {"total_capital_available": 5000000000, "max_single_ticket": 600000000, "min_ticket": 75000000, "credit_rating_range": {"min": "BBB", "max": "AAA", "sweet_spot": "A- to AA"}, "target_all_in_yield": 4.5, "min_acceptable_yield": 3.5},
+>>>>>>> syndication-change
             "sector_preferences": {"preferred": ["Infrastructure", "Project Finance", "Utilities"], "neutral": ["Industrial", "TMT"], "avoid": ["Speculative Tech", "Crypto"]},
             "geographic_preferences": {"preferred": ["Asia Pacific", "North America"], "neutral": ["Europe"], "avoid": []},
             "constraints": {"esg_requirements": False},
@@ -199,7 +224,11 @@ def seed_participant_agents():
         {
             "_id": "PA-005", "tier": "major",
             "institution": {"name": "Palmer Square Capital", "type": "CLO Manager", "headquarters": "Kansas City, MO"},
+<<<<<<< HEAD
             "risk_appetite": {"total_capital_available": 1200000000, "current_deployed": 900000000, "available_capacity": 300000000, "max_single_ticket": 75000000, "min_ticket": 5000000, "credit_rating_range": {"min": "B-", "max": "BBB-", "minimum": "B-", "maximum": "BBB-", "sweet_spot": "B+ to BB"}, "target_all_in_yield": 8.5, "min_acceptable_yield": 7.0},
+=======
+            "risk_appetite": {"total_capital_available": 1200000000, "max_single_ticket": 75000000, "min_ticket": 5000000, "credit_rating_range": {"min": "B-", "max": "BBB-", "sweet_spot": "B+ to BB"}, "target_all_in_yield": 8.5, "min_acceptable_yield": 7.0},
+>>>>>>> syndication-change
             "sector_preferences": {"preferred": ["Business Services", "Healthcare", "Technology"], "neutral": ["Consumer", "Media"], "avoid": ["Oil & Gas", "Airlines"]},
             "geographic_preferences": {"preferred": ["North America"], "neutral": ["Europe"], "avoid": ["Latin America"]},
             "constraints": {"esg_requirements": False},
@@ -212,6 +241,7 @@ def seed_participant_agents():
         },
         
         # MINOR (10)
+<<<<<<< HEAD
         {"_id": "PA-101", "tier": "minor", "institution": {"name": "PNC Bank", "type": "US Regional Bank", "headquarters": "Pittsburgh, PA"}, "risk_appetite": {"total_capital_available": 800000000, "current_deployed": 580000000, "available_capacity": 220000000, "max_single_ticket": 100000000, "min_ticket": 15000000, "credit_rating_range": {"min": "BBB-", "max": "A+", "minimum": "BBB-", "maximum": "A+", "sweet_spot": "BBB to A-"}, "target_all_in_yield": 5.8, "min_acceptable_yield": 4.5}, "sector_preferences": {"preferred": ["Industrial", "Real Estate"], "neutral": ["Consumer"], "avoid": []}, "geographic_preferences": {"preferred": ["North America"], "neutral": [], "avoid": []}, "current_portfolio": {"number_of_loans": 45, "total_exposure": 580000000}, "strategy": {"investment_style": "moderate", "bidding_behavior": "relationship_price_conscious"}, "performance_history": {"bids_submitted_ytd": 89, "allocations_won": 40, "win_rate": 0.45, "average_spread_paid": 365}, "payment_stats": {"total_payments": 89, "on_time_payments": 89, "reliability_score": 100}, "status": "active"},
         {"_id": "PA-102", "tier": "minor", "institution": {"name": "Ares Management", "type": "Private Credit Fund", "headquarters": "Los Angeles, CA"}, "risk_appetite": {"total_capital_available": 1100000000, "current_deployed": 780000000, "available_capacity": 320000000, "max_single_ticket": 200000000, "min_ticket": 20000000, "credit_rating_range": {"min": "B", "max": "BB+", "minimum": "B", "maximum": "BB+", "sweet_spot": "B+ to BB"}, "target_all_in_yield": 11.0, "min_acceptable_yield": 9.0}, "sector_preferences": {"preferred": ["Technology", "Healthcare"], "neutral": ["Business Services"], "avoid": ["Retail"]}, "geographic_preferences": {"preferred": ["North America"], "neutral": ["Europe"], "avoid": []}, "current_portfolio": {"number_of_loans": 68, "total_exposure": 780000000}, "strategy": {"investment_style": "aggressive", "bidding_behavior": "fast_decisive"}, "performance_history": {"bids_submitted_ytd": 198, "allocations_won": 81, "win_rate": 0.41, "average_spread_paid": 475}, "payment_stats": {"total_payments": 198, "on_time_payments": 195, "reliability_score": 97}, "status": "active"},
         {"_id": "PA-103", "tier": "minor", "institution": {"name": "MetLife Investment Management", "type": "Insurance Company", "headquarters": "New York, NY"}, "risk_appetite": {"total_capital_available": 1500000000, "current_deployed": 1200000000, "available_capacity": 300000000, "max_single_ticket": 250000000, "min_ticket": 40000000, "credit_rating_range": {"min": "A-", "max": "AAA", "minimum": "A-", "maximum": "AAA", "sweet_spot": "A to AA"}, "target_all_in_yield": 4.8, "min_acceptable_yield": 3.8}, "sector_preferences": {"preferred": ["Infrastructure", "Utilities"], "neutral": ["Industrial"], "avoid": ["Cannabis"]}, "geographic_preferences": {"preferred": ["North America", "Europe"], "neutral": [], "avoid": []}, "constraints": {"esg_requirements": True, "min_esg_score": 72}, "current_portfolio": {"number_of_loans": 38, "total_exposure": 1200000000}, "strategy": {"investment_style": "conservative", "bidding_behavior": "methodical_selective"}, "performance_history": {"bids_submitted_ytd": 156, "allocations_won": 81, "win_rate": 0.52, "average_spread_paid": 295}, "payment_stats": {"total_payments": 156, "on_time_payments": 156, "reliability_score": 100}, "status": "active"},
@@ -222,15 +252,56 @@ def seed_participant_agents():
         {"_id": "PA-108", "tier": "minor", "institution": {"name": "Ontario Teachers' Pension", "type": "Pension Fund", "headquarters": "Toronto, Canada"}, "risk_appetite": {"total_capital_available": 2200000000, "current_deployed": 1650000000, "available_capacity": 550000000, "max_single_ticket": 350000000, "min_ticket": 50000000, "credit_rating_range": {"min": "A-", "max": "AAA", "minimum": "A-", "maximum": "AAA", "sweet_spot": "A to AA"}, "target_all_in_yield": 5.2, "min_acceptable_yield": 4.0}, "sector_preferences": {"preferred": ["Infrastructure", "Utilities"], "neutral": ["Industrial"], "avoid": ["Tobacco", "Weapons"]}, "geographic_preferences": {"preferred": ["North America", "Europe"], "neutral": ["Asia Pacific"], "avoid": []}, "constraints": {"esg_requirements": True, "min_esg_score": 78}, "current_portfolio": {"number_of_loans": 42, "total_exposure": 1650000000}, "strategy": {"investment_style": "conservative", "bidding_behavior": "methodical_selective"}, "performance_history": {"bids_submitted_ytd": 58, "allocations_won": 41, "win_rate": 0.71, "average_spread_paid": 275}, "payment_stats": {"total_payments": 58, "on_time_payments": 58, "reliability_score": 100}, "status": "active"},
         {"_id": "PA-109", "tier": "minor", "institution": {"name": "Barings LLC", "type": "CLO Manager", "headquarters": "Charlotte, NC"}, "risk_appetite": {"total_capital_available": 850000000, "current_deployed": 620000000, "available_capacity": 230000000, "max_single_ticket": 60000000, "min_ticket": 5000000, "credit_rating_range": {"min": "B-", "max": "BB+", "minimum": "B-", "maximum": "BB+", "sweet_spot": "B to BB-"}, "target_all_in_yield": 8.2, "min_acceptable_yield": 7.0}, "sector_preferences": {"preferred": ["Business Services", "Technology"], "neutral": ["Healthcare"], "avoid": []}, "geographic_preferences": {"preferred": ["North America"], "neutral": ["Europe"], "avoid": []}, "current_portfolio": {"number_of_loans": 128, "total_exposure": 620000000}, "strategy": {"investment_style": "moderate", "bidding_behavior": "competitive_fast"}, "performance_history": {"bids_submitted_ytd": 678, "allocations_won": 195, "win_rate": 0.29, "average_spread_paid": 450}, "payment_stats": {"total_payments": 678, "on_time_payments": 672, "reliability_score": 96}, "status": "active"},
         {"_id": "PA-110", "tier": "minor", "institution": {"name": "Prudential Investment Management", "type": "Insurance Company", "headquarters": "Newark, NJ"}, "risk_appetite": {"total_capital_available": 1800000000, "current_deployed": 1400000000, "available_capacity": 400000000, "max_single_ticket": 300000000, "min_ticket": 50000000, "credit_rating_range": {"min": "A-", "max": "AAA", "minimum": "A-", "maximum": "AAA", "sweet_spot": "A to AA"}, "target_all_in_yield": 4.5, "min_acceptable_yield": 3.5}, "sector_preferences": {"preferred": ["Infrastructure", "Utilities", "Healthcare"], "neutral": ["Industrial"], "avoid": ["Cannabis"]}, "geographic_preferences": {"preferred": ["North America", "Europe"], "neutral": [], "avoid": []}, "constraints": {"esg_requirements": True, "min_esg_score": 70}, "current_portfolio": {"number_of_loans": 35, "total_exposure": 1400000000}, "strategy": {"investment_style": "conservative", "bidding_behavior": "methodical_selective"}, "performance_history": {"bids_submitted_ytd": 142, "allocations_won": 78, "win_rate": 0.55, "average_spread_paid": 280}, "payment_stats": {"total_payments": 142, "on_time_payments": 142, "reliability_score": 100}, "status": "active"}
+=======
+        {"_id": "PA-101", "tier": "minor", "institution": {"name": "PNC Bank", "type": "US Regional Bank", "headquarters": "Pittsburgh, PA"}, "risk_appetite": {"total_capital_available": 800000000, "max_single_ticket": 100000000, "min_ticket": 15000000}, "strategy": {"investment_style": "moderate", "bidding_behavior": "relationship_price_conscious"}, "status": "active"},
+        {"_id": "PA-102", "tier": "minor", "institution": {"name": "Ares Management", "type": "Private Credit Fund", "headquarters": "Los Angeles, CA"}, "risk_appetite": {"total_capital_available": 1100000000, "max_single_ticket": 200000000, "min_ticket": 20000000}, "strategy": {"investment_style": "aggressive", "bidding_behavior": "fast_decisive"}, "status": "active"},
+        {"_id": "PA-103", "tier": "minor", "institution": {"name": "MetLife Investment Management", "type": "Insurance Company", "headquarters": "New York, NY"}, "risk_appetite": {"total_capital_available": 1500000000, "max_single_ticket": 250000000, "min_ticket": 40000000}, "strategy": {"investment_style": "conservative", "bidding_behavior": "methodical_selective"}, "status": "active"},
+        {"_id": "PA-104", "tier": "minor", "institution": {"name": "Golub Capital", "type": "BDC", "headquarters": "New York, NY"}, "risk_appetite": {"total_capital_available": 700000000, "max_single_ticket": 80000000, "min_ticket": 10000000}, "strategy": {"investment_style": "moderate", "bidding_behavior": "competitive_fast"}, "status": "active"},
+        {"_id": "PA-105", "tier": "minor", "institution": {"name": "Davidson Kempner", "type": "Hedge Fund - Distressed", "headquarters": "New York, NY"}, "risk_appetite": {"total_capital_available": 600000000, "max_single_ticket": 100000000, "min_ticket": 15000000}, "strategy": {"investment_style": "very_aggressive", "bidding_behavior": "opportunistic"}, "status": "active"},
+        {"_id": "PA-106", "tier": "minor", "institution": {"name": "KeyBank", "type": "US Regional Bank", "headquarters": "Cleveland, OH"}, "risk_appetite": {"total_capital_available": 650000000, "max_single_ticket": 80000000, "min_ticket": 15000000}, "strategy": {"investment_style": "moderate", "bidding_behavior": "relationship_price_conscious"}, "status": "active"},
+        {"_id": "PA-107", "tier": "minor", "institution": {"name": "Blue Owl Capital", "type": "Private Credit Fund", "headquarters": "New York, NY"}, "risk_appetite": {"total_capital_available": 950000000, "max_single_ticket": 150000000, "min_ticket": 25000000}, "strategy": {"investment_style": "aggressive", "bidding_behavior": "fast_decisive"}, "status": "active"},
+        {"_id": "PA-108", "tier": "minor", "institution": {"name": "Ontario Teachers' Pension", "type": "Pension Fund", "headquarters": "Toronto, Canada"}, "risk_appetite": {"total_capital_available": 2200000000, "max_single_ticket": 350000000, "min_ticket": 50000000}, "strategy": {"investment_style": "conservative", "bidding_behavior": "methodical_selective"}, "status": "active"},
+        {"_id": "PA-109", "tier": "minor", "institution": {"name": "Barings LLC", "type": "CLO Manager", "headquarters": "Charlotte, NC"}, "risk_appetite": {"total_capital_available": 850000000, "max_single_ticket": 60000000, "min_ticket": 5000000}, "strategy": {"investment_style": "moderate", "bidding_behavior": "competitive_fast"}, "status": "active"},
+        {"_id": "PA-110", "tier": "minor", "institution": {"name": "Prudential Investment Management", "type": "Insurance Company", "headquarters": "Newark, NJ"}, "risk_appetite": {"total_capital_available": 1800000000, "max_single_ticket": 300000000, "min_ticket": 50000000}, "strategy": {"investment_style": "conservative", "bidding_behavior": "methodical_selective"}, "status": "active"}
+>>>>>>> syndication-change
     ]
     
+    # Process and randomize deployment
+    for p in participants:
+        total = p["risk_appetite"]["total_capital_available"]
+        # Randomize current deployment between 40-80%
+        deployed = int(total * random.uniform(0.4, 0.8))
+        p["risk_appetite"]["current_deployed"] = deployed
+        p["risk_appetite"]["available_capacity"] = total - deployed
+        p["risk_appetite"]["reserved_for_bids"] = 0
+        
+        # Default credit ratings if missing
+        if "credit_rating_range" not in p["risk_appetite"]:
+            p["risk_appetite"]["credit_rating_range"] = {"min": "B", "max": "A", "sweet_spot": "BB to BBB"}
+            p["risk_appetite"]["target_all_in_yield"] = 6.5
+            p["risk_appetite"]["min_acceptable_yield"] = 5.0
+            
+        # Default sector preferences if missing
+        if "sector_preferences" not in p:
+            p["sector_preferences"] = {"preferred": ["Industrial", "Consumer"], "neutral": ["Healthcare"], "avoid": ["Speculative"]}
+
+    # Canonical collection name used by app: participants
+    db["participants"].delete_many({})
+    db["participants"].insert_many(participants)
+    # Backward compatibility for older scripts
     db.participant_agents.delete_many({})
     db.participant_agents.insert_many(participants)
-    print(f"✅ Seeded {len(participants)} participant agents")
+    print(f"✅ Seeded {len(participants)} participant agents with randomized deployment (participants + participant_agents)")
 
 
 def seed_demo_syndications():
+<<<<<<< HEAD
     """Seed sample syndications with ESG ratings and geography"""
+=======
+    """Seed sample syndications in various states with relative dates"""
+    now = datetime.utcnow()
+    
+>>>>>>> syndication-change
     syndications = [
         {
             "_id": "SYND-2025-001",
@@ -361,9 +432,13 @@ def seed_demo_syndications():
         }
     ]
     
+    # Canonical collection name used by app: syndication_original
+    db["syndication_original"].delete_many({})
+    db["syndication_original"].insert_many(syndications)
+    # Backward compatibility for older scripts
     db.syndications.delete_many({})
     db.syndications.insert_many(syndications)
-    print(f"✅ Seeded {len(syndications)} demo syndications")
+    print(f"✅ Seeded {len(syndications)} demo syndications with relative dates (syndication_original + syndications)")
 
 
 def seed_demo_bids():
@@ -434,14 +509,36 @@ def main():
     
     print("\n🎉 Database seeding complete!\n")
     
-    # Print summary
+    # Print summary and sample data
     print("Collections summary:")
+<<<<<<< HEAD
     print(f"  • originator_agents: {db.originator_agents.count_documents({})}")
     print(f"  • participant_agents: {db.participant_agents.count_documents({})}")
     print(f"  • syndications: {db.syndications.count_documents({})}")
     print(f"  • bids: {db.bids.count_documents({})}")
     print(f"  • allocations: {db.allocations.count_documents({})}")
     print(f"  • payment_history: {db.payment_history.count_documents({})}")
+=======
+    print(f"  • originator (canonical): {db['originator'].count_documents({})}")
+    print(f"  • originator_agents (legacy): {db.originator_agents.count_documents({})}")
+    print(f"  • participants (canonical): {db['participants'].count_documents({})}")
+    print(f"  • participant_agents (legacy): {db.participant_agents.count_documents({})}")
+    print(f"  • syndication_original (canonical): {db['syndication_original'].count_documents({})}")
+    print(f"  • syndications (legacy): {db.syndications.count_documents({})}")
+    
+    print("\nSample records:")
+    sample_o = db["originator"].find_one()
+    if sample_o:
+        print(f"  • Originator: {sample_o['entity']} ({sample_o['_id']})")
+    
+    sample_p = db["participants"].find_one()
+    if sample_p:
+        print(f"  • Participant: {sample_p['institution']['name']} (Deployed: {sample_p['risk_appetite']['current_deployed']:,})")
+    
+    sample_s = db["syndication_original"].find_one()
+    if sample_s:
+        print(f"  • Syndication: {sample_s['loan_details']['borrower_name']} (Status: {sample_s['status']})")
+>>>>>>> syndication-change
 
 
 if __name__ == "__main__":

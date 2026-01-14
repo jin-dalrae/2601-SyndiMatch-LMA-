@@ -19,56 +19,48 @@
     <!-- Header -->
     <header class="header">
         <div class="header-left">
-            <div class="logo">
-                <div class="logo-icon">
-                    <svg viewBox="0 0 32 32" fill="none">
-                        <circle cx="16" cy="16" r="14" stroke="currentColor" stroke-width="2" />
-                        <path d="M8 16h16M16 8v16M10 10l12 12M22 10L10 22" stroke="currentColor" stroke-width="1.5"
-                            opacity="0.5" />
-                        <circle cx="16" cy="16" r="4" fill="currentColor" />
-                    </svg>
-                </div>
-                <span class="logo-text">SyndiMatch</span>
-            </div>
             <nav class="nav-tabs">
                 <button class="nav-tab active" data-view="overview">Overview</button>
-                <button class="nav-tab" data-view="orchestration">Orchestration</button>
-                <button class="nav-tab" data-view="payments">Payments</button>
                 <button class="nav-tab" data-view="analytics">Analytics</button>
             </nav>
         </div>
         <div class="header-right">
             <!-- Role Selector -->
             <div class="role-selector" id="role-selector">
-                <label class="role-label">Viewing as:</label>
+                <label class="role-label">User</label>
                 <select class="role-dropdown" id="role-dropdown">
                     <option value="platform" selected>Platform Admin</option>
                     <optgroup label="─── Participants ───">
-                        <option value="participant:PA-001">Apollo Global (Private Credit)</option>
-                        <option value="participant:PA-002">CalPERS (Pension Fund)</option>
-                        <option value="participant:PA-003">BNP Paribas AM (European Bank)</option>
-                        <option value="participant:PA-004">MUFG Bank (Japanese Bank)</option>
-                        <option value="participant:PA-005">Palmer Square (CLO Manager)</option>
-                        <option value="participant:PA-101">PNC Bank (Regional)</option>
-                        <option value="participant:PA-102">Ares Management (Private Credit)</option>
-                        <option value="participant:PA-103">MetLife (Insurance)</option>
+                        <option value="participant:PA-001">[Participant] Apollo Global</option>
+                        <option value="participant:PA-002">[Participant] CalPERS</option>
+                        <option value="participant:PA-003">[Participant] BNP Paribas AM</option>
+                        <option value="participant:PA-004">[Participant] MUFG Bank</option>
+                        <option value="participant:PA-005">[Participant] Palmer Square</option>
+                        <option value="participant:PA-101">[Participant] PNC Bank</option>
+                        <option value="participant:PA-102">[Participant] Ares Management</option>
+                        <option value="participant:PA-103">[Participant] MetLife</option>
                     </optgroup>
                     <optgroup label="─── Originators ───">
-                        <option value="originator:OA-001">JPMorgan Chase</option>
-                        <option value="originator:OA-002">Bank of America</option>
-                        <option value="originator:OA-003">Citigroup</option>
-                        <option value="originator:OA-004">Goldman Sachs</option>
-                        <option value="originator:OA-005">Wells Fargo</option>
-                        <option value="originator:OA-006">BNP Paribas</option>
-                        <option value="originator:OA-007">Barclays</option>
-                        <option value="originator:OA-008">MUFG Bank</option>
+                        <option value="originator:OA-001">[Originator] JPMorgan Chase</option>
+                        <option value="originator:OA-002">[Originator] Bank of America</option>
+                        <option value="originator:OA-003">[Originator] Citigroup</option>
+                        <option value="originator:OA-004">[Originator] Goldman Sachs</option>
+                        <option value="originator:OA-005">[Originator] Wells Fargo</option>
+                        <option value="originator:OA-006">[Originator] BNP Paribas</option>
+                        <option value="originator:OA-007">[Originator] Barclays</option>
+                        <option value="originator:OA-008">[Originator] MUFG Bank</option>
                     </optgroup>
                 </select>
             </div>
-            <div class="connection-status">
-                <span class="status-dot live"></span>
-                <span>Live</span>
+
+            <div class="demo-toggle">
+                <span class="demo-label" id="demo-mode-status">Demo</span>
+                <label class="switch">
+                    <input type="checkbox" id="demo-mode-toggle" />
+                    <span class="slider"></span>
+                </label>
             </div>
+
             <button class="btn-icon" id="alerts-toggle">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
@@ -79,11 +71,101 @@
         </div>
     </header>
 
+<<<<<<< HEAD
+=======
+    <!-- Top Metrics Bar -->
+    <!-- Top Metrics Bar -->
+    <section class="metrics-bar" id="metrics-bar">
+        <div class="metric-card" data-metric-id="metric-active">
+            <div class="metric-label">Active Syndications</div>
+            <div class="metric-value">8</div>
+            <div class="metric-change positive">+2 today</div>
+        </div>
+        <div class="metric-card" data-metric-id="metric-value">
+            <div class="metric-label">Total Value in Play</div>
+            <div class="metric-value">$2.4B</div>
+            <div class="metric-change positive">+$340M</div>
+        </div>
+        <div class="metric-card" data-metric-id="metric-closed">
+            <div class="metric-label">Closed Today</div>
+            <div class="metric-value">3</div>
+            <div class="metric-change positive">Target: 4</div>
+        </div>
+        <div class="metric-card" data-metric-id="metric-success">
+            <div class="metric-label">Success Rate</div>
+            <div class="metric-value">94.2%</div>
+            <div class="metric-change positive">+1.2%</div>
+        </div>
+        <div class="metric-card" data-metric-id="metric-participants">
+            <div class="metric-label">Active Participants</div>
+            <div class="metric-value">47</div>
+            <div class="metric-change neutral">steady</div>
+        </div>
+        <div class="metric-card" data-metric-id="metric-payments">
+            <div class="metric-label">Payments (24h)</div>
+            <div class="metric-value">$892M</div>
+            <div class="metric-change positive">+$156M</div>
+        </div>
+    </section>
+
+>>>>>>> syndication-change
     <!-- Main Content Area -->
 
     <main class="main-content">
         <!-- Overview View -->
         <div class="view active" id="view-overview">
+            <!-- Origination Form -->
+            <section class="origination-section">
+                <div class="origination-card">
+                    <div class="origination-header">
+                        <div>
+                            <h2 class="section-title">Originate a Deal</h2>
+                            <p class="section-subtitle">Create a live syndication and trigger the LangGraph agents.</p>
+                        </div>
+                        <button class="btn-secondary" id="btn-originate-demo">Quick Demo Deal</button>
+                    </div>
+                    <form id="origination-form" class="origination-form">
+                        <div class="form-row">
+                            <label>Borrower</label>
+                            <input type="text" name="borrower" placeholder="Acme Holdings" required />
+                        </div>
+                        <div class="form-row">
+                            <label>Amount (USD millions)</label>
+                            <input type="number" name="amount" min="10" step="10" placeholder="500" required />
+                        </div>
+                        <div class="form-row">
+                            <label>Spread (bps)</label>
+                            <input type="number" name="spread" min="100" max="800" step="5" placeholder="425" required />
+                        </div>
+                        <div class="form-row">
+                            <label>Rating</label>
+                            <input type="text" name="rating" placeholder="BB+" />
+                        </div>
+                        <div class="form-row">
+                            <label>Industry</label>
+                            <input type="text" name="industry" placeholder="Software/SaaS" />
+                        </div>
+                        <div class="form-row">
+                            <label>Originator</label>
+                            <select name="originator_agent_id">
+                                <option value="OA-001">JPMorgan Chase</option>
+                                <option value="OA-002">Bank of America</option>
+                                <option value="OA-003">Citigroup</option>
+                                <option value="OA-004">Goldman Sachs</option>
+                                <option value="OA-005">Wells Fargo</option>
+                                <option value="OA-006">BNP Paribas</option>
+                                <option value="OA-007">Barclays</option>
+                                <option value="OA-008">MUFG Bank</option>
+                            </select>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn-primary">Create & Run</button>
+                            <span class="form-status" id="origination-status"></span>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
             <!-- Pipeline Section -->
             <section class="pipeline-section">
                 <h2 class="section-title">Syndication Pipeline</h2>
@@ -203,6 +285,9 @@
         </div>
     </div>
 
+    <!-- Firebase SDK -->
+    <script type="module" src="js/firebase-config.js"></script>
+    
     <!-- Scripts -->
     <script src="js/config.js"></script>
     <script src="js/api-client.js"></script>
@@ -224,6 +309,7 @@
     <script src="js/components/agents.js"></script>
     <script src="js/components/analytics.js"></script>
     <script src="js/components/alerts.js"></script>
+    <script src="js/components/origination-form.js"></script>
     <script src="js/agent-orchestration.js"></script>
     <script src="js/app.js"></script>
 </body>

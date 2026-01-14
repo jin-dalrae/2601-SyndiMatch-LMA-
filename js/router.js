@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 // ========================================
 // Router - Simple Client-Side Routing
 // Handles URL changes and view switching
@@ -23,6 +24,27 @@ const Router = {
         });
 
         if (Config?.DEBUG) console.log('🗺️ Router initialized');
+=======
+/**
+ * SyndiMatch Router
+ * Simple hash-based client-side router
+ */
+const Router = {
+    routes: {},
+    currentRoute: null,
+
+    init() {
+        window.addEventListener('hashchange', () => this.handleRoute());
+        window.addEventListener('load', () => this.handleRoute());
+        console.log('🧭 Router initialized');
+    },
+
+    /**
+     * Register a route handler
+     */
+    on(path, handler) {
+        this.routes[path] = handler;
+>>>>>>> syndication-change
     },
 
     /**
@@ -35,6 +57,7 @@ const Router = {
     /**
      * Handle route change
      */
+<<<<<<< HEAD
     handleRoute(path) {
         if (path === '') path = '/';
 
@@ -75,4 +98,29 @@ const Router = {
 };
 
 // Expose globally
+=======
+    handleRoute() {
+        const hash = window.location.hash.slice(1) || '/';
+        const [path, queryString] = hash.split('?');
+
+        const params = new URLSearchParams(queryString);
+
+        // Find matching route
+        // Simple exact match for now, could add regex for params
+        let handler = this.routes[path];
+
+        // Fallback to default if not found
+        if (!handler) {
+            handler = this.routes['/'] || this.routes['/overview'];
+        }
+
+        if (handler) {
+            this.currentRoute = path;
+            AppState.set('activeView', path.replace('/', ''));
+            handler(Object.fromEntries(params));
+        }
+    }
+};
+
+>>>>>>> syndication-change
 window.Router = Router;

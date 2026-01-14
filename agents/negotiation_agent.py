@@ -11,12 +11,12 @@ import logging
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from state import SyndicationState, AuctionDecision
-from config import (
+from .state import SyndicationState, AuctionDecision
+from .config import (
     ANTHROPIC_API_KEY, AGENT_MODEL, 
     MAX_AUCTION_ROUNDS, MIN_SUBSCRIPTION_RATE, EARLY_CLOSE_THRESHOLD
 )
-import db
+from . import db
 
 logger = logging.getLogger(__name__)
 
@@ -34,11 +34,14 @@ class NegotiationAgent:
     def __init__(self, syndication_id: str):
         self.syndication_id = syndication_id
         self.agent_id = f"NA-{syndication_id}"
-        self.llm = ChatAnthropic(
-            model=AGENT_MODEL,
-            api_key=ANTHROPIC_API_KEY,
-            temperature=0.3
-        )
+        if ANTHROPIC_API_KEY and ANTHROPIC_API_KEY.startswith("sk-"):
+            self.llm = ChatAnthropic(
+                model=AGENT_MODEL,
+                api_key=ANTHROPIC_API_KEY,
+                temperature=0.3
+            )
+        else:
+            self.llm = None
         self.config = None
     
     def _load_or_create_config(self, current_time_str: Optional[str] = None) -> Dict[str, Any]:
@@ -52,7 +55,10 @@ class NegotiationAgent:
             raise ValueError(f"Syndication {self.syndication_id} not found")
         
         now = datetime.fromisoformat(current_time_str) if current_time_str else datetime.utcnow()
-        target_close = datetime.fromisoformat(synd["timeline"]["target_close_date"].replace("Z", ""))
+        
+        # Use robust parsing
+        from dateutil.parser import isoparse
+        target_close = isoparse(synd["timeline"]["target_close_date"])
         hours_remaining = (target_close - now).total_seconds() / 3600
         
         if hours_remaining < 48:
@@ -109,6 +115,140 @@ class NegotiationAgent:
         
         db.negotiation_agents().insert_one(config)
         return config
+
+    def calculate_max_rounds(self, state: SyndicationState) -> int:
+        if not self.config:
+            self.config = self._load_or_create_config(state.get("current_time"))
+        return self.config["auction_config"]["max_rounds"]
+
+    def get_round_duration(self, state: SyndicationState) -> int:
+        if not self.config:
+            self.config = self._load_or_create_config(state.get("current_time"))
+        return self.config["auction_config"]["round_duration_minutes"]
+
+    def run_auction_round(self, state: SyndicationState, round_num: int) -> SyndicationState:
+        """Run a single auction round"""
+        # Lazy load config
+        if not self.config:
+            self.config = self._load_or_create_config(state.get("current_time"))
+        
+        # Ensure state contains required keys
+        state.setdefault("rejected_bids", [])
+        state.setdefault("allocations", [])
+        state.setdefault("auction_history", [])
+        
+        state["status"] = "negotiating"
+        state["negotiation_agent_id"] = self.agent_id
+        state["current_round"] = round_num
+        
+        # Collect bids
+        bids = list(db.bids().find({
+            "syndication_id": self.syndication_id,
+            "bid_status": "active",
+            "spread_bid": {"$lte": state["current_spread"]}
+        }))
+        
+        # Calculate stats
+        target = self.config["auction_config"]["target_subscription"]
+        total_committed = sum(b["bid_amount"] for b in bids)
+        subscription_rate = total_committed / target if target > 0 else 0
+        
+        state["total_committed"] = total_committed
+        state["subscription_rate"] = subscription_rate
+        
+        # Initialize negotiation_state if needed (orchestrator uses this)
+        if "negotiation_state" not in state:
+             state["negotiation_state"] = {}
+        state["negotiation_state"]["current_spread"] = state["current_spread"]
+        state["negotiation_state"]["total_committed"] = total_committed
+        state["negotiation_state"]["subscription_rate"] = subscription_rate
+        state["negotiation_state"]["auction_round"] = round_num
+        
+        # Log round
+        round_record = {
+            "round": round_num,
+            "spread": state["current_spread"],
+            "total_committed": total_committed,
+            "subscription_rate": subscription_rate,
+            "bids_count": len(bids),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        if "auction_history" not in state:
+            state["auction_history"] = []
+        state["auction_history"].append(round_record)
+        
+        # Update DB
+        self._update_syndication(state)
+        self._update_tracking(state, len(bids))
+        
+        logger.info(f"[{self.agent_id}] Round {round_num}: "
+                   f"${total_committed:,} ({subscription_rate*100:.1f}%) @ {state['current_spread']} bps")
+        
+        # Prepare spread for next round (decrement)
+        # But only if not closing? Orchestrator loop controls flow.
+        # We decrement here so next round uses lower spread.
+        spread_decrement = self.config["auction_config"]["spread_decrement"]
+        min_spread = self.config["auction_config"]["minimum_spread"]
+        
+        new_spread = state["current_spread"] - spread_decrement
+        # Don't go below min spread (logic handled in is_auction_failing or next checking)
+        # Just update state for next iteration
+        state["current_spread"] = max(new_spread, min_spread)
+        
+        return state
+
+    def should_close_auction(self, state: SyndicationState) -> bool:
+        """Check if auction should close successfully"""
+        sub_rate = state["negotiation_state"]["subscription_rate"]
+        round_num = state["negotiation_state"]["auction_round"]
+        
+        if sub_rate >= 1.0:
+            return True
+        
+        if sub_rate >= EARLY_CLOSE_THRESHOLD and round_num >= 3:
+            return True
+            
+        # Check min spread reached logic - if we hit min spread and have min subscription
+        min_spread = self.config["auction_config"]["minimum_spread"]
+        current_spread = state["negotiation_state"]["current_spread"]
+        
+        if current_spread <= min_spread and sub_rate >= MIN_SUBSCRIPTION_RATE:
+            return True
+            
+        return False
+
+    def is_auction_failing(self, state: SyndicationState, round_num: int, max_rounds: int) -> bool:
+        """Check if auction is failing"""
+        min_spread = self.config["auction_config"]["minimum_spread"]
+        current_spread = state["negotiation_state"]["current_spread"]
+        sub_rate = state["negotiation_state"]["subscription_rate"]
+        
+        # Hit min spread without enough subscription
+        if current_spread <= min_spread and sub_rate < MIN_SUBSCRIPTION_RATE:
+            return True
+            
+        return False
+
+    def finalize_auction(self, state: SyndicationState) -> SyndicationState:
+        """Finalize auction based on final state"""
+        bids = list(db.bids().find({
+            "syndication_id": self.syndication_id,
+            "bid_status": "active"
+        }))
+        
+        sub_rate = state["negotiation_state"]["subscription_rate"]
+        
+        if sub_rate >= MIN_SUBSCRIPTION_RATE:
+            if sub_rate >= 1.0:
+                reason = "fully_subscribed"
+            elif sub_rate >= EARLY_CLOSE_THRESHOLD:
+                reason = "early_close"
+            else:
+                reason = "max_rounds_reached" # or min spread reached
+                
+            return self._close_auction(state, bids, reason)
+        else:
+            return self._fail_auction(state, "insufficient_subscription")
     
     def calculate_max_rounds(self, state: SyndicationState) -> int:
         """Calculate maximum rounds based on syndication parameters"""
@@ -421,8 +561,13 @@ class NegotiationAgent:
         """Close auction with uniform price (all pay clearing spread)"""
         logger.info(f"[{self.agent_id}] Closing auction: {reason}")
         
+<<<<<<< HEAD
         if not self.config:
             self.config = self._load_or_create_config(state.get("current_time"))
+=======
+        # Ensure collections exist
+        state.setdefault("rejected_bids", [])
+>>>>>>> syndication-change
         
         target = self.config["auction_config"]["target_subscription"]
         total_bids = sum(b["bid_amount"] for b in bids)
@@ -440,8 +585,13 @@ class NegotiationAgent:
                 allocations.append(alloc)
         else:
             # Pro-rata allocation
+<<<<<<< HEAD
             pro_rata_factor = target / total_bids
             for bid in sorted_bids:
+=======
+            pro_rata_factor = target / total_bids if total_bids > 0 else 0
+            for bid in bids:
+>>>>>>> syndication-change
                 alloc_amount = int(bid["bid_amount"] * pro_rata_factor)
                 if alloc_amount >= bid.get("min_allocation", 0):
                     alloc = self._create_allocation(bid, alloc_amount, final_spread, "pro_rata", target)
@@ -465,6 +615,11 @@ class NegotiationAgent:
                 {"$set": {"bid_status": "provisional_winner", "final_spread": final_spread}}
             )
         
+        # Calculate allocation percentages for analytics
+        total_allocated = sum(a["final_allocation"] for a in allocations)
+        for a in allocations:
+            a["allocation_percentage"] = round(a["final_allocation"] / total_allocated * 100, 2) if total_allocated > 0 else 0
+
         state["allocations"] = allocations
         state["status"] = "closing"
         
@@ -539,11 +694,17 @@ class NegotiationAgent:
     def _calculate_fees(self, amount: int) -> Dict[str, Any]:
         """Calculate fees for an allocation"""
         synd = db.syndications().find_one({"_id": self.syndication_id})
+<<<<<<< HEAD
         pricing = synd.get("pricing", {})
         
         commitment_fee_pct = pricing.get("commitment_fee", 0.5)
         arrangement_fee_pct = pricing.get("arrangement_fee", 2.0)
         upfront_fee_pct = pricing.get("upfront_fee", 1.0)
+=======
+        commitment_fee_pct = synd.get("pricing", {}).get("commitment_fee", 0.5)
+        # Arrangement fee should preferably come from syndication config
+        arrangement_fee_pct = synd.get("pricing", {}).get("arrangement_fee", 2.0)
+>>>>>>> syndication-change
         
         return {
             "commitment_fee": int(amount * commitment_fee_pct / 100),

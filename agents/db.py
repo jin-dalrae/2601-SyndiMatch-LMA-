@@ -10,7 +10,7 @@ from typing import Optional, Dict, Any, List
 import logging
 import os
 
-from config import MONGODB_URI, DATABASE_NAME
+from .config import MONGODB_URI, DATABASE_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +24,7 @@ def get_database() -> Database:
     global _client, _db
     
     if _db is None:
+<<<<<<< HEAD
         try:
             _client = MongoClient(
                 MONGODB_URI,
@@ -51,6 +52,11 @@ def get_database() -> Database:
         except Exception as e:
             logger.error(f"❌ MongoDB error: {e}")
             raise
+=======
+        _client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=5000)
+        _db = _client[DATABASE_NAME]
+        logger.info(f"Connected to MongoDB: {DATABASE_NAME}")
+>>>>>>> syndication-change
     
     return _db
 
@@ -131,7 +137,8 @@ def get_collection(name: str):
 # ============== Collection Shortcuts ==============
 
 def syndications():
-    return get_collection("syndications")
+    """Point to the canonical syndications collection"""
+    return get_collection("syndication_original")
 
 def bids():
     return get_collection("bids")
@@ -146,10 +153,12 @@ def payment_history():
     return get_collection("payment_history")
 
 def participant_agents():
-    return get_collection("participant_agents")
+    """Point to the richer participants collection"""
+    return get_collection("participants")
 
 def originator_agents():
-    return get_collection("originator_agents")
+    """Point to the richer originator collection"""
+    return get_collection("originator")
 
 def negotiation_agents():
     return get_collection("negotiation_agents")
@@ -299,3 +308,14 @@ def close_connection():
         _db = None
         _indexes_created = False
         logger.info("MongoDB connection closed")
+
+
+def ping_database() -> bool:
+    """Ping MongoDB to verify connectivity."""
+    try:
+        db = get_database()
+        db.command({"ping": 1})
+        return True
+    except Exception as exc:
+        logger.error(f"MongoDB ping failed: {exc}")
+        return False

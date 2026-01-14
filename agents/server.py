@@ -13,11 +13,14 @@ import json
 import logging
 import secrets
 
-from orchestrator import run_syndication, run_syndication_async, build_syndication_graph
-from originator_agent import generate_syndication
-from participant_agent import ParticipantAgent
-from x402_client import x402, PaymentStatus  # Import x402 client
-import db
+# Use absolute imports since all files are in the same directory (/app)
+# PYTHONPATH is set to /app in Dockerfile
+from .orchestrator import run_syndication, run_syndication_async, build_syndication_graph
+from .originator_agent import OriginatorAgent, generate_syndication
+from .participant_agent import ParticipantAgent
+from .x402_client import x402, PaymentStatus  # Import x402 client
+from . import db
+from .event_bus import EventBus
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -83,6 +86,25 @@ class ConnectionManager:
                 logger.error(f"Broadcast error: {e}")
 
 manager = ConnectionManager()
+_main_event_loop = None  # Set on startup for thread-safe WS broadcasts
+
+
+def _broadcast_domain_event(event: Any) -> None:
+    """
+    Bridge DomainEvents from the EventBus to all connected WebSocket clients.
+    Uses the main FastAPI event loop to schedule async broadcasts from worker threads.
+    """
+    global _main_event_loop
+    if not _main_event_loop or _main_event_loop.is_closed():
+        return
+
+    try:
+        payload = event.to_dict()
+        # Ensure a consistent shape for the frontend
+        payload["status"] = "active"
+        asyncio.run_coroutine_threadsafe(manager.broadcast(payload), _main_event_loop)
+    except Exception as e:
+        logger.error(f"WS broadcast failed for {type(event).__name__}: {e}")
 
 
 # === Request Models ===
@@ -93,7 +115,9 @@ class CreateSyndicationRequest(BaseModel):
 
 
 class RunSyndicationRequest(BaseModel):
-    syndication_id: str
+    syndication_id: Optional[str] = None
+    originator_id: str = "OA-001"
+    loan_params: Optional[Dict[str, Any]] = None
 
 
 # === REST Endpoints ===
@@ -103,13 +127,29 @@ async def root():
     return {"status": "online", "service": "SyndiMatch Agent API"}
 
 
+@app.get("/health")
+async def health_check():
+    """Simple health check for Cloud Run"""
+    return {"status": "ok"}
+
+
 @app.get("/api/health")
 async def health():
+    db_ok = db.ping_database()
+    status = "healthy" if db_ok else "degraded"
     return {
-        "status": "healthy",
+        "status": status,
         "timestamp": datetime.utcnow().isoformat(),
-        "database": "connected"
+        "database": "connected" if db_ok else "unreachable"
     }
+
+
+@app.get("/api/ready")
+async def readiness():
+    """Readiness check that validates database connectivity."""
+    if not db.ping_database():
+        raise HTTPException(status_code=503, detail="Database not ready")
+    return {"status": "ready"}
 
 
 @app.post("/api/syndication/create")
@@ -117,6 +157,9 @@ async def create_syndication(request: CreateSyndicationRequest):
     """Create a new syndication without running the workflow"""
     try:
         state = generate_syndication(request.originator_id, request.loan_params)
+        # Persist the new syndication for the dashboard and later runs
+        agent = OriginatorAgent(state["originator_agent_id"])
+        state = agent.broadcast_loan(state)
         
         # Broadcast to connected clients
         await manager.broadcast({
@@ -136,11 +179,12 @@ async def create_syndication(request: CreateSyndicationRequest):
 
 
 @app.post("/api/syndication/run")
-async def run_full_syndication(request: CreateSyndicationRequest):
+async def run_full_syndication(request: RunSyndicationRequest):
     """Run a complete syndication workflow"""
     try:
+        target_id = request.syndication_id or request.originator_id
         # Run in background
-        result = await run_syndication_async(request.originator_id)
+        result = await run_syndication_async(target_id, request.loan_params)
         
         return {
             "success": True,
@@ -148,10 +192,29 @@ async def run_full_syndication(request: CreateSyndicationRequest):
             "status": result.get("status"),
             "total_committed": result.get("total_committed"),
             "subscription_rate": result.get("subscription_rate"),
-            "allocations": len(result.get("allocations", []))
+            "allocations_count": len(result.get("allocations", []))
         }
     except Exception as e:
         logger.error(f"Run syndication error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/orchestrator/reset")
+async def reset_orchestrator():
+    """Reset the orchestration engine state and events"""
+    try:
+        # Clear syndication_events collection
+        db.get_collection("syndication_events").delete_many({})
+        
+        # Broadcast reset to dashboard
+        await manager.broadcast({
+            "type": "engine_reset",
+            "message": "Orchestration engine state and events cleared"
+        })
+        
+        return {"success": True, "message": "Engine reset complete"}
+    except Exception as e:
+        logger.error(f"Reset engine error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -160,11 +223,14 @@ async def get_syndications():
     """Get all syndications"""
     try:
         syndications = list(db.syndications().find({}).sort("created_at", -1).limit(50))
-        # Convert ObjectId to string
+        # Standardize ObjectId -> str conversion
         for s in syndications:
-            s["_id"] = str(s["_id"]) if "_id" in s else s.get("syndication_id")
+            if "_id" in s:
+                s["_id"] = str(s["_id"])
+            # Handle potential Dict[str, Any] nested states if needed
         return syndications
     except Exception as e:
+        logger.error(f"Get syndications error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -234,6 +300,7 @@ async def get_all_allocations():
 @app.get("/api/payments/{syndication_id}")
 async def get_payments(syndication_id: str):
     """Get payment history for a syndication"""
+<<<<<<< HEAD
     payments_list = list(db.payments().find({"syndication_id": syndication_id}))
     return payments_list
 
@@ -288,6 +355,22 @@ async def get_all_data():
         "timestamp": datetime.utcnow().isoformat()
     })
 
+=======
+    try:
+        payments_list = list(db.payment_history().find({"syndication_id": syndication_id}))
+        # Standardize IDs and dates for JSON
+        for p in payments_list:
+            if "_id" in p:
+                p["_id"] = str(p["_id"])
+            if "created_at" in p and isinstance(p["created_at"], datetime):
+                p["created_at"] = p["created_at"].isoformat()
+            if "due_date" in p and isinstance(p["due_date"], datetime):
+                p["due_date"] = p["due_date"].isoformat()
+        return payments_list
+    except Exception as e:
+        logger.error(f"Get payments error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+>>>>>>> syndication-change
 
 
 @app.post("/api/agents/bid")
@@ -310,6 +393,14 @@ async def agent_bid(request: Dict[str, Any]):
         else:
             current_time = datetime.utcnow()
 
+        # Validate and parse numeric inputs safely
+        try:
+            amount_m = float(syndication_data.get("amount", 0))
+            spread = int(syndication_data.get("spread", 400))
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="Invalid amount or spread format")
+
+        from datetime import timedelta
         # Map frontend data to SyndicationState
         # Note: We construct a partial state sufficient for evaluation
         state = {
@@ -318,18 +409,18 @@ async def agent_bid(request: Dict[str, Any]):
             "loan_details": {
                 "borrower_name": syndication_data.get("borrower"),
                 "industry": syndication_data.get("industry"),
-                "total_amount": int(syndication_data.get("amount") * 1000000), # Convert M to absolute
+                "total_amount": int(amount_m * 1000000), # Convert M to absolute
                 "credit_rating": syndication_data.get("rating"),
-                "syndication_target": int(syndication_data.get("amount") * 1000000),
+                "syndication_target": int(amount_m * 1000000),
                 "loan_type": "Term Loan B" # Default
             },
             "pricing": {
                 "base_rate": "SOFR",
-                "initial_spread": syndication_data.get("spread", 400)
+                "initial_spread": spread
             },
-            "current_spread": syndication_data.get("spread", 400),
+            "current_spread": spread,
             "subscription_rate": float(syndication_data.get("subscription", 0)) / 100.0,
-            "current_round": syndication_data.get("round", 1),
+            "current_round": int(syndication_data.get("round", 1)),
             "timeline": {
                 # Ensure target close is in future relative to simulation time
                 "target_close_date": (current_time + timedelta(hours=48)).isoformat()
@@ -565,38 +656,48 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             data = await websocket.receive_text()
             message = json.loads(data)
+            msg_type = message.get("type")
             
             # Handle different message types
-            if message.get("type") == "subscribe":
-                # Client wants to subscribe to updates
+            if msg_type == "subscribe":
                 await websocket.send_json({
                     "type": "subscribed",
                     "message": "Connected to SyndiMatch updates"
                 })
             
-            elif message.get("type") == "run_syndication":
-                # Client wants to run a syndication
+            elif msg_type == "run_syndication":
                 originator = message.get("originator_id", "OA-001")
+                synd_id = message.get("syndication_id")
+                step_mode = message.get("step_mode", False)
                 
                 await websocket.send_json({
                     "type": "syndication_started",
-                    "message": f"Starting syndication with {originator}"
+                    "message": f"Starting syndication run (Step Mode: {step_mode})"
                 })
                 
-                # Run syndication and stream updates
-                result = await run_syndication_async(originator)
-                
-                await websocket.send_json({
-                    "type": "syndication_complete",
-                    "data": {
-                        "syndication_id": result.get("syndication_id"),
-                        "status": result.get("status"),
-                        "total_committed": result.get("total_committed"),
-                        "allocations": len(result.get("allocations", []))
-                    }
-                })
+                # Run as background task
+                loan_params = {"step_mode": step_mode}
+                asyncio.create_task(_handle_run_syndication_ws(websocket, originator, synd_id, loan_params))
+
+            elif msg_type == "step_syndication":
+                synd_id = message.get("syndication_id")
+                if synd_id:
+                    await websocket.send_json({
+                        "type": "syndication_started",
+                        "message": f"Stepping syndication {synd_id}..."
+                    })
+                    asyncio.create_task(_handle_resume_syndication_ws(websocket, synd_id))
+
+            elif msg_type == "reset_engine":
+                try:
+                    db.get_collection("syndication_events").delete_many({})
+                    await websocket.send_json({
+                        "type": "engine_reset",
+                        "message": "Engine state cleared"
+                    })
+                except Exception as e:
+                    await websocket.send_json({"type": "error", "message": f"Reset failed: {e}"})
             
-            elif message.get("type") == "ping":
                 await websocket.send_json({"type": "pong"})
     
     except WebSocketDisconnect:
@@ -606,12 +707,68 @@ async def websocket_endpoint(websocket: WebSocket):
         manager.disconnect(websocket)
 
 
+async def _handle_run_syndication_ws(websocket: WebSocket, originator_id: str, synd_id: Optional[str], loan_params: Optional[Dict[str, Any]] = None):
+    """Helper to run syndication and report back over WS"""
+    try:
+        target_id = synd_id or originator_id
+        result = await run_syndication_async(target_id, loan_params)
+        
+        # If it returned with 'paused', it will be handled by events
+        # but we also report final status if it completed
+        if not result.get("paused"):
+            await websocket.send_json({
+                "type": "syndication_complete",
+                "data": {
+                    "syndication_id": result.get("syndication_id"),
+                    "status": result.get("status"),
+                    "total_committed": result.get("total_committed"),
+                    "allocations_count": len(result.get("allocations", []))
+                }
+            })
+    except Exception as e:
+        logger.error(f"WS Syndication run error: {e}")
+        try:
+            await websocket.send_json({"type": "error", "message": f"Run failed: {str(e)}"})
+        except:
+            pass
+
+
+async def _handle_resume_syndication_ws(websocket: WebSocket, syndication_id: str):
+    """Helper to resume/step syndication and report back over WS"""
+    try:
+        from orchestrator import resume_syndication_async
+        result = await resume_syndication_async(syndication_id)
+        
+        if not result.get("paused"):
+            await websocket.send_json({
+                "type": "syndication_complete",
+                "data": {
+                    "syndication_id": result.get("syndication_id"),
+                    "status": result.get("status"),
+                    "total_committed": result.get("total_committed"),
+                    "allocations_count": len(result.get("allocations", []))
+                }
+            })
+    except Exception as e:
+        logger.error(f"WS Resume error: {e}")
+        try:
+            await websocket.send_json({"type": "error", "message": f"Step failed: {str(e)}"})
+        except:
+            pass
+
+
 # === Startup Events ===
 
 @app.on_event("startup")
 async def startup():
     logger.info("SyndiMatch Agent API starting...")
+    global _main_event_loop
+    _main_event_loop = asyncio.get_running_loop()
+    # Register WS bridge as a sticky global handler (survives setup_event_handlers clears)
+    EventBus.subscribe_all_sticky(_broadcast_domain_event)
     db.get_database()
+    if not db.ping_database():
+        raise RuntimeError("MongoDB not reachable on startup")
     logger.info("Database connected")
 
 

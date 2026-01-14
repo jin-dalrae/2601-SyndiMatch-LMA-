@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "syndimatch-7383b"
+  },
+  "targets": {
+    "syndimatch-7383b": {
+      "hosting": {
+        "syndimatch": [
+          "syndimatch"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

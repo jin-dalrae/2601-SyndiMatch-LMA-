@@ -8,13 +8,14 @@ from typing import Dict, Any, List, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import logging
+import uuid
 
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from state import SyndicationState, BidDecision, Bid
-from config import ANTHROPIC_API_KEY, AGENT_MODEL
-import db
+from .state import SyndicationState, BidDecision, Bid
+from .config import ANTHROPIC_API_KEY, AGENT_MODEL
+from . import db
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,7 @@ class ParticipantAgent:
     """
     
     def __init__(self, agent_id: str):
+<<<<<<< HEAD
         self.agent_id = agent_id
         self.llm = ChatAnthropic(
             model=AGENT_MODEL,
@@ -54,6 +56,35 @@ class ParticipantAgent:
         )
         self.profile = self._load_profile()
         self._cached_capacity = None
+=======
+        self.agent_id = str(agent_id)
+        
+        # Initialize LLM only if API key is present
+        if ANTHROPIC_API_KEY and ANTHROPIC_API_KEY.startswith("sk-"):
+            self.llm = ChatAnthropic(
+                model=AGENT_MODEL,
+                api_key=ANTHROPIC_API_KEY,
+                temperature=0.7
+            )
+        else:
+            self.llm = None
+            logger.info(f"[{self.agent_id}] No valid API Key found. Running in Simulation Mode (Rule-Based).")
+            
+        try:
+            self.profile = self._load_profile()
+        except Exception as e:
+            logger.warning(f"[{self.agent_id}] Profile load failed: {e}. Using default.")
+            self.profile = {
+                "institution": {"name": "Default Investor", "type": "Bank"},
+                "risk_appetite": {
+                    "available_capacity": 100000000, 
+                    "min_ticket": 1000000, 
+                    "max_single_ticket": 20000000,
+                    "min_acceptable_yield": 4.0
+                },
+                "strategy": {"investment_style": "balanced"}
+            }
+>>>>>>> syndication-change
     
     def _load_profile(self) -> Dict[str, Any]:
         """Load participant profile from MongoDB"""
@@ -74,8 +105,29 @@ class ParticipantAgent:
                 self.profile["risk_appetite"]["available_capacity"] = self._cached_capacity
     
     def _refresh_profile(self):
+<<<<<<< HEAD
         """Full profile refresh (use sparingly)"""
         self.profile = self._load_profile()
+=======
+        """Refresh profile from database to get latest state"""
+        try:
+            self.profile = self._load_profile()
+        except Exception as e:
+            # Log warning instead of silently swallowing
+            logger.warning(f"[{self.agent_id}] Profile refresh failed: {e}. Keeping existing.")
+
+    def evaluate_opportunity(self, state: SyndicationState) -> Optional[Dict[str, Any]]:
+        """
+        Evaluate opportunity and submit bid if applicable.
+        Used by the enhanced orchestrator for parallel execution.
+        """
+        decision = self.evaluate_loan(state)
+        
+        if decision and decision.decision == "bid":
+            return self.submit_bid(state, decision)
+        
+        return None
+>>>>>>> syndication-change
     
     def evaluate_opportunity(self, state: SyndicationState) -> Optional[Dict[str, Any]]:
         """
@@ -107,9 +159,9 @@ class ParticipantAgent:
             )
         
         # Build prompt for LLM evaluation
-        prompt = self._build_evaluation_prompt(state)
-        
-        system_message = SystemMessage(content="""
+        if self.llm:
+            try:
+                system_message = SystemMessage(content="""
 You are an AI investment analyst for a financial institution participating in loan syndications.
 Analyze the loan opportunity and decide whether to bid based on your institution's profile.
 
@@ -123,6 +175,7 @@ Respond ONLY with valid JSON in this exact format:
     "risk_adjusted_return": <float percentage or null>
 }
 """)
+<<<<<<< HEAD
         
         try:
             response = self.llm.invoke([system_message, HumanMessage(content=prompt)])
@@ -139,6 +192,32 @@ Respond ONLY with valid JSON in this exact format:
         except Exception as e:
             logger.error(f"[{self.agent_id}] LLM evaluation failed: {e}")
             return self._rule_based_evaluation(state)
+=======
+                prompt = self._build_evaluation_prompt(state)
+                response = self.llm.invoke([system_message, HumanMessage(content=prompt)])
+                decision_data = json.loads(response.content)
+                
+                return BidDecision(
+                    decision=decision_data["decision"],
+                    amount=decision_data.get("amount", 0),
+                    spread=decision_data.get("spread", state["current_spread"]),
+                    reasoning=decision_data["reasoning"],
+                    portfolio_fit_score=decision_data.get("portfolio_fit_score", 0.5),
+                    risk_adjusted_return=decision_data.get("risk_adjusted_return")
+                )
+            except json.JSONDecodeError as e:
+                logger.error(f"[{self.agent_id}] LLM returned invalid JSON: {e}")
+                logger.debug(f"[{self.agent_id}] Raw LLM response: {response.content}")
+            except KeyError as e:
+                logger.error(f"[{self.agent_id}] LLM response missing required field: {e}")
+                logger.debug(f"[{self.agent_id}] Parsed data: {decision_data}")
+            except Exception as e:
+                logger.error(f"[{self.agent_id}] LLM evaluation failed: {e}")
+            # Fallback to rule-based decision
+        
+        # Fallback / Simulation Mode
+        return self._rule_based_evaluation(state)
+>>>>>>> syndication-change
     
     def _check_all_constraints(self, state: SyndicationState) -> List[str]:
         """Comprehensive constraint checking - returns list of violations"""
@@ -247,11 +326,19 @@ Respond ONLY with valid JSON in this exact format:
 - Credit Rating: {state['loan_details']['credit_rating']}
 - Total Amount: ${state['loan_details']['total_amount']:,}
 - Syndication Target: ${state['loan_details']['syndication_target']:,}
+<<<<<<< HEAD
 - Current Spread: {state.get('current_spread', state.get('pricing', {}).get('initial_spread', 0))} bps
 - Base Rate: {state.get('pricing', {}).get('base_rate', 'SOFR')}
 - All-in Yield (estimated): {4.5 + state.get('current_spread', 0)/100:.2f}%
 - Current Subscription: {state.get('subscription_rate', 0)*100:.1f}%
 - Auction Round: {state.get('current_round', 1)}
+=======
+- Current Spread: {state['current_spread']} bps
+- Base Rate: {state['pricing']['base_rate']}
+- All-in Yield (estimated): {self._calculate_yield(state):.2f}%
+- Current Subscription: {state['subscription_rate']*100:.1f}%
+- Auction Round: {state['current_round']}
+>>>>>>> syndication-change
 - Originator: {state['originator']}
 
 ## Decision Required
@@ -264,21 +351,112 @@ Remember: Your available capital is ${risk.get('available_capacity', 0):,}.
 Do not bid more than you have available.
 """
     
+<<<<<<< HEAD
+=======
+    def _passes_hard_constraints(self, state: SyndicationState) -> bool:
+        """Check if loan passes basic eligibility"""
+        risk = self.profile.get("risk_appetite", {})
+        sector_prefs = self.profile.get("sector_preferences", {})
+        rating_pref = risk.get("credit_rating_range", {})
+        
+        # Check available capacity with 2% buffer for fees
+        available_cap = risk.get("available_capacity", 0) - risk.get("reserved_for_bids", 0)
+        fee_buffer = available_cap * 0.02
+        if (available_cap - fee_buffer) < risk.get("min_ticket", 0):
+            return False
+        
+        # Check if sector is avoided
+        if state["loan_details"]["industry"] in sector_prefs.get("avoid", []):
+            return False
+
+        # Check rating against range if provided
+        loan_rating = state["loan_details"].get("credit_rating")
+        if loan_rating and rating_pref:
+            # Simple lexical check for min/max buckets if present
+            min_rating = rating_pref.get("min")
+            max_rating = rating_pref.get("max")
+            # If min/max exist and loan outside, fail
+            if min_rating and loan_rating < min_rating:
+                return False
+            if max_rating and loan_rating > max_rating:
+                return False
+        
+        return True
+    
+    def _get_violated_constraints(self, state: SyndicationState) -> List[str]:
+        """Get list of violated constraints"""
+        violations = []
+        risk = self.profile.get("risk_appetite", {})
+        sector_prefs = self.profile.get("sector_preferences", {})
+        
+        if risk.get("available_capacity", 0) < risk.get("min_ticket", 0):
+            violations.append("insufficient_capacity")
+        
+        if state["loan_details"]["industry"] in sector_prefs.get("avoid", []):
+            violations.append("sector_excluded")
+        
+        return violations
+    
+    def _calculate_yield(self, state: SyndicationState, spread: Optional[int] = None) -> float:
+        """
+        Calculate all-in yield using actual base rate from state.
+        
+        Args:
+            state: Syndication state containing pricing info
+            spread: Optional spread override (bps), defaults to current_spread
+        
+        Returns:
+            All-in yield as percentage (e.g., 7.5 for 7.5%)
+        """
+        # Get base rate - handle both numeric and string (e.g., "SOFR")
+        base_rate = state["pricing"].get("base_rate", 4.5)
+        
+        # If base_rate is a string like "SOFR", use current SOFR approximation
+        # In production, this would fetch from a rate service
+        if isinstance(base_rate, str):
+            # Current market approximations (should be fetched from rate service)
+            rate_lookup = {
+                "SOFR": 4.35,
+                "LIBOR": 4.50,  # Deprecated but may exist in legacy
+                "PRIME": 7.50,
+                "T-BILL": 4.25
+            }
+            base_rate = rate_lookup.get(base_rate.upper(), 4.5)
+        
+        spread_bps = spread if spread is not None else state.get("current_spread", 0)
+        return float(base_rate) + (spread_bps / 100)
+    
+>>>>>>> syndication-change
     def _rule_based_evaluation(self, state: SyndicationState) -> BidDecision:
         """Fallback rule-based evaluation if LLM fails"""
         risk = self.profile.get("risk_appetite", {})
         
+<<<<<<< HEAD
         # Simple yield check
         current_spread = state.get("current_spread", state.get("pricing", {}).get("initial_spread", 0))
         estimated_yield = 4.5 + current_spread / 100
+=======
+        # Calculate yield using ACTUAL base rate, not hardcoded 4.5
+        estimated_yield = self._calculate_yield(state)
+>>>>>>> syndication-change
         min_yield = risk.get("min_acceptable_yield", 0)
         
         if estimated_yield >= min_yield:
+            available = max(0, risk.get("available_capacity", 0) - risk.get("reserved_for_bids", 0))
+            capacity_after_fees = max(0, available - available * 0.02)
             amount = min(
                 risk.get("max_single_ticket", 50000000),
-                risk.get("available_capacity", 0),
+                capacity_after_fees,
                 state["loan_details"]["syndication_target"] * 0.15
             )
+            if amount < risk.get("min_ticket", 0):
+                return BidDecision(
+                    decision="pass",
+                    amount=0,
+                    spread=0,
+                    reasoning="Rule-based: Insufficient available capacity for min ticket",
+                    portfolio_fit_score=0.2
+                )
             return BidDecision(
                 decision="bid",
                 amount=int(amount),
@@ -353,7 +531,8 @@ Do not bid more than you have available.
         if decision.decision != "bid":
             return {"status": "passed", "participant": self.agent_id}
         
-        bid_id = f"BID-{state['syndication_id'].split('-')[-1]}-{self.agent_id.split('-')[-1]}"
+        # Generate unique bid ID using UUID to prevent collisions across rounds
+        bid_id = f"BID-{uuid.uuid4().hex[:12].upper()}"
         now_str = state.get("current_time")
         now = datetime.fromisoformat(now_str) if now_str else datetime.utcnow()
         
@@ -366,7 +545,7 @@ Do not bid more than you have available.
             "institution_type": self.profile.get("institution", {}).get("type", "Unknown"),
             "bid_amount": decision.amount,
             "spread_bid": decision.spread,
-            "all_in_yield": 4.5 + decision.spread / 100,
+            "all_in_yield": self._calculate_yield(state, decision.spread),
             "min_allocation": int(decision.amount * 0.5),
             "max_allocation": decision.amount,
             "partial_fill_acceptable": True,
@@ -398,7 +577,11 @@ Do not bid more than you have available.
             {"_id": self.agent_id},
             {
                 "$inc": {"performance_history.bids_submitted_ytd": 1},
-                "$set": {"last_bid_at": now}
+                "$set": {"last_bid_at": now},
+                "$inc": {
+                    "risk_appetite.available_capacity": -decision.amount,
+                    "risk_appetite.reserved_for_bids": decision.amount
+                }
             }
         )
         
@@ -416,6 +599,7 @@ Do not bid more than you have available.
                 "$inc": {
                     "risk_appetite.current_deployed": amount,
                     "risk_appetite.available_capacity": -amount,
+                    "risk_appetite.reserved_for_bids": -min(amount, self.profile.get("risk_appetite", {}).get("reserved_for_bids", 0)),
                     "performance_history.allocations_won": 1
                 },
                 "$set": {"updated_at": datetime.utcnow()}
@@ -506,6 +690,15 @@ Do not bid more than you have available.
     def notify_settlement_failed(self, syndication_id: str):
         """Handle notification that settlement failed"""
         logger.info(f"[{self.agent_id}] Settlement failed for {syndication_id}")
+
+    def notify_auction_failed(self, syndication_id: str, reason: str):
+        """Handle notification of failed auction"""
+        logger.info(f"[{self.agent_id}] Auction failed for {syndication_id}: {reason}")
+        # Release capital reservations if any (not implemented in this simplified version)
+
+    def notify_settlement_failed(self, syndication_id: str):
+        """Handle notification of failed settlement"""
+        logger.warning(f"[{self.agent_id}] Settlement failed for {syndication_id}")
 
 
 def evaluate_all_participants(state: SyndicationState) -> List[Dict[str, Any]]:
