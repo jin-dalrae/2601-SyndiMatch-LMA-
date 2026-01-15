@@ -287,6 +287,10 @@ class PaymentAgent:
     def process_single_payment(self, payment: Dict[str, Any]) -> PaymentDecision:
         """Public method for orchestrator to process single payment with retry"""
         return self._process_single_payment_with_retry(payment)
+
+    def _process_single_payment(self, payment: Dict[str, Any]) -> PaymentDecision:
+        """Internal compatibility wrapper for legacy call sites."""
+        return self._process_single_payment_with_retry(payment)
     
     def _process_single_payment_with_retry(self, payment: Dict[str, Any], attempt: int = 1) -> PaymentDecision:
         """Process a single payment with retry logic"""

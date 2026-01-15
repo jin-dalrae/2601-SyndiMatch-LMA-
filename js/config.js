@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 // ========================================
 // Configuration Management
 // Centralized configuration for all environments
@@ -8,37 +7,38 @@ const Config = {
     // API Endpoints
     API_URL: window.ENV?.API_URL || 'http://localhost:3001/api',
     AGENT_URL: window.ENV?.AGENT_URL || 'http://localhost:8000/api',
-    WS_URL: window.ENV?.WS_URL || 'ws://localhost:8765',
+    WS_URL: window.ENV?.WS_URL || 'ws://localhost:8000/ws',
 
     // Feature Flags
     ENABLE_MOCK_DATA: window.ENV?.ENABLE_MOCK_DATA === 'true' || false,
     ENABLE_WEBSOCKET: window.ENV?.ENABLE_WEBSOCKET !== 'false',
     ENABLE_AUTO_REFRESH: window.ENV?.ENABLE_AUTO_REFRESH !== 'false',
+    ENABLE_ANALYTICS: true,
+    USE_POLLING: false, // Default to WebSocket
 
     // Timeouts & Intervals
-    API_TIMEOUT: parseInt(window.ENV?.API_TIMEOUT) || 10000, // 10 seconds
+    API_TIMEOUT: parseInt(window.ENV?.API_TIMEOUT) || 15000,
     RETRY_MAX_ATTEMPTS: parseInt(window.ENV?.RETRY_MAX_ATTEMPTS) || 3,
-    RETRY_BASE_DELAY: parseInt(window.ENV?.RETRY_BASE_DELAY) || 1000, // 1 second
-    UPDATE_INTERVAL: parseInt(window.ENV?.UPDATE_INTERVAL) || 10000, // 10 seconds
+    RETRY_BASE_DELAY: parseInt(window.ENV?.RETRY_BASE_DELAY) || 1000,
+    UPDATE_INTERVAL: parseInt(window.ENV?.UPDATE_INTERVAL) || 10000,
     PORTFOLIO_REFRESH_INTERVAL: parseInt(window.ENV?.PORTFOLIO_REFRESH_INTERVAL) || 10000,
 
-    // Rate Limiting
-    RATE_LIMIT_MAX_PER_SECOND: parseInt(window.ENV?.RATE_LIMIT_MAX_PER_SECOND) || 10,
-
     // Caching
-    CACHE_TTL: parseInt(window.ENV?.CACHE_TTL) || 300000, // 5 minutes
+    CACHE_TTL: parseInt(window.ENV?.CACHE_TTL) || 60000,
     ENABLE_CACHE: window.ENV?.ENABLE_CACHE !== 'false',
 
     // Debug & Monitoring
     DEBUG: window.ENV?.DEBUG === 'true' || false,
-    LOG_LEVEL: window.ENV?.LOG_LEVEL || 'info', // 'debug', 'info', 'warn', 'error'
+    LOG_LEVEL: window.ENV?.LOG_LEVEL || 'info',
 
     // Authentication
-    API_KEY: window.ENV?.API_KEY || null,
+    API_KEY: window.ENV?.API_KEY || 'mock-api-key',
     AUTH_TOKEN: window.ENV?.AUTH_TOKEN || null,
 
     // Environment
-    ENVIRONMENT: window.ENV?.ENVIRONMENT || 'development', // 'development', 'staging', 'production'
+    ENVIRONMENT: window.ENV?.ENVIRONMENT || 'development',
+    CURRENCY: 'USD',
+    DATE_FORMAT: 'en-US',
 
     // Helper methods
     isDevelopment() {
@@ -58,55 +58,8 @@ const Config = {
 
 // Log configuration on load (only in development)
 if (Config.isDevelopment()) {
-    console.log('🔧 Configuration loaded:', {
-        environment: Config.ENVIRONMENT,
-        apiUrl: Config.API_URL,
-        agentUrl: Config.AGENT_URL,
-        wsUrl: Config.WS_URL,
-        features: {
-            mockData: Config.ENABLE_MOCK_DATA,
-            websocket: Config.ENABLE_WEBSOCKET,
-            autoRefresh: Config.ENABLE_AUTO_REFRESH,
-            cache: Config.ENABLE_CACHE
-        }
-    });
+    console.log('🔧 Configuration loaded:', Config);
 }
 
 // Make available globally
-=======
-/**
- * SyndiMatch Configuration
- * Centralized environment variables and feature flags
- */
-const Config = {
-    // Environment
-    ENV: window.ENV?.NODE_ENV || 'development',
-    IS_DEV: (window.ENV?.NODE_ENV || 'development') === 'development',
-
-    // API Endpoints
-    API_URL: window.ENV?.API_URL || 'http://localhost:3001/api',
-    WS_URL: window.ENV?.WS_URL || 'ws://localhost:8000/ws',
-
-    // Feature Flags
-    ENABLE_MOCK_DATA: false, // Set to false to force API usage
-    ENABLE_WEBSOCKET: true,
-    ENABLE_ANALYTICS: true,
-
-    // Timeouts & intervals
-    API_TIMEOUT: 15000, // 15s
-    CACHE_TTL: 60000,   // 1m
-    UPDATE_INTERVAL: 10000,
-
-    // Auth (Placeholder)
-    API_KEY: window.ENV?.API_KEY || 'mock-api-key',
-
-    // Constants
-    CURRENCY: 'USD',
-    DATE_FORMAT: 'en-US'
-};
-
-// Freeze to prevent modification
-Object.freeze(Config);
-
->>>>>>> syndication-change
 window.Config = Config;

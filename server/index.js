@@ -55,6 +55,16 @@ app.get('/api/ready', async (req, res) => {
     }
 });
 
+app.get('/api/all-data', async (req, res) => {
+    try {
+        const data = await callAgentsService('/api/all-data', 'GET');
+        res.json(data);
+    } catch (error) {
+        console.error('❌ Failed to fetch all-data from agents service:', error);
+        res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch all-data' });
+    }
+});
+
 // Syndications
 app.get('/api/syndications', async (req, res) => {
     try {
@@ -162,6 +172,18 @@ app.get('/api/participants', async (req, res) => {
     } catch (error) {
         console.error('❌ Failed to fetch participants:', error);
         res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch participants' });
+    }
+});
+
+// Originators
+app.get('/api/originators', async (req, res) => {
+    try {
+        const db = getDB();
+        const originators = await db.collection('originator').find({}).toArray();
+        res.json(originators);
+    } catch (error) {
+        console.error('❌ Failed to fetch originators:', error);
+        res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch originators' });
     }
 });
 

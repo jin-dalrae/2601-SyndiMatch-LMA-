@@ -1,62 +1,44 @@
 /**
  * SyndiMatch Agent Orchestration
- * Manages WebSocket connection to Python Agent Server and visualizes workflow
+ * Visualizes multi-agent workflow with real-time simulation integration
  */
 
 const AgentOrchestration = {
     // Configuration
     ws: null,
-<<<<<<< HEAD
     wsUrl: Config?.WS_URL || 'ws://localhost:8000/ws',
+    isConnected: false,
     reconnectAttempts: 0,
     maxReconnectAttempts: 10,
     baseReconnectDelay: 1000,
-=======
-    wsUrl: null,
-    isConnected: false,
-    reconnectAttempts: 0,
-    maxReconnectAttempts: 5,
-    usePolling: true,
+    usePolling: Config?.USE_POLLING || false,
     pollIntervalMs: 3000,
     pollTimer: null,
     seenEventIds: new Set(),
->>>>>>> syndication-change
 
     // State
-    isConnected: false,
     activeSyndication: null,
     workflowLog: [],
+    manualMode: false,
+    initialized: false,
 
     // Workflow Definitions
     workflowStages: [
-        { id: 'originator', name: 'Originator Agent', icon: '🏦', description: 'Generates syndication opportunity and broadcasts to participants' },
-        { id: 'participant', name: 'Participant Agents', icon: '🏢', description: 'Evaluate opportunity and submit bids based on risk profile' },
-        { id: 'negotiation', name: 'Negotiation Agent', icon: '⚡', description: 'Runs Dutch auction to determine clearing spread' },
-        { id: 'settlement', name: 'Settlement Agent', icon: '📋', description: 'Confirms allocations and generates documentation' },
-        { id: 'payment', name: 'Payment Agent', icon: '💰', description: 'Processes x402 payments and records transactions' }
+        { id: 'originator', name: 'Originator', icon: '🏦', description: 'Opens syndication & broadcasts deal', status: 'pending' },
+        { id: 'participant', name: 'Participants', icon: '🏢', description: '13 AI agents evaluate & bid', status: 'pending' },
+        { id: 'negotiation', name: 'Negotiation', icon: '⚡', description: 'Dutch auction for clearing spread', status: 'pending' },
+        { id: 'settlement', name: 'Settlement', icon: '📋', description: 'Confirms allocations & docs', status: 'pending' },
+        { id: 'payment', name: 'Payment', icon: '💰', description: 'x402 blockchain payments', status: 'pending' }
     ],
 
-<<<<<<< HEAD
-=======
-    // Current workflow state
-    currentStage: null,
-    workflowLog: [],
-    activeSyndication: null,
-    isSimulatedMode: false,  // Track if we're in simulated mode
-    manualMode: false,
-
-    /**
-     * Normalize syndication data from various sources to a consistent shape
-     */
     normalizeSyndication(data) {
         if (!data) return null;
-
         return {
             id: data.syndication_id || data.id || data._id || 'Unknown',
             borrower: data.loan_details?.borrower_name || data.borrower || 'Unknown Borrower',
             amount: typeof data.loan_details?.total_amount === 'number'
                 ? data.loan_details.total_amount / 1000000
-                : data.amount || 0,
+                : (data.amount || 0),
             rating: data.loan_details?.credit_rating || data.rating || 'N/A',
             spread: data.current_spread || data.pricing?.initial_spread || data.spread || data.loan_details?.spread || null,
             industry: data.loan_details?.industry || data.industry || 'Unknown',
@@ -68,44 +50,173 @@ const AgentOrchestration = {
         };
     },
 
->>>>>>> syndication-change
-    /**
-     * Initialize Module
-     */
     init() {
-<<<<<<< HEAD
         if (this.initialized) return;
         console.log('🤖 Initializing Agent Orchestration...');
-=======
-        console.log('🤖 Agent Orchestration initialized');
+
+        // Connect to WebSocket or use polling if configured
         if (this.usePolling) {
             this.startPolling();
-        } else {
+        } else if (Config?.ENABLE_WEBSOCKET) {
             this.connectWebSocket();
         }
+
         this.setupControlHandlers();
->>>>>>> syndication-change
-
-        // Connect WS
-        if (Config?.ENABLE_WEBSOCKET) {
-            this.connectWebSocket();
-        }
-
-<<<<<<< HEAD
-        // Listeners
         this.setupEventListeners();
 
+        // Critical: Connect to local simulation events
+        this.connectToSimulation();
+
         this.initialized = true;
-=======
-        // Listen for manual syndication triggers
-        window.addEventListener('newSyndication', (e) => this.onNewSyndication(e.detail));
     },
 
     /**
-     * Set up event handlers for controls
+     * Connect to local SimulationEngine events for real-time updates
      */
+    connectToSimulation() {
+        // Listen for simulation events
+        if (window.SimulationEngine) {
+            // Simulation lifecycle
+            SimulationEngine.on('simulationStart', () => {
+                this.addLogEntry('system', '▶️ Simulation started');
+                this.renderWorkflow();
+            });
+
+            SimulationEngine.on('simulationStop', () => {
+                this.addLogEntry('system', '⏸️ Simulation paused');
+                this.renderWorkflow();
+            });
+
+            SimulationEngine.on('simulationReset', () => {
+                this.resetUI();
+                this.addLogEntry('system', '🔄 Simulation reset');
+                this.renderWorkflow();
+            });
+
+            // Transaction events (bids, payments, etc.)
+            SimulationEngine.on('transaction', (tx) => {
+                this.handleTransaction(tx);
+            });
+
+            // Day change for periodic updates
+            SimulationEngine.on('dayChange', (data) => {
+                // Update context with current date
+                if (this.activeSyndication) {
+                    this.updateActiveContext();
+                }
+            });
+
+            console.log('📡 Connected to SimulationEngine');
+        }
+
+        // Listen for SyndiData events
+        window.addEventListener('newSyndication', (e) => this.onNewSyndication(e.detail));
+        window.addEventListener('syndicationUpdated', (e) => this.onSyndicationUpdated(e.detail));
+        window.addEventListener('bidPlaced', (e) => this.onBidPlaced(e.detail));
+        window.addEventListener('bidScheduled', (e) => this.onBidScheduled(e.detail));
+    },
+
+    /**
+     * Handle transaction from simulation engine
+     */
+    handleTransaction(tx) {
+        if (!tx) return;
+
+        switch (tx.type) {
+            case 'bid':
+                this.setStage('participant', 'active');
+                this.addLogEntry('participant', tx.description || `Bid placed: $${(tx.amount / 1000000).toFixed(1)}M`);
+                break;
+            case 'allocation':
+                this.setStage('negotiation', 'active');
+                this.addLogEntry('negotiation', tx.description || 'Allocation confirmed');
+                break;
+            case 'settlement':
+                this.setStage('settlement', 'active');
+                this.addLogEntry('settlement', tx.description || 'Settlement initiated');
+                break;
+            case 'payment':
+            case 'fee':
+                this.setStage('payment', 'active');
+                this.addLogEntry('payment', tx.description || `Payment: $${(tx.amount / 1000000).toFixed(2)}M`);
+                break;
+            default:
+                this.addLogEntry('system', tx.description || `Transaction: ${tx.type}`);
+        }
+
+        this.renderWorkflow();
+    },
+
+    /**
+     * Handle bid scheduled by AutoBidder
+     */
+    onBidScheduled(bid) {
+        const name = bid.participantName || bid.participantId || 'Participant';
+        this.addLogEntry('participant', `📋 ${name} scheduling bid: $${bid.amount}M`, bid.reasons?.join(', '));
+        this.setStage('participant', 'active');
+        this.renderWorkflow();
+    },
+
+    /**
+     * Handle bid executed
+     */
+    onBidPlaced(bid) {
+        const name = bid.participantName || bid.participantId || 'Participant';
+        this.addLogEntry('participant', `✅ ${name} placed $${bid.amount}M bid`);
+
+        // Update active deal context
+        if (this.activeSyndication && bid.syndicationId === this.activeSyndication.id) {
+            const synd = SyndiData?.syndications?.find(s => s.id === bid.syndicationId);
+            if (synd) {
+                this.activeSyndication = this.normalizeSyndication(synd);
+            }
+        }
+
+        this.renderWorkflow();
+    },
+
+    /**
+     * Handle syndication updated
+     */
+    onSyndicationUpdated(data) {
+        if (!data?.id) return;
+
+        const synd = SyndiData?.syndications?.find(s => s.id === data.id);
+        if (synd) {
+            // Update stage based on status
+            if (synd.subscription >= 100) {
+                this.setStage('participant', 'complete');
+                this.setStage('negotiation', 'active');
+                this.addLogEntry('negotiation', `🎯 Fully subscribed (${synd.subscription.toFixed(0)}%)`);
+            }
+
+            if (synd.status === 'closed' || synd.status === 'settled') {
+                this.setStage('negotiation', 'complete');
+                this.setStage('settlement', 'active');
+            }
+
+            if (synd.status === 'completed') {
+                this.setStage('settlement', 'complete');
+                this.setStage('payment', 'complete');
+                this.addLogEntry('system', '✅ Deal completed');
+            }
+
+            if (this.activeSyndication?.id === data.id) {
+                this.activeSyndication = this.normalizeSyndication(synd);
+            }
+        }
+
+        this.renderWorkflow();
+    },
+
+    updateActiveContext() {
+        const contextEl = document.getElementById('orch-context');
+        if (contextEl) {
+            contextEl.innerHTML = this.renderContext();
+        }
+    },
+
     setupControlHandlers() {
-        // Use event delegation for buttons that might be re-rendered
         document.addEventListener('click', (e) => {
             const id = e.target.id;
             if (id === 'btn-run-syndication') {
@@ -119,44 +230,21 @@ const AgentOrchestration = {
                 this.renderWorkflow();
             }
         });
-
-        document.addEventListener('change', (e) => {
-            if (e.target.id === 'check-manual-mode') {
-                this.manualMode = e.target.checked;
-                this.addLogEntry('system', `Manual Mode: ${this.manualMode ? 'ENABLED' : 'DISABLED'}`);
-            }
-        });
     },
 
-    /**
-     * Step workflow (execute next node)
-     */
-    stepWorkflow() {
-        if (!this.activeSyndication) {
-            this.addLogEntry('system', '⚠️ No active syndication to step');
-            return;
+    setupEventListeners() {
+        // Legacy listeners (kept for backward compatibility)
+        if (window.SimulationEngine) {
+            SimulationEngine.on('simulationStart', () => this.onSimulationStart());
         }
-
-        this.addLogEntry('system', `Stepping workflow for ${this.activeSyndication.id}...`);
-        if (this.isConnected && this.ws) {
-            this.ws.send(JSON.stringify({
-                type: 'step_syndication',
-                syndication_id: this.activeSyndication.id
-            }));
-        } else {
-            API.post('server', '/syndications/resume', {
-                syndication_id: this.activeSyndication.id
-            });
-        }
->>>>>>> syndication-change
     },
 
-    /**
-     * Establish WebSocket Connection
-     */
+    onSimulationStart() {
+        // Legacy handler - now covered by connectToSimulation()
+    },
+
     connectWebSocket() {
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
-
+        if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) return;
         try {
             this.ws = new WebSocket(this.wsUrl);
 
@@ -164,81 +252,49 @@ const AgentOrchestration = {
                 console.log('✅ Agent Server Connected');
                 this.isConnected = true;
                 this.reconnectAttempts = 0;
-<<<<<<< HEAD
-                AppState.set('agentConnected', true);
-                this.updateUIStatus(true);
-
-                // Subscribe
-                this.ws.send(JSON.stringify({ type: 'subscribe', client: 'web-ui' }));
-=======
                 this.updateConnectionStatus(true);
-                this.ws.send(JSON.stringify({ type: 'subscribe' }));
->>>>>>> syndication-change
+                this.ws.send(JSON.stringify({ type: 'subscribe', client: 'web-ui' }));
             };
 
-            this.ws.onmessage = (e) => this.handleMessage(JSON.parse(e.data));
+            this.ws.onmessage = (e) => {
+                try {
+                    const msg = JSON.parse(e.data);
+                    this.handleMessage(msg);
+                } catch (err) {
+                    console.error('Error parsing WS message:', err);
+                }
+            };
 
             this.ws.onclose = () => {
-<<<<<<< HEAD
-                if (this.isConnected) console.log('❌ Agent Server Disconnected');
-=======
->>>>>>> syndication-change
                 this.isConnected = false;
-                AppState.set('agentConnected', false);
-                this.updateUIStatus(false);
+                this.updateConnectionStatus(false);
                 this.scheduleReconnect();
             };
 
-<<<<<<< HEAD
-            this.ws.onerror = (e) => {
-                // Silent error on connection refusal to avoid console spam
-                if (this.isConnected) console.warn('WS Error:', e);
-=======
             this.ws.onerror = (error) => {
+                console.warn('WS Error:', error);
                 this.ws.close();
->>>>>>> syndication-change
             };
-
         } catch (e) {
             console.warn('WS Connection Failed:', e);
             this.scheduleReconnect();
         }
     },
 
-    /**
-     * Exponential Backoff Reconnect
-     */
-<<<<<<< HEAD
     scheduleReconnect() {
-        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-            console.log('⚠️ Max reconnect attempts reached. Agent features limited.');
-            return;
-=======
-    attemptReconnect() {
-        if (this.reconnectAttempts < this.maxReconnectAttempts) {
-            this.reconnectAttempts++;
-            setTimeout(() => this.connectWebSocket(), 3000);
->>>>>>> syndication-change
-        }
-
+        if (this.reconnectAttempts >= this.maxReconnectAttempts) return;
         const delay = this.baseReconnectDelay * Math.pow(1.5, this.reconnectAttempts);
         this.reconnectAttempts++;
-
         setTimeout(() => {
             if (!this.isConnected) this.connectWebSocket();
         }, delay);
     },
 
-    /**
-<<<<<<< HEAD
-     * Handle Incoming Messages
-=======
-     * Poll syndication events via Node API (no direct agent calls from browser)
-     */
     startPolling() {
         if (this.pollTimer) clearInterval(this.pollTimer);
         const poll = async () => {
-            const events = await API.get('server', '/syndication-events?limit=100');
+            if (!window.API) return;
+            const events = await API.get('server', '/syndication-events?limit=50');
             if (!events) {
                 this.isConnected = false;
                 this.updateConnectionStatus(false);
@@ -246,787 +302,443 @@ const AgentOrchestration = {
             }
             this.isConnected = true;
             this.updateConnectionStatus(true);
+
             const ordered = [...events].reverse();
             ordered.forEach((event) => {
                 const key = event._id || `${event.event_type}-${event.timestamp}`;
                 if (this.seenEventIds.has(key)) return;
                 this.seenEventIds.add(key);
-                this.handleServerMessage(event);
+                this.handleMessage(event);
             });
+
             if (this.seenEventIds.size > 1000) {
-                this.seenEventIds.clear();
+                const arr = Array.from(this.seenEventIds);
+                this.seenEventIds = new Set(arr.slice(-500));
             }
         };
         poll();
         this.pollTimer = setInterval(poll, this.pollIntervalMs);
     },
 
-    /**
-     * Handle message from Python agent server
-     * Updated to handle new domain events from events.py including agent reasoning
->>>>>>> syndication-change
-     */
-    handleMessage(msg) {
-        if (Config?.DEBUG) console.log('📨 Agent Msg:', msg);
+    handleMessage(message) {
+        if (!message) return;
+        const type = message.event_type || message.type;
+        const data = message.data || message;
 
-<<<<<<< HEAD
-        // Log to workflow
-        if (msg.log) {
-            this.addLogEntry(msg.source || 'system', msg.log);
+        if (message.log) {
+            this.addLogEntry(message.source || 'system', message.log);
         }
 
-        switch (msg.type) {
-            case 'syndication_created':
-                this.handleNewSyndication(msg.data);
-=======
-        // Handle both legacy format (type) and new format (event_type)
-        const eventType = message.event_type || message.type;
-        const eventData = message.data || message;
-
-        switch (eventType) {
-            // === Connection Events ===
+        switch (type) {
             case 'subscribed':
-                this.addLogEntry('system', 'Connected to LangGraph agents');
+                this.addLogEntry('system', 'Connected to Agent Orchestrator');
                 break;
-
             case 'engine_reset':
-                this.addLogEntry('system', '🔄 Engine state reset by server');
-                this.resetWorkflow(false); // don't re-send reset to server
+                this.addLogEntry('system', '🔄 Engine state reset');
+                this.resetUI();
                 break;
-
-            // === Domain Events ===
+            case 'syndication_created':
             case 'SyndicationOpened':
-                this.activeSyndication = this.normalizeSyndication(eventData);
+                this.activeSyndication = this.normalizeSyndication(data);
                 this.setStage('originator', 'complete');
+                this.setStage('participant', 'active');
                 this.addLogEntry('originator',
-                    `${eventData.originator} opened ${eventData.borrower} $${(eventData.amount / 1000000).toFixed(0)}M @ ${eventData.spread}bps`,
-                    eventData.reasoning);
+                    `${data.borrower || 'New Deal'} opened: $${((data.amount || data.loan_details?.total_amount || 0) / 1000000).toFixed(0)}M`,
+                    data.reasoning);
                 break;
-
             case 'BidReceived':
+            case 'bid_placed':
                 this.setStage('participant', 'active');
                 this.addLogEntry('participant',
-                    `${eventData.institution_name} bid $${(eventData.amount / 1000000).toFixed(1)}M @ ${eventData.spread}bps (${(eventData.cumulative_subscription * 100).toFixed(0)}% subscribed)`,
-                    eventData.reasoning,
-                    eventData.sentiment);
+                    `${data.participant || data.institution_name || 'Participant'} bid $${(data.amount / 1000000).toFixed(1)}M`,
+                    data.reasoning);
                 break;
-
-            case 'BidRejected':
-                this.addLogEntry('participant', `⏰ ${eventData.institution_name} rejected: ${eventData.reason}`);
-                break;
-
             case 'BiddingCompleted':
                 this.setStage('participant', 'complete');
-                this.addLogEntry('participant',
-                    `Bidding complete: ${eventData.total_bids} bids, ${(eventData.subscription_rate * 100).toFixed(0)}% subscribed`);
-                break;
-
-            case 'AuctionRoundCompleted':
                 this.setStage('negotiation', 'active');
-                this.addLogEntry('negotiation',
-                    `Round ${eventData.round_number}/${eventData.max_rounds}: ${eventData.current_spread}bps, ${(eventData.subscription_rate * 100).toFixed(0)}% subscribed`);
+                this.addLogEntry('negotiation', `Bidding complete: ${(data.subscription_rate * 100).toFixed(0)}% subscribed`);
                 break;
-
             case 'AuctionCompleted':
                 this.setStage('negotiation', 'complete');
-                this.addLogEntry('negotiation',
-                    `Auction closed: ${eventData.final_spread}bps (${eventData.spread_improvement}bps improvement), ${eventData.winning_bids} winners`);
-                break;
-
-            case 'AuctionFailed':
-                this.setStage('negotiation', 'complete');
-                this.addLogEntry('negotiation', `⚠️ Auction failed: ${eventData.reason} (${(eventData.final_subscription * 100).toFixed(0)}% subscribed)`);
-                break;
-
-            case 'SettlementStageCompleted':
                 this.setStage('settlement', 'active');
-                this.addLogEntry('settlement', `Stage ${eventData.stage_number}/${eventData.total_stages}: ${eventData.stage_name} complete`,
-                    eventData.reasoning, eventData.sentiment);
+                this.addLogEntry('negotiation', `Auction closed at ${data.final_spread}bps`);
                 break;
-
             case 'SettlementCompleted':
                 this.setStage('settlement', 'complete');
-                this.addLogEntry('settlement', `Settlement complete: ${eventData.allocations_confirmed} allocations, ${eventData.documents_signed || 0} docs signed`,
-                    eventData.reasoning, eventData.sentiment);
-                break;
-
-            case 'SettlementFailed':
-                this.setStage('settlement', 'complete');
-                this.addLogEntry('settlement', `⚠️ Settlement failed at ${eventData.stage_name}: ${eventData.reason}`);
-                break;
-
-            case 'PaymentProcessed':
                 this.setStage('payment', 'active');
-                this.addLogEntry('payment', `${eventData.payment_type}: ${eventData.completed || eventData.payments_processed}/${eventData.total || eventData.total_payments} processed ($${(eventData.amount_collected / 1000000).toFixed(2)}M)`,
-                    eventData.reasoning, eventData.sentiment);
+                this.addLogEntry('settlement', 'Settlement documentation finalized');
                 break;
-
-            case 'PaymentFailed':
-                this.addLogEntry('payment', `⚠️ Payment failed: ${eventData.payer_institution} $${(eventData.amount / 1000000).toFixed(2)}M: ${eventData.reason}`);
-                break;
-
+            case 'PaymentProcessed':
             case 'SyndicationCompleted':
                 this.setStage('payment', 'complete');
-                this.addLogEntry('system', `✅ Syndication complete: $${(eventData.total_syndicated / 1000000).toFixed(0)}M`,
-                    eventData.reasoning, eventData.sentiment);
+                this.addLogEntry('system', '✅ Syndication pipeline completed');
                 break;
-
-            case 'WorkflowPaused':
-                this.addLogEntry('system', `⏸ PAUSED before ${eventData.next_node}. Click Step or Run to continue.`);
-                this.setStage(this.getStageIdFromNodeName(eventData.next_node), 'active');
-                break;
-
-            case 'syndication_created':
-                this.activeSyndication = this.normalizeSyndication(message.data);
-                this.setStage('originator', 'active');
->>>>>>> syndication-change
-                break;
-            case 'bid_placed':
-                this.addLogEntry('participant', `${msg.data.participant} placed bid: $${msg.data.amount}M`);
-                break;
-<<<<<<< HEAD
             case 'market_update':
-                this.handleMarketUpdate(msg.data);
+                if (window.AppState) AppState.set('marketConditions', data.condition);
                 break;
-            case 'agent_update':
-                // General agent status update
-                break;
-=======
-
-            case 'pong':
-                break;
-
-            default:
-                console.log('Unknown event type:', eventType);
->>>>>>> syndication-change
         }
 
         this.renderWorkflow();
     },
 
-<<<<<<< HEAD
-    handleNewSyndication(data) {
-        this.activeSyndication = data;
-        this.resetWorkflow();
+    onNewSyndication(synd) {
+        this.activeSyndication = this.normalizeSyndication(synd);
+        this.resetUI();
         this.setStage('originator', 'complete');
         this.setStage('participant', 'active');
-
-        // Sync with AppState
-        // AppState.update('syndications', data);
-        window.dispatchEvent(new CustomEvent('newSyndication', { detail: data }));
-    },
-
-    handleMarketUpdate(data) {
-        if (window.MarketConditions) {
-            MarketConditions.currentCondition = data.condition;
-            AppState.set('marketConditions', data.condition);
-=======
-    /**
-     * Map internal node name to UI stage ID
-     */
-    getStageIdFromNodeName(nodeName) {
-        const map = {
-            'originator': 'originator',
-            'participants': 'participant',
-            'negotiation': 'negotiation',
-            'payment': 'payment',
-            'settlement': 'settlement',
-            'failed': 'negotiation', // If auction fails, it's still part of negotiation
-            'settlement_failed': 'settlement' // If settlement fails, it's still part of settlement
-        };
-        return map[nodeName] || 'originator';
-    },
-
-    /**
-     * Handle simulation start
-     */
-    onSimulationStart() {
-        this.resetWorkflow();
-        this.addLogEntry('system', 'Simulation started - agents ready');
-    },
-
-    /**
-     * Handle new syndication from auto-generator
-     */
-    onNewSyndication(syndication) {
-        this.activeSyndication = this.normalizeSyndication(syndication);
-        this.resetWorkflow();
-        this.setStage('originator', 'complete');
-
-        const s = this.activeSyndication;
-        this.addLogEntry('originator', `${s.originator} announced ${s.borrower} $${s.amount}M`);
-
-        // Simulate workflow progression if not connected to Python server
-        if (!this.isConnected) {
-            this.isSimulatedMode = true;
-            this.simulateWorkflow(this.activeSyndication);
->>>>>>> syndication-change
-        }
-    },
-
-    /**
-     * Setup Local Event Listeners (Simulation Mode)
-     */
-    setupEventListeners() {
-        // Listen for internal events (Simulation or AutoGenerator)
-        window.addEventListener('newSyndication', (e) => {
-            if (!this.isConnected) {
-                // If not connected to real backend, simulate orchestration
-                this.onSimulatedSyndication(e.detail);
-            }
-        });
-
-<<<<<<< HEAD
-        window.addEventListener('bidPlaced', (e) => {
-            if (!this.isConnected) {
-                this.addLogEntry('participant', `${e.detail.participantName} bid $${e.detail.amount}M`);
-=======
-        // Map phase to completed stages
-        const phase = synd.phase || 'open';
-
-        if (phase !== 'open') this.setStage('originator', 'complete');
-        else this.setStage('originator', 'active');
-
-        if (['negotiating', 'closing', 'closed', 'completed'].includes(phase) || synd.status === 'negotiating') {
-            this.setStage('participant', 'complete');
-            this.setStage('negotiation', 'active');
-        }
-
-        if (['closing', 'closed', 'completed'].includes(phase)) {
-            this.setStage('negotiation', 'complete');
-            this.setStage('settlement', 'active');
-        }
-
-        if (['closed', 'completed'].includes(phase)) {
-            this.setStage('settlement', 'complete');
-            this.setStage('payment', 'active');
-        }
-
-        if (synd.status === 'completed') {
-            this.setStage('payment', 'complete');
-        }
-
-        this.addLogEntry('system', `Viewing orchestration for ${synd.id}`);
+        this.addLogEntry('originator', `🚀 ${synd.borrower || 'New Deal'} opened: $${synd.amount}M @ ${synd.spread}bps`);
         this.renderWorkflow();
     },
 
-    /**
-     * Simulate workflow when Python server is not connected
-     * Uses deterministic mock data instead of random values
-     */
-    simulateWorkflow(syndication) {
-        const stages = ['participant', 'negotiation', 'settlement', 'payment'];
-        let delay = 500;
-
-        // Mock workflow data (deterministic, not random)
-        const mockData = {
-            participant: {
-                bidCount: 7,
-                subscriptionRate: 105
-            },
-            negotiation: {
-                rounds: 3,
-                spreadImprovement: 15
-            },
-            settlement: {
-                allocations: 5
-            }
-        };
-
-        stages.forEach((stage, i) => {
-            setTimeout(() => {
-                this.setStage(stage, 'active');
-                this.addLogEntry(stage, this.getStageMessage(stage, syndication, mockData));
->>>>>>> syndication-change
-                this.renderWorkflow();
-            }
-        });
-    },
-
-    /**
-<<<<<<< HEAD
-     * Simulate Workflow (Fallback)
-     */
-    onSimulatedSyndication(synd) {
-        this.activeSyndication = synd;
-        this.resetWorkflow();
-        this.setStage('originator', 'complete');
-        this.addLogEntry('originator', `Announced: ${synd.borrower} ($${synd.amount}M)`);
-
-        this.setStage('participant', 'active');
-
-        // Auto-advance visualization based on syndication status
-        this.renderWorkflow();
-=======
-     * Get appropriate message for a workflow stage
-     * Uses mock data object instead of Math.random()
-     */
-    getStageMessage(stage, synd, mockData = {}) {
-        const messages = {
-            participant: `${mockData.participant?.bidCount || 'Several'} participants submitted bids (${mockData.participant?.subscriptionRate || '~100'}% subscribed)`,
-            negotiation: `Dutch auction completed in ${mockData.negotiation?.rounds || 3} rounds at ${synd.spread || 'clearing'} bps`,
-            settlement: `Allocations confirmed for ${mockData.settlement?.allocations || 'all'} winning bidders`,
-            payment: `Processing commitment fees via x402 USDC`
-        };
-        return `[SIMULATED] ${messages[stage] || 'Processing...'}`;
->>>>>>> syndication-change
-    },
-
-    // ========================================
-    // Logging & Visualization
-    // ========================================
-
-    addLogEntry(source, message) {
-        this.workflowLog.unshift({
-            time: new Date(),
-            source,
-            message
-        });
-        if (this.workflowLog.length > 50) this.workflowLog.pop();
-
-        // Update UI if visible
-        const logContainer = document.getElementById('workflow-log');
-        if (logContainer) {
-            logContainer.innerHTML = this.renderLogEntries();
+    triggerManualRun() {
+        // First try simulation engine
+        if (window.SimulationEngine) {
+            SimulationEngine.triggerNewSyndication();
+            this.addLogEntry('system', '🚀 New syndication triggered via simulation');
+            this.renderWorkflow();
+            return;
         }
+
+        // Fallback to WebSocket/API
+        if (this.isConnected && this.ws) {
+            this.ws.send(JSON.stringify({ type: 'trigger_run' }));
+        } else if (window.API) {
+            API.post('server', '/syndications/generate', {});
+        }
+    },
+
+    stepWorkflow() {
+        if (this.isConnected && this.ws) {
+            this.ws.send(JSON.stringify({ type: 'step_engine' }));
+        } else {
+            // Allow manual step for demo
+            this.advanceToNextStage();
+        }
+    },
+
+    advanceToNextStage() {
+        const stages = this.workflowStages;
+        for (let i = 0; i < stages.length; i++) {
+            if (stages[i].status === 'active') {
+                stages[i].status = 'complete';
+                if (i + 1 < stages.length) {
+                    stages[i + 1].status = 'active';
+                    this.addLogEntry(stages[i + 1].id, `${stages[i + 1].name} phase started`);
+                }
+                break;
+            }
+        }
+        this.renderWorkflow();
+    },
+
+    async resetWorkflow() {
+        this.resetUI();
+        if (this.isConnected && this.ws) {
+            this.ws.send(JSON.stringify({ type: 'reset_engine' }));
+        }
+        if (window.API) {
+            await API.post('server', '/orchestrator/reset', {}).catch(() => { });
+        }
+        this.addLogEntry('system', '🔄 Workflow reset');
+        this.renderWorkflow();
+    },
+
+    resetUI() {
+        this.workflowStages.forEach(s => s.status = 'pending');
+        this.workflowLog = [];
+        this.activeSyndication = null;
     },
 
     setStage(stageId, status) {
         const stage = this.workflowStages.find(s => s.id === stageId);
-        if (stage) {
-            stage.status = status;
-            this.renderWorkflow();
-        }
+        if (stage) stage.status = status;
     },
 
-<<<<<<< HEAD
-    resetWorkflow() {
-=======
-    /**
-     * Reset workflow to initial state
-     */
-    async resetWorkflow() {
->>>>>>> syndication-change
-        this.workflowStages.forEach(s => s.status = 'pending');
-        this.workflowLog = [];
-        this.addLogEntry('system', 'Resetting orchestration engine...');
-
-        if (this.isConnected && this.ws) {
-            this.ws.send(JSON.stringify({ type: 'reset_engine' }));
-        }
-
-        // Also try REST endpoint for full persistence clear
-        await API.post('server', '/orchestrator/reset', {});
-
-        this.renderWorkflow();
-    },
-
-<<<<<<< HEAD
-    updateUIStatus(connected) {
-        const el = document.getElementById('agent-connection-status');
-        if (el) {
-            el.innerHTML = connected
-                ? '<span class="text-green-500">● Live Agents</span>'
-                : '<span class="text-gray-500">○ Simulated</span>';
-            el.className = connected ? 'status-connected' : 'status-disconnected';
-=======
-    /**
-     * Add entry to workflow log including optional reasoning and sentiment
-     */
-    addLogEntry(source, message, reasoning = null, sentiment = 0.5) {
-        const entry = {
+    addLogEntry(source, message, reasoning = null) {
+        this.workflowLog.push({
             timestamp: new Date(),
             source,
             message,
-            reasoning,
-            sentiment
-        };
-        this.workflowLog.push(entry);
-
-        // Keep log manageable
-        if (this.workflowLog.length > 50) {
-            this.workflowLog.shift();
->>>>>>> syndication-change
-        }
+            reasoning
+        });
+        if (this.workflowLog.length > 50) this.workflowLog.shift();
     },
 
-    // ========================================
-    // Rendering
-    // ========================================
+    updateConnectionStatus(connected) {
+        const el = document.getElementById('orch-connection-status');
+        if (el) {
+            el.className = `orch-status-badge ${connected ? 'live' : 'sim'}`;
+            el.innerHTML = connected ? '● Live Agents' : '○ Simulated';
+        }
+        if (window.AppState) AppState.set('agentConnected', connected);
+    },
 
+    // === Rendering ===
     render(container) {
         if (!container) return;
+        this.injectStyles();
+
+        // Check if simulation is running
+        const simRunning = window.SimulationEngine?.state?.isRunning || false;
+        const simStatusText = simRunning ? '● Running' : '○ Stopped';
+        const simStatusClass = simRunning ? 'live' : 'sim';
 
         container.innerHTML = `
-            <div class="agent-orchestration-page">
-                <div class="header-section">
-                    <h2>Agent Orchestration</h2>
-                    <div id="agent-connection-status">${this.isConnected ? '● Live' : '○ Simulated'}</div>
-                </div>
-                
-                <!-- Workflow Diagram -->
-                <div class="workflow-diagram">
-                    ${this.renderStages()}
-                </div>
-<<<<<<< HEAD
-                
-                <!-- Log & Details -->
-                <div class="orch-split">
-                    <div class="log-panel">
-                        <h3>Activity Log</h3>
-                        <div id="workflow-log" class="workflow-log">
-                            ${this.renderLogEntries()}
+            <div class="orch-page">
+                <!-- Header -->
+                <div class="orch-header">
+                    <div class="orch-header-left">
+                        <h2 class="orch-title">Agent Orchestration</h2>
+                        <div id="orch-connection-status" class="orch-status-badge ${simStatusClass}">
+                            ${this.isConnected ? '● Live Agents' : simStatusText}
                         </div>
                     </div>
-                    <div class="details-panel">
-                        <h3>Active Context</h3>
-                        ${this.renderActiveContext()}
-=======
-
-                <div class="orchestration-controls">
-                    <button class="btn-control" id="btn-run-syndication" title="Start new LangGraph run">▶ Run Engine</button>
-                    <button class="btn-control btn-secondary" id="btn-reset-engine" title="Reset all stages">🔄 Reset</button>
-                    <button class="btn-control btn-secondary" id="btn-step-engine" title="Execute next node only">⚡ Step</button>
-                    <div class="control-spacer"></div>
-                    <label class="toggle-control">
-                        <input type="checkbox" id="check-manual-mode" ${this.manualMode ? 'checked' : ''}>
-                        <span class="toggle-label">Manual Step Mode</span>
-                    </label>
+                    <div class="orch-controls">
+                        <button id="btn-run-syndication" class="orch-btn primary">▶ Run Engine</button>
+                        <button id="btn-step-engine" class="orch-btn">⚡ Step</button>
+                        <button id="btn-reset-engine" class="orch-btn">🔄 Reset</button>
+                    </div>
                 </div>
 
-                <div class="orchestration-grid">
-                    <div class="workflow-log-section">
-                        <div class="section-header-flex">
-                            <h3>Workflow Activity</h3>
-                            <button class="btn-xs" id="btn-clear-log">Clear</button>
+                <!-- Pipeline Flow -->
+                <div class="orch-pipeline">
+                    ${this.renderPipeline()}
+                </div>
+
+                <!-- Bottom Grid -->
+                <div class="orch-grid">
+                    <div class="orch-activity-panel">
+                        <div class="orch-panel-header">
+                            <h3>Activity Timeline</h3>
+                            <button id="btn-clear-log" class="orch-btn-xs">Clear</button>
                         </div>
-                        <div class="workflow-log" id="workflow-log">
-                            ${this.renderWorkflowLog()}
+                        <div id="orch-activity-log" class="orch-activity-log">
+                            ${this.renderActivityLog()}
                         </div>
                     </div>
-
-                    <div class="active-syndication-section">
-                        <h3>Active Syndication</h3>
-                        <div id="active-syndication-container">
-                            ${this.renderActiveSyndication()}
+                    <div class="orch-context-panel">
+                        <h3>Deal Context</h3>
+                        <div id="orch-context">
+                            ${this.renderContext()}
                         </div>
->>>>>>> syndication-change
                     </div>
                 </div>
             </div>
         `;
-
-        this.injectStyles();
     },
 
-<<<<<<< HEAD
-    renderStages() {
-        return this.workflowStages.map((s, i) => `
-            <div class="stage-node ${s.status || 'pending'}">
-                <div class="icon">${s.icon}</div>
-                <div class="label">${s.name}</div>
-                <div class="status-dot"></div>
-=======
-    /**
-     * Render workflow diagram
-     */
-    renderWorkflowDiagram() {
+    renderPipeline() {
         return `
-            <div class="workflow-stages">
-                ${this.workflowStages.map((stage, i) => {
-            const status = stage.status || 'pending';
-            const statusText = status.charAt(0).toUpperCase() + status.slice(1);
-            const tooltip = `${stage.name}: ${statusText}\n${stage.description}`;
-
-            return `
-                    <div class="workflow-stage ${status}" title="${tooltip}" data-status="${status}" data-stage="${stage.id}">
-                        <div class="stage-icon">${stage.icon}</div>
-                        <div class="stage-name">${stage.name}</div>
-                        <div class="stage-status-indicator"></div>
+            <div class="orch-pipeline-flow">
+                ${this.workflowStages.map((stage, i) => `
+                    <div class="orch-stage ${stage.status}" title="${stage.description}">
+                        <div class="orch-stage-icon">${stage.icon}</div>
+                        <div class="orch-stage-name">${stage.name}</div>
+                        <div class="orch-stage-dot"></div>
                     </div>
-                    ${i < this.workflowStages.length - 1 ? '<div class="workflow-connector"></div>' : ''}
-                `;
-        }).join('')}
->>>>>>> syndication-change
+                    ${i < this.workflowStages.length - 1 ? '<div class="orch-connector"><div class="orch-connector-line"></div></div>' : ''}
+                `).join('')}
             </div>
-            ${i < this.workflowStages.length - 1 ? '<div class="connector"></div>' : ''}
-        `).join('');
+        `;
     },
 
-<<<<<<< HEAD
-    renderLogEntries() {
-        if (!this.workflowLog.length) return '<div class="empty-log">Waiting for activity...</div>';
-        return this.workflowLog.map(l => `
-            <div class="log-entry ${l.source}">
-                <span class="time">${l.time.toLocaleTimeString()}</span>
-                <span class="source">[${l.source}]</span>
-                <span class="msg">${l.message}</span>
-            </div>
-        `).join('');
-    },
-
-    renderActiveContext() {
-        if (!this.activeSyndication) return '<div class="empty-state">No Active Syndication</div>';
-=======
-    /**
-     * Render workflow log
-     */
-    renderWorkflowLog() {
+    renderActivityLog() {
         if (this.workflowLog.length === 0) {
-            return '<p class="no-log">No activity yet. Start the simulation or trigger a syndication manually.</p>';
-        }
-
-        return this.workflowLog.slice(-20).map(entry => {
-            const isInsight = !!entry.reasoning;
             return `
-                <div class="log-entry ${entry.source} ${isInsight ? 'insight' : ''}">
-                    <span class="log-time">${entry.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
-                    <span class="log-source">${entry.source}</span>
-                    <div class="log-content">
-                        <span class="log-message">${entry.message}</span>
-                        ${entry.reasoning ? `<span class="log-reasoning">💡 ${entry.reasoning}</span>` : ''}
+                <div class="orch-empty-state">
+                    <div class="orch-empty-icon">🤖</div>
+                    <div class="orch-empty-title">Awaiting Activity</div>
+                    <div class="orch-empty-text">Click <strong>Start</strong> in the header to begin simulation, or click <strong>Run Engine</strong> to trigger a new syndication.</div>
+                </div>
+            `;
+        }
+        return this.workflowLog.slice().reverse().map(entry => {
+            const icon = this.getSourceIcon(entry.source);
+            return `
+                <div class="orch-log-entry">
+                    <div class="orch-log-icon">${icon}</div>
+                    <div class="orch-log-content">
+                        <div class="orch-log-header">
+                            <span class="orch-log-source">${entry.source.toUpperCase()}</span>
+                            <span class="orch-log-time">${entry.timestamp.toLocaleTimeString()}</span>
+                        </div>
+                        <div class="orch-log-msg">${entry.message}</div>
+                        ${entry.reasoning ? `<div class="orch-log-reason">💡 ${entry.reasoning}</div>` : ''}
                     </div>
                 </div>
             `;
         }).join('');
     },
 
-    /**
-     * Render active syndication info
-     * Uses normalized data from normalizeSyndication()
-     */
-    renderActiveSyndication() {
+    getSourceIcon(source) {
+        const icons = {
+            originator: '🏦',
+            participant: '🏢',
+            negotiation: '⚡',
+            settlement: '📋',
+            payment: '💰',
+            system: '⚙️'
+        };
+        return icons[source] || '📌';
+    },
+
+    renderContext() {
         if (!this.activeSyndication) {
-            return '<p class="no-syndication">No active syndication. Waiting for next deal...</p>';
+            // Show recent syndications if available
+            const recentSynd = SyndiData?.syndications?.find(s => s.status === 'open');
+            if (recentSynd) {
+                this.activeSyndication = this.normalizeSyndication(recentSynd);
+            } else {
+                return `
+                    <div class="orch-empty-state small">
+                        <div class="orch-empty-icon">📊</div>
+                        <div class="orch-empty-text">No active deal<br/>Trigger a new syndication to see context</div>
+                    </div>
+                `;
+            }
         }
-
->>>>>>> syndication-change
         const s = this.activeSyndication;
-        const modeIndicator = this.isSimulatedMode
-            ? '<div class="simulated-badge">SIMULATED</div>'
-            : '';
-
         return `
-<<<<<<< HEAD
-            <div class="context-card">
-                <h4>${s.borrower}</h4>
-                <div class="metrics">
-                    <div>Amount: $${s.amount}M</div>
-                    <div>Spread: ${s.spread}bps</div>
-                    <div>ESG: ${s.esg_score || 'N/A'}</div>
-=======
-            <div class="syndication-info">
-                ${modeIndicator}
-                <div class="syndication-id">${s.id}</div>
-                <div class="syndication-borrower">${s.borrower}</div>
-                <div class="syndication-details">
-                    <div><strong>Amount:</strong> $${typeof s.amount === 'number' ? s.amount.toLocaleString() : s.amount}M</div>
-                    <div><strong>Rating:</strong> ${s.rating}</div>
-                    <div><strong>Spread:</strong> ${s.spread !== null ? s.spread + 'bps' : 'TBD'}</div>
-                    <div><strong>Industry:</strong> ${s.industry}</div>
-                    <div><strong>Status:</strong> ${s.status}</div>
->>>>>>> syndication-change
+            <div class="orch-context-card">
+                <div class="orch-context-id">${s.id}</div>
+                <div class="orch-context-borrower">${s.borrower}</div>
+                <div class="orch-context-grid">
+                    <div class="orch-context-item">
+                        <span class="label">Amount</span>
+                        <span class="value">$${s.amount.toFixed(0)}M</span>
+                    </div>
+                    <div class="orch-context-item">
+                        <span class="label">Rating</span>
+                        <span class="value">${s.rating}</span>
+                    </div>
+                    <div class="orch-context-item">
+                        <span class="label">Spread</span>
+                        <span class="value">${s.spread ? s.spread + 'bps' : '—'}</span>
+                    </div>
+                    <div class="orch-context-item">
+                        <span class="label">Subscription</span>
+                        <span class="value orch-sub-${s.subscription >= 100 ? 'full' : s.subscription >= 50 ? 'mid' : 'low'}">${s.subscription.toFixed(0)}%</span>
+                    </div>
                 </div>
-                <div class="progress-bar">
-                    <div class="fill" style="width: ${s.subscription || 0}%"></div>
+                <div class="orch-sub-bar">
+                    <div class="orch-sub-fill" style="width: ${Math.min(100, s.subscription)}%"></div>
                 </div>
-                <div class="sub-text">${s.subscription || 0}% Subscribed</div>
+                <div class="orch-context-status">
+                    <span class="orch-status-pill ${s.status}">${s.status.toUpperCase()}</span>
+                </div>
             </div>
         `;
     },
 
     renderWorkflow() {
-<<<<<<< HEAD
-        const diagram = document.querySelector('.workflow-diagram');
-        if (diagram) diagram.innerHTML = this.renderStages();
+        const log = document.getElementById('orch-activity-log');
+        if (log) log.innerHTML = this.renderActivityLog();
 
-        const log = document.getElementById('workflow-log');
-        if (log) log.innerHTML = this.renderLogEntries();
+        const context = document.getElementById('orch-context');
+        if (context) context.innerHTML = this.renderContext();
+
+        // Update stage statuses
+        document.querySelectorAll('.orch-stage').forEach((el, i) => {
+            if (this.workflowStages[i]) {
+                el.className = `orch-stage ${this.workflowStages[i].status}`;
+            }
+        });
+
+        // Update connection status based on simulation
+        const el = document.getElementById('orch-connection-status');
+        if (el && !this.isConnected) {
+            const simRunning = window.SimulationEngine?.state?.isRunning || false;
+            el.className = `orch-status-badge ${simRunning ? 'live' : 'sim'}`;
+            el.innerHTML = simRunning ? '● Simulating' : '○ Stopped';
+        }
     },
 
     injectStyles() {
-        if (document.getElementById('orch-css')) return;
-        const css = `
-            .agent-orchestration-page { padding: 20px; color: #fff; }
-            .header-section { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #333; padding-bottom: 10px; }
-            .workflow-diagram { display: flex; justify-content: center; align-items: center; padding: 30px; background: #1a1a1a; border-radius: 8px; margin-bottom: 20px; border: 1px solid #333; overflow-x: auto;}
-            .stage-node { display: flex; flex-direction: column; align-items: center; min-width: 100px; opacity: 0.5; transition: all 0.3s; }
-            .stage-node.active { opacity: 1; transform: scale(1.1); color: #60a5fa; }
-            .stage-node.complete { opacity: 1; color: #34d399; }
-            .stage-node .icon { font-size: 24px; margin-bottom: 8px; }
-            .stage-node .label { font-size: 12px; font-weight: 600; text-align: center; }
-            .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #555; margin-top: 8px; }
-            .stage-node.active .status-dot { background: #60a5fa; box-shadow: 0 0 8px #60a5fa; }
-            .stage-node.complete .status-dot { background: #34d399; }
-            .connector { flex: 1; height: 2px; background: #333; margin: 0 10px; min-width: 20px; max-width: 50px; }
-            .orch-split { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
-            .log-panel, .details-panel { background: #1a1a1a; padding: 15px; border-radius: 8px; border: 1px solid #333; height: 300px; overflow-y: auto; }
-            .log-entry { font-size: 12px; margin-bottom: 6px; border-bottom: 1px solid #2a2a2a; padding-bottom: 4px; font-family: monospace; }
-            .log-entry .time { color: #666; margin-right: 8px; }
-            .log-entry .source { color: #888; margin-right: 8px; font-weight: bold; }
-            .log-entry.originator .source { color: #f472b6; }
-            .log-entry.participant .source { color: #60a5fa; }
-            .context-card h4 { margin: 0 0 10px 0; color: #fff; }
-            .metrics { display: grid; grid-template-columns: 1fr; gap: 5px; font-size: 13px; color: #ccc; margin-bottom: 10px; }
-            .progress-bar { height: 6px; background: #333; border-radius: 3px; overflow: hidden; }
-            .progress-bar .fill { height: 100%; background: #34d399; transition: width 0.5s; }
-            .sub-text { font-size: 11px; color: #888; text-align: right; margin-top: 4px; }
-            .status-connected { color: #34d399; font-weight: bold; }
-            .status-disconnected { color: #9ca3af; }
-        `;
+        if (document.getElementById('orch-v2-styles')) return;
         const style = document.createElement('style');
-        style.id = 'orch-css';
-        style.textContent = css;
+        style.id = 'orch-v2-styles';
+        style.textContent = `
+            .orch-page { padding: 1.5rem; }
+
+            /* Header */
+            .orch-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+            .orch-header-left { display: flex; align-items: center; gap: 1rem; }
+            .orch-title { margin: 0; font-size: 1.5rem; font-weight: 700; }
+            .orch-status-badge { font-size: 0.75rem; font-weight: 600; padding: 0.25rem 0.75rem; border-radius: 20px; }
+            .orch-status-badge.live { background: rgba(16,185,129,0.15); color: #10b981; }
+            .orch-status-badge.sim { background: rgba(0,0,0,0.1); color: var(--text-muted); }
+            .orch-controls { display: flex; gap: 0.5rem; }
+            .orch-btn { padding: 0.5rem 1rem; font-size: 0.875rem; font-weight: 600; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); cursor: pointer; transition: all 0.2s; }
+            .orch-btn:hover { background: var(--bg-secondary); }
+            .orch-btn.primary { background: var(--primary); color: white; border-color: var(--primary); }
+            .orch-btn.primary:hover { background: #4f46e5; }
+            .orch-btn-xs { font-size: 0.7rem; padding: 0.25rem 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: transparent; cursor: pointer; }
+
+            /* Pipeline */
+            .orch-pipeline { background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(16,185,129,0.1)); border-radius: 16px; padding: 2rem; margin-bottom: 1.5rem; border: 1px solid var(--border); }
+            .orch-pipeline-flow { display: flex; align-items: center; justify-content: space-between; }
+            .orch-stage { display: flex; flex-direction: column; align-items: center; min-width: 80px; }
+            .orch-stage-icon { width: 56px; height: 56px; border-radius: 50%; background: var(--bg-card); border: 3px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; transition: all 0.3s; }
+            .orch-stage-name { margin-top: 0.5rem; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); }
+            .orch-stage-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--border); margin-top: 0.5rem; transition: all 0.3s; }
+            
+            /* Stage States */
+            .orch-stage.active .orch-stage-icon { border-color: var(--primary); box-shadow: 0 0 20px rgba(99,102,241,0.4); transform: scale(1.1); }
+            .orch-stage.active .orch-stage-dot { background: var(--primary); animation: pulse 1.5s infinite; }
+            .orch-stage.complete .orch-stage-icon { border-color: #10b981; background: rgba(16,185,129,0.1); }
+            .orch-stage.complete .orch-stage-dot { background: #10b981; }
+            @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+            /* Connector */
+            .orch-connector { flex: 1; display: flex; align-items: center; margin: 0 0.5rem; margin-bottom: 2rem; }
+            .orch-connector-line { flex: 1; height: 3px; background: linear-gradient(90deg, var(--border), var(--primary), var(--border)); border-radius: 2px; }
+
+            /* Grid */
+            .orch-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; }
+            .orch-activity-panel, .orch-context-panel { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; }
+            .orch-panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+            .orch-panel-header h3, .orch-context-panel h3 { margin: 0; font-size: 0.875rem; font-weight: 600; }
+
+            /* Activity Log */
+            .orch-activity-log { max-height: 320px; overflow-y: auto; }
+            .orch-log-entry { display: flex; gap: 0.75rem; padding: 0.75rem 0; border-bottom: 1px solid rgba(0,0,0,0.05); }
+            .orch-log-entry:last-child { border-bottom: none; }
+            .orch-log-icon { font-size: 1.25rem; }
+            .orch-log-content { flex: 1; }
+            .orch-log-header { display: flex; justify-content: space-between; margin-bottom: 0.25rem; }
+            .orch-log-source { font-size: 0.65rem; font-weight: 700; color: var(--primary); text-transform: uppercase; }
+            .orch-log-time { font-size: 0.65rem; color: var(--text-muted); font-family: monospace; }
+            .orch-log-msg { font-size: 0.85rem; line-height: 1.4; }
+            .orch-log-reason { margin-top: 0.5rem; font-size: 0.75rem; font-style: italic; color: var(--text-muted); background: rgba(0,0,0,0.03); padding: 0.5rem; border-radius: 6px; }
+
+            /* Empty State */
+            .orch-empty-state { text-align: center; padding: 2rem 1rem; color: var(--text-muted); }
+            .orch-empty-state.small { padding: 1rem; }
+            .orch-empty-icon { font-size: 2rem; margin-bottom: 0.5rem; }
+            .orch-empty-title { font-weight: 600; font-size: 0.9rem; margin-bottom: 0.25rem; }
+            .orch-empty-text { font-size: 0.8rem; line-height: 1.5; }
+
+            /* Context */
+            .orch-context-card { padding: 0.5rem 0; }
+            .orch-context-id { font-size: 1rem; font-weight: 700; color: var(--primary); }
+            .orch-context-borrower { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1rem; }
+            .orch-context-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+            .orch-context-item { display: flex; flex-direction: column; }
+            .orch-context-item .label { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; }
+            .orch-context-item .value { font-size: 0.9rem; font-weight: 600; }
+            .orch-sub-full { color: #10b981; }
+            .orch-sub-mid { color: #f59e0b; }
+            .orch-sub-low { color: var(--text-primary); }
+            .orch-sub-bar { height: 6px; background: rgba(0,0,0,0.1); border-radius: 3px; margin: 0.75rem 0; overflow: hidden; }
+            .orch-sub-fill { height: 100%; background: linear-gradient(90deg, var(--primary), #10b981); border-radius: 3px; transition: width 0.5s; }
+            .orch-context-status { margin-top: 0.5rem; }
+            .orch-status-pill { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.7rem; font-weight: 700; }
+            .orch-status-pill.pending { background: rgba(245,158,11,0.15); color: #f59e0b; }
+            .orch-status-pill.open, .orch-status-pill.active { background: rgba(99,102,241,0.15); color: var(--primary); }
+            .orch-status-pill.closed, .orch-status-pill.completed { background: rgba(16,185,129,0.15); color: #10b981; }
+        `;
         document.head.appendChild(style);
     }
 };
 
-=======
-        const diagramEl = document.querySelector('.workflow-diagram');
-        const logEl = document.getElementById('workflow-log');
-        const activeContainer = document.getElementById('active-syndication-container');
-
-        if (diagramEl) {
-            diagramEl.innerHTML = this.renderWorkflowDiagram();
-        }
-        if (logEl) {
-            logEl.innerHTML = this.renderWorkflowLog();
-            // Auto-scroll to bottom for live monitor experience
-            logEl.scrollTop = logEl.scrollHeight;
-        }
-        if (activeContainer) {
-            activeContainer.innerHTML = this.renderActiveSyndication();
-        }
-    },
-
-    /**
-     * Trigger a manual syndication run
-     */
-    triggerManualRun() {
-        const stepMode = !!this.manualMode;
-        if (this.isConnected && this.ws) {
-            this.ws.send(JSON.stringify({
-                type: 'run_syndication',
-                originator_id: 'OA-001',
-                step_mode: stepMode
-            }));
-            this.addLogEntry('system', `Manual syndication triggered via LangGraph (Step Mode: ${stepMode ? 'ON' : 'OFF'})`);
-        } else {
-            API.post('server', '/syndications/run', { originator_id: 'OA-001' });
-            this.addLogEntry('system', `Manual syndication triggered via API (Step Mode: ${stepMode ? 'ON' : 'OFF'})`);
-        }
-        this.renderWorkflow();
-    }
-};
-
-// Add orchestration styles
-const orchestrationStyles = document.createElement('style');
-orchestrationStyles.textContent = `
-    .agent-orchestration-page { padding: 1rem; }
-    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-    .connection-status { font-size: 0.875rem; }
-    .status-connected { color: var(--success); }
-    .status-disconnected { color: var(--warning); }
-    
-    .orchestration-controls { 
-        display: flex; 
-        align-items: center; 
-        gap: 0.75rem; 
-        background: var(--bg-card); 
-        padding: 0.75rem 1rem; 
-        border: 1px solid var(--border-color); 
-        border-radius: var(--radius-lg);
-        margin-bottom: 1.5rem;
-    }
-    .control-spacer { flex: 1; }
-    .btn-control { 
-        padding: 0.5rem 1rem; 
-        font-size: 0.8125rem; 
-        display: flex; 
-        align-items: center; 
-        gap: 0.5rem; 
-    }
-    .toggle-control { 
-        display: flex; 
-        align-items: center; 
-        gap: 0.5rem; 
-        cursor: pointer; 
-        font-size: 0.8125rem; 
-        color: var(--text-secondary); 
-    }
-    .toggle-control input { cursor: pointer; }
-    .section-header-flex { 
-        display: flex; 
-        justify-content: space-between; 
-        align-items: center; 
-        margin-bottom: 1rem; 
-    }
-    .section-header-flex h3 { margin-bottom: 0 !important; }
-    
-    .workflow-diagram { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 1.5rem; margin-bottom: 1.5rem; }
-    .workflow-stages { display: flex; align-items: center; justify-content: center; gap: 0; margin-bottom: 1rem; }
-    .workflow-stage { display: flex; flex-direction: column; align-items: center; padding: 1rem; border-radius: var(--radius-lg); min-width: 120px; transition: all 0.3s ease; }
-    .workflow-stage.pending { opacity: 0.5; }
-    .workflow-stage.active { background: var(--info-bg); border: 2px solid var(--info); animation: pulseStage 1.5s infinite; }
-    .workflow-stage.complete { background: var(--success-bg); }
-    .stage-icon { font-size: 2rem; margin-bottom: 0.5rem; }
-    .stage-name { font-size: 0.8125rem; font-weight: 600; text-align: center; }
-    .stage-status-indicator { width: 8px; height: 8px; border-radius: 50%; margin-top: 0.5rem; }
-    .workflow-stage.pending .stage-status-indicator { background: var(--text-muted); }
-    .workflow-stage.active .stage-status-indicator { background: var(--info); animation: blink 1s infinite; }
-    .workflow-stage.complete .stage-status-indicator { background: var(--success); }
-    
-    .workflow-connector { width: 40px; height: 2px; background: var(--border-color); }
-    .workflow-stage.complete + .workflow-connector { background: var(--success); }
-    
-    .workflow-descriptions { display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; }
-    .stage-desc { font-size: 0.75rem; color: var(--text-muted); text-align: center; max-width: 150px; }
-    .stage-desc.active { color: var(--info); }
-    .stage-desc.complete { color: var(--success); }
-    
-    @keyframes pulseStage { 
-        0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4); border-color: var(--info); } 
-        70% { box-shadow: 0 0 0 10px rgba(37, 99, 235, 0); border-color: var(--primary-light); } 
-        100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); border-color: var(--info); } 
-    }
-    @keyframes blink { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.3; transform: scale(0.8); } }
-    
-    .orchestration-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
-    .workflow-log-section, .active-syndication-section { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 1rem; }
-    .workflow-log-section h3, .active-syndication-section h3 { font-size: 0.875rem; margin-bottom: 1rem; color: var(--text-secondary); }
-    .workflow-log { max-height: 350px; overflow-y: auto; scroll-behavior: smooth; }
-    .log-entry { display: grid; grid-template-columns: 80px 80px 1fr; gap: 0.5rem; padding: 0.625rem 0.5rem; font-size: 0.8125rem; border-bottom: 1px solid var(--border-color); transition: background 0.2s ease; }
-    .log-entry:hover { background: var(--bg-card-hover); }
-    .log-entry.insight { border-left: 3px solid var(--info); background: var(--info-bg); }
-    .log-time { color: var(--text-muted); font-family: monospace; }
-    .log-source { font-weight: 500; text-transform: capitalize; }
-    .log-source.originator { color: var(--primary-light); }
-    .log-source.participant { color: var(--warning); }
-    .log-source.negotiation { color: #8B5CF6; }
-    .log-source.settlement { color: #EC4899; }
-    .log-source.payment { color: var(--success); }
-    .log-source.system { color: var(--text-muted); }
-    .log-content { display: flex; flex-direction: column; gap: 0.25rem; }
-    .log-message { color: var(--text-primary); font-weight: 500; }
-    .log-reasoning { font-size: 0.75rem; color: var(--text-secondary); font-style: italic; line-height: 1.4; }
-    .no-log, .no-syndication { color: var(--text-muted); font-size: 0.875rem; }
-    
-    .syndication-info { background: var(--bg-main); padding: 1rem; border-radius: var(--radius-md); position: relative; }
-    .syndication-id { font-size: 0.75rem; color: var(--primary-light); margin-bottom: 0.25rem; }
-    .syndication-borrower { font-size: 1.125rem; font-weight: 600; margin-bottom: 0.75rem; }
-    .syndication-details { font-size: 0.875rem; display: grid; gap: 0.25rem; }
-    
-    .simulated-badge { position: absolute; top: 0.5rem; right: 0.5rem; background: var(--warning); color: #000; font-size: 0.625rem; font-weight: 700; padding: 0.125rem 0.375rem; border-radius: 2px; letter-spacing: 0.5px; }
-    
-    .orchestration-actions { display: flex; gap: 1rem; }
-`;
-document.head.appendChild(orchestrationStyles);
-
-// Initialize on page load
-document.addEventListener('DOMContentLoaded', () => {
-    AgentOrchestration.init();
-});
-
-// Export
->>>>>>> syndication-change
 window.AgentOrchestration = AgentOrchestration;

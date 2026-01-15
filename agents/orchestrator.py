@@ -21,6 +21,7 @@ from .settlement_agent import SettlementAgent
 from .payment_agent import PaymentAgent
 from .metrics_calculator import MetricsCalculator
 from .alert_manager import AlertManager
+from .config import MIN_SUBSCRIPTION_RATE, HAPPY_PATH_MODE
 from .event_bus import EventBus
 from .events import (
     SyndicationOpened, BidReceived, BidRejected, BiddingCompleted,
@@ -107,8 +108,12 @@ def participants_node(state: SyndicationState) -> SyndicationState:
         if idx > 0:
             # Use environment variable to expedite testing
             is_test = os.getenv("SYNDIMATCH_TEST_MODE") == "true"
-            delay = random.randint(1, 2) if is_test else random.randint(3, 10)
-            time.sleep(delay)
+            if HAPPY_PATH_MODE:
+                delay = 0
+            else:
+                delay = random.randint(1, 2) if is_test else random.randint(3, 10)
+            if delay:
+                time.sleep(delay)
         
         # Calculate simulated "bid time" offset (in minutes, for logging)
         elapsed_time = (datetime.utcnow() - bid_start_time).total_seconds()
@@ -571,7 +576,7 @@ def route_after_negotiation(state: SyndicationState) -> Literal["settlement", "f
         return "failed"
     
     # Additional validation
-    if sub_rate < 0.80:  # Less than 80% subscribed
+    if sub_rate < MIN_SUBSCRIPTION_RATE:
         logger.warning(f"Routing to FAILED: Low subscription rate {sub_rate}")
         state["status"] = "failed"
         state["failure_reason"] = "insufficient_subscription"

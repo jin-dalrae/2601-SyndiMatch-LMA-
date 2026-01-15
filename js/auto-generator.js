@@ -1,13 +1,14 @@
 /**
- * SyndiMatch Enhanced Auto-Generator
- * - Loads originators from API
- * - Generates rich deal structures (ESG, Geography, Capital Structure)
- * - Syncs generated deals to backend
+ * SyndiMatch Auto-Generator
+ * - Generates syndications during simulation
+ * - Manages deal lifecycle progression
+ * - Syncs with SyndiData for UI updates
  */
 
 const AutoGenerator = {
+    enabled: false,
     activeSyndications: [],
-    originators: [], // Loaded from API
+    originators: [],
 
     config: {
         minDealsPerMonth: 2,
@@ -19,22 +20,26 @@ const AutoGenerator = {
         seniority: ['Senior Secured', 'Unitranche', 'Second Lien', 'Mezzanine'],
         ratings: ['AAA', 'AA+', 'AA', 'A', 'BBB+', 'BBB', 'BB+', 'BB', 'B', 'CCC+'],
         ratingWeights: [2, 5, 10, 15, 25, 20, 15, 5, 2, 1],
-        avgDurationDays: 14 // Average deal lifecycle
+        avgDurationDays: 14
     },
 
     /**
      * Initialize Generator
      */
     async init() {
-        console.log('🏭 Initializing Enhanced Auto-Generator...');
+        console.log('🏭 Initializing Auto-Generator...');
 
-        // 1. Load Originators
+        // Load Originators
         await this.loadOriginators();
 
-        // 2. Setup Simulation Listeners
+        // Setup Simulation Listeners
         if (window.SimulationEngine) {
             SimulationEngine.on('dayChange', (data) => this.onDayChange(data));
+            SimulationEngine.on('timeTick', (data) => this.onTimeTick(data));
         }
+
+        // Listen for bid events to progress syndications
+        window.addEventListener('bidPlaced', (e) => this.onBidPlaced(e.detail));
 
         console.log(`✅ Auto-Generator Ready (Originators: ${this.originators.length})`);
     },
@@ -44,16 +49,17 @@ const AutoGenerator = {
      */
     async loadOriginators() {
         try {
-            const agents = await API.getAgents();
-            if (agents && agents.originator) {
-                this.originators = agents.originator;
-            } else {
-                this.loadDefaultOriginators();
+            if (window.API && API.getAgents) {
+                const agents = await API.getAgents();
+                if (agents?.originator) {
+                    this.originators = agents.originator;
+                    return;
+                }
             }
         } catch (e) {
             console.warn('⚠️ API Originators not found, using defaults');
-            this.loadDefaultOriginators();
         }
+        this.loadDefaultOriginators();
     },
 
     loadDefaultOriginators() {
@@ -67,7 +73,7 @@ const AutoGenerator = {
     },
 
     /**
-     * Daily Tick Handler
+     * Daily Tick Handler - Process lifecycles and generate new deals
      */
     onDayChange(data) {
         // 1. Process existing deal phases
@@ -78,12 +84,88 @@ const AutoGenerator = {
     },
 
     /**
-     * Generate new deal with probabilities
+     * Time Tick Handler - Check for stage progression more frequently
+     */
+    onTimeTick(data) {
+        // Check for stage progression every tick (based on subscription)
+        this.activeSyndications.forEach(deal => {
+            if (deal.status === 'open' || deal.status === 'negotiating') {
+                this.checkStageProgression(deal);
+            }
+        });
+    },
+
+    /**
+     * Handle bid placed - update subscription and check progression
+     */
+    onBidPlaced(bid) {
+        const deal = this.activeSyndications.find(d => d.id === bid.syndicationId);
+        if (!deal) return;
+
+        // Update subscription based on bid
+        const bidAmount = bid.amount || 0;
+        const subscriptionIncrease = (bidAmount / deal.amount) * 100;
+        deal.subscription = Math.min(100, (deal.subscription || 0) + subscriptionIncrease);
+
+        // Update in SyndiData
+        if (window.SyndiData) {
+            SyndiData.updateSyndication(deal.id, { subscription: deal.subscription });
+        }
+
+        // Check for stage progression
+        this.checkStageProgression(deal);
+    },
+
+    /**
+     * Check if a deal should progress to next stage
+     */
+    checkStageProgression(deal) {
+        let shouldProgress = false;
+        let newStatus = deal.status;
+        let newPhase = deal.phase;
+
+        if (deal.status === 'open' && deal.subscription >= 50) {
+            newStatus = 'negotiating';
+            newPhase = 'pricing';
+            shouldProgress = true;
+        } else if (deal.status === 'negotiating' && deal.subscription >= 100) {
+            newStatus = 'closing';
+            newPhase = 'allocation';
+            shouldProgress = true;
+        }
+
+        if (shouldProgress) {
+            const oldStatus = deal.status;
+            deal.status = newStatus;
+            deal.phase = newPhase;
+
+            console.log(`📈 ${deal.borrower}: ${oldStatus} → ${newStatus} (${deal.subscription.toFixed(0)}% subscribed)`);
+
+            // Update SyndiData
+            if (window.SyndiData) {
+                SyndiData.updateSyndication(deal.id, {
+                    status: newStatus,
+                    phase: newPhase,
+                    subscription: deal.subscription
+                });
+            }
+
+            // Emit stage change event
+            window.dispatchEvent(new CustomEvent('syndicationUpdated', {
+                detail: { id: deal.id, statusChange: { from: oldStatus, to: newStatus }, ...deal }
+            }));
+
+            // Refresh UI
+            if (window.PipelineComponent) PipelineComponent.render();
+        }
+    },
+
+    /**
+     * Generate new deals based on market conditions
      */
     checkForNewDeals(date) {
-        // Market Conditions Handling
-        const condition = AppState.get('marketConditions') || 'neutral';
-        let prob = 0.15; // Base probability 15% per day ~ 4.5 deals/month
+        const condition = window.AppState?.get('marketConditions') || 'neutral';
+        let prob = 0.15; // Base probability 15% per day
 
         if (condition === 'bull') prob = 0.25;
         if (condition === 'bear') prob = 0.05;
@@ -94,7 +176,7 @@ const AutoGenerator = {
     },
 
     /**
-     * Generate comprehensive syndication record
+     * Generate a new syndication
      */
     generateSyndication(date) {
         const originator = this.getRandomItem(this.originators);
@@ -107,17 +189,18 @@ const AutoGenerator = {
         const baseSpread = isIG ? 150 : 350;
         const spread = baseSpread + this.randomInt(0, 200);
 
-        // ESG Logic (Random skew towards higher scores)
-        const esgScore = Math.floor(Math.random() * 30) + 65; // 65-95 range
+        // ESG Score (65-95 range)
+        const esgScore = Math.floor(Math.random() * 30) + 65;
 
         const syndication = {
-            id: `SYND-${date.getFullYear()}-${Math.floor(Math.random() * 10000)}`,
+            id: `SYND-${Date.now()}`,
             borrower: this.generateBorrowerName(sector),
             industry: sector,
             amount: amount,
             rating: rating,
             originatorId: originator.id,
-            originatorName: originator.name || originator.entity, // Handle different API formats
+            originatorName: originator.name || originator.entity,
+            originator: originator.name || originator.entity,
 
             // Deal Structure
             seniority: this.getRandomItem(this.config.seniority),
@@ -127,10 +210,7 @@ const AutoGenerator = {
 
             // Pricing
             spread: spread,
-            priceTalk: {
-                min: spread - 25,
-                max: spread + 25
-            },
+            priceTalk: { min: spread - 25, max: spread + 25 },
 
             // ESG
             esg_score: esgScore,
@@ -144,31 +224,36 @@ const AutoGenerator = {
 
             // Timestamps
             announcedAt: date.toISOString(),
-            bookbuildDeadline: new Date(date.getTime() + 3 * 24 * 3600000).toISOString(), // +3 days
-            closingDate: new Date(date.getTime() + 10 * 24 * 3600000).toISOString(), // +10 days
+            bookbuildDeadline: new Date(date.getTime() + 3 * 24 * 3600000).toISOString(),
+            closingDate: new Date(date.getTime() + 10 * 24 * 3600000).toISOString(),
 
-            bids: []
+            bids: [],
+            isMock: false
         };
 
+        // Track locally
         this.activeSyndications.push(syndication);
 
-        // Update Local Store
-        if (window.Data && window.Data.syndications) {
-            window.Data.syndications.push(syndication);
+        // Add to SyndiData
+        if (window.SyndiData) {
+            SyndiData.addSyndication(syndication);
         }
 
-        // Sync to Backend
+        // Sync to Backend (if connected)
         this.syncToBackend(syndication);
 
-        // Notify UI
-        console.log(`🆕 Generated Deal: ${syndication.borrower} ($${amount}M, ${rating}) from ${syndication.originatorName}`);
+        // Notify
+        console.log(`🆕 Generated: ${syndication.borrower} ($${amount}M, ${rating}) from ${syndication.originatorName}`);
         window.dispatchEvent(new CustomEvent('newSyndication', { detail: syndication }));
+
+        // Update UI
+        if (window.PipelineComponent) PipelineComponent.render();
 
         return syndication;
     },
 
     /**
-     * Process Lifecycle transitions
+     * Process deal lifecycle transitions based on time
      */
     processDealLifecycles(currentDate) {
         const now = currentDate.getTime();
@@ -178,47 +263,101 @@ const AutoGenerator = {
 
             const closeTime = new Date(deal.closingDate).getTime();
 
-            // Check for closing
-            if (now >= closeTime && deal.status !== 'closed') {
-                this.closeDeal(deal);
+            // Auto-close deals past their closing date
+            if (now >= closeTime && deal.status !== 'completed') {
+                if (deal.subscription >= 100) {
+                    this.completeDeal(deal);
+                } else if (deal.subscription >= 50) {
+                    // Partial close - still complete but with notes
+                    deal.notes = `Closed at ${deal.subscription.toFixed(0)}% subscription`;
+                    this.completeDeal(deal);
+                } else {
+                    // Failed to meet minimum - cancel
+                    this.cancelDeal(deal);
+                }
+            }
+
+            // Progress deals that are ready for next stage
+            if (deal.status === 'closing') {
+                // Move to settlement after 1 day in closing
+                const closingStart = new Date(deal.closingStartDate || now).getTime();
+                if (now - closingStart > 24 * 3600000) {
+                    deal.status = 'settlement';
+                    deal.phase = 'documentation';
+                    SyndiData.updateSyndication(deal.id, { status: 'settlement', phase: 'documentation' });
+                }
+            }
+
+            if (deal.status === 'settlement') {
+                // Move to funding after 1 day in settlement
+                const settlementStart = new Date(deal.settlementStartDate || now).getTime();
+                if (now - settlementStart > 24 * 3600000) {
+                    deal.status = 'funding';
+                    deal.phase = 'payment';
+                    SyndiData.updateSyndication(deal.id, { status: 'funding', phase: 'payment' });
+                }
+            }
+
+            if (deal.status === 'funding') {
+                // Complete after 1 day in funding
+                const fundingStart = new Date(deal.fundingStartDate || now).getTime();
+                if (now - fundingStart > 24 * 3600000) {
+                    this.completeDeal(deal);
+                }
             }
         });
     },
 
     /**
-     * Close a deal
+     * Complete a deal
      */
-    closeDeal(deal) {
-        deal.status = 'closed';
-        deal.phase = 'funded';
+    completeDeal(deal) {
+        deal.status = 'completed';
+        deal.phase = 'completed';
 
-        console.log(`🏁 Deal Closed: ${deal.borrower}`);
-        window.dispatchEvent(new CustomEvent('syndicationClosed', { detail: deal }));
+        console.log(`✅ Deal Completed: ${deal.borrower}`);
 
-        // Mock API update
-        // API.updateSyndication(deal.id, { status: 'closed' });
+        if (window.SyndiData) {
+            SyndiData.updateSyndication(deal.id, { status: 'completed', phase: 'completed' });
+        }
+
+        window.dispatchEvent(new CustomEvent('syndicationCompleted', { detail: deal }));
+        if (window.PipelineComponent) PipelineComponent.render();
     },
 
     /**
-     * Sync Generated Deal to Backend
+     * Cancel a deal
+     */
+    cancelDeal(deal) {
+        deal.status = 'cancelled';
+        deal.phase = 'cancelled';
+
+        console.log(`❌ Deal Cancelled: ${deal.borrower} (insufficient subscription)`);
+
+        if (window.SyndiData) {
+            SyndiData.updateSyndication(deal.id, { status: 'cancelled', phase: 'cancelled' });
+        }
+
+        window.dispatchEvent(new CustomEvent('syndicationCancelled', { detail: deal }));
+    },
+
+    /**
+     * Sync to Backend
      */
     async syncToBackend(syndication) {
-        // In simulation mode, we might just log this
-        // But if connected to real backend, we should POST
-        if (AppState.get('connected')) {
+        if (window.AppState?.get('connected') && window.API) {
             try {
-                // Map to Backend Schema if needed
-                // For now, assume backend accepts flexible schema or ignored keys
-                await API.post('/syndications', syndication);
+                await API.post('server', '/syndications', syndication);
             } catch (e) {
-                console.warn('Failed to sync generated deal to backend:', e);
+                console.warn('Failed to sync deal to backend:', e);
             }
         }
     },
 
-    /**
-     * Utilities
-     */
+    // ========================================
+    // Utilities
+    // ========================================
+
     getRandomItem(arr) {
         return arr[Math.floor(Math.random() * arr.length)];
     },
@@ -244,9 +383,17 @@ const AutoGenerator = {
     checkRating(r) { return r || 'BB'; },
 
     generateBorrowerName(sector) {
-        const prefixes = ['Global', 'Advanced', 'Strategic', 'United', 'First', 'Prime', 'Apex', 'Summit'];
-        const suffixes = ['Holdings', 'Group', 'Partners', 'Corp', 'Inc', 'Solutions', 'Systems', 'Ventures'];
+        const prefixes = ['Global', 'Advanced', 'Strategic', 'United', 'First', 'Prime', 'Apex', 'Summit', 'Horizon', 'Vertex'];
+        const suffixes = ['Holdings', 'Group', 'Partners', 'Corp', 'Inc', 'Solutions', 'Systems', 'Ventures', 'Industries'];
         return `${this.getRandomItem(prefixes)} ${sector.split(' ')[0]} ${this.getRandomItem(suffixes)}`;
+    },
+
+    /**
+     * Reset generator state
+     */
+    reset() {
+        this.activeSyndications = [];
+        console.log('🔄 Auto-Generator reset');
     }
 };
 
@@ -254,5 +401,7 @@ window.AutoGenerator = AutoGenerator;
 
 // Init on load
 document.addEventListener('DOMContentLoaded', () => {
-    AutoGenerator.init();
+    if (AutoGenerator.enabled) {
+        AutoGenerator.init();
+    }
 });

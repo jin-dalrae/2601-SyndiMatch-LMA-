@@ -143,13 +143,13 @@ def setup_event_handlers() -> None:
     Call this once when the application starts, before any events are emitted.
     This wires up the dashboard, metrics, alerts, and audit handlers.
     """
-    from event_handlers import (
+    from .event_handlers import (
         DashboardHandler,
         MetricsHandler,
         AlertHandler,
         AuditHandler
     )
-    from events import (
+    from .events import (
         BiddingCompleted,
         AuctionCompleted,
         AuctionFailed,

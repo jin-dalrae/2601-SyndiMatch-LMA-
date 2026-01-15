@@ -14,14 +14,14 @@ const RoleRouter = {
         },
         originator: {
             name: 'Originator',
-            routes: ['my-deals', 'create-syndication', 'payments-received', 'settings'],
-            defaultRoute: 'my-deals',
+            routes: ['overview', 'orchestration', 'my-deals', 'create-syndication', 'payments-received', 'analytics', 'settings'],
+            defaultRoute: 'overview',
             features: ['create-deal', 'fee-earnings']
         },
         participant: {
             name: 'Participant',
-            routes: ['available-deals', 'my-bids', 'portfolio', 'earnings', 'settings'],
-            defaultRoute: 'available-deals',
+            routes: ['overview', 'orchestration', 'available-deals', 'my-bids', 'portfolio', 'earnings', 'analytics', 'settings'],
+            defaultRoute: 'overview',
             features: ['auto-bid', 'cancel-bid', 'wealth-tracking']
         }
     },
@@ -48,12 +48,10 @@ const RoleRouter = {
      */
     async loadAgents() {
         try {
-            // If running without API, fallback to basic mock
             if (typeof API === 'undefined' || !API.getAgents) return;
 
             const res = await API.getAgents();
             if (res) {
-                // Flatten and map names
                 [...res.originator, ...res.participant].forEach(agent => {
                     this.agentNames[agent._id || agent.id] = agent.name;
                 });
@@ -70,7 +68,6 @@ const RoleRouter = {
         const dropdown = document.getElementById('role-dropdown');
         if (!dropdown) return;
 
-        // Repopulate dropdown if empty or basic
         if (dropdown.options.length <= 2) {
             this.populateRoleDropdown(dropdown);
         }
@@ -87,7 +84,6 @@ const RoleRouter = {
     },
 
     async populateRoleDropdown(dropdown) {
-        // Clear existing except platform
         dropdown.innerHTML = '<option value="platform">Platform Admin (View All)</option>';
 
         const optGroupOrg = document.createElement('optgroup');
@@ -97,6 +93,7 @@ const RoleRouter = {
         optGroupPart.label = 'Participants';
 
         try {
+            if (typeof API === 'undefined' || !API.getAgents) return;
             const agents = await API.getAgents();
 
             if (agents?.originator) {
@@ -118,7 +115,6 @@ const RoleRouter = {
             }
         } catch (e) {
             console.error('Failed to populate role dropdown:', e);
-            // Fallback handled by static HTML
             return;
         }
 
@@ -133,18 +129,13 @@ const RoleRouter = {
         this.currentRole = role;
         this.currentAgentId = agentId;
 
-        // Update body class
         document.body.className = document.body.className
             .replace(/role-\w+/g, '')
             .trim() + ` role-${role}`;
 
-        // Update navigation tabs
         this.updateNavigation();
-
-        // Switch to default route
         this.navigateTo(this.roles[role].defaultRoute);
 
-        // Emit event
         window.dispatchEvent(new CustomEvent('roleChange', {
             detail: { role, agentId }
         }));
@@ -167,7 +158,6 @@ const RoleRouter = {
             </button>
         `).join('');
 
-        // Re-attach click handlers
         navContainer.querySelectorAll('.nav-tab').forEach(tab => {
             tab.addEventListener('click', () => {
                 this.navigateTo(tab.dataset.view);
@@ -186,7 +176,8 @@ const RoleRouter = {
             'analytics': 'Analytics',
             'transactions': 'Transactions',
             'my-deals': 'My Deals',
-            'create-syndication': '+ Create Deal',
+            'create-syndication': 'Originate',
+            'originate': 'Originate',
             'payments-received': 'Payments',
             'settings': 'Settings',
             'available-deals': 'Available Deals',
@@ -201,13 +192,16 @@ const RoleRouter = {
      * Navigate to a route
      */
     navigateTo(route) {
+        // Alias common routes to match index.html IDs
+        let targetId = `view-${route}`;
+        if (route === 'create-syndication') targetId = 'view-originate';
+        if (route === 'originate') targetId = 'view-originate';
+
         this.currentRoute = route;
 
-        // Hide all views
         document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
 
-        // Show target view or create it
-        let targetView = document.getElementById(`view-${route}`);
+        let targetView = document.getElementById(targetId);
         if (!targetView) {
             targetView = this.createView(route);
         }
@@ -216,18 +210,19 @@ const RoleRouter = {
             targetView.classList.add('active');
         }
 
-        // Update active tab
+        if (targetView) {
+            targetView.classList.add('active');
+        }
+
         document.querySelectorAll('.nav-tab').forEach(tab => {
             tab.classList.toggle('active', tab.dataset.view === route);
         });
 
-        // Show metrics bar only on overview page
         const metricsBar = document.getElementById('metrics-bar');
         if (metricsBar) {
             metricsBar.style.display = (route === 'overview') ? 'flex' : 'none';
         }
 
-        // Render view content
         this.renderViewContent(route);
     },
 
@@ -238,7 +233,6 @@ const RoleRouter = {
         const mainContent = document.querySelector('.main-content');
         if (!mainContent) return;
 
-        // Create views for all role-specific routes
         const allRoutes = new Set();
         Object.values(this.roles).forEach(r => r.routes.forEach(route => allRoutes.add(route)));
 
@@ -273,7 +267,6 @@ const RoleRouter = {
         const view = document.getElementById(`view-${route}`);
         if (!view) return;
 
-        // Platform Admin Dashboard Override
         if (route === 'overview' && this.currentRole === 'platform' && window.AdminView) {
             window.AdminView.renderDashboard(view);
             return;
@@ -305,8 +298,9 @@ const RoleRouter = {
                 this.renderTransactions(view);
                 break;
             case 'orchestration':
-                if (window.AgentsComponent) {
-                    AgentsComponent.render();
+                if (window.AgentOrchestration) {
+                    AgentOrchestration.init();  // Ensure connected to simulation events
+                    AgentOrchestration.render(view);
                 }
                 break;
             case 'settings':
@@ -341,13 +335,11 @@ const RoleRouter = {
                                     <option value="Energy">Energy</option>
                                     <option value="Real Estate">Real Estate</option>
                                     <option value="Manufacturing">Manufacturing</option>
-                                    <option value="Financial Services">Financial Services</option>
                                 </select>
                             </div>
                             <div class="form-group">
                                 <label>Loan Amount ($M)</label>
                                 <input type="number" id="loan-amount" value="250" min="50" max="1000" required>
-                                <span class="form-hint">Min: $50M, Max: $1B (based on tier)</span>
                             </div>
                             <div class="form-group">
                                 <label>Syndication Target (%)</label>
@@ -362,40 +354,12 @@ const RoleRouter = {
                                     <option value="A">A</option>
                                     <option value="BBB+" selected>BBB+</option>
                                     <option value="BBB">BBB</option>
-                                    <option value="BB+">BB+</option>
-                                    <option value="BB">BB</option>
-                                    <option value="B">B</option>
                                 </select>
                             </div>
                             <div class="form-group">
                                 <label>Initial Spread (bps)</label>
                                 <input type="number" id="initial-spread" value="420" min="300" max="600" required>
-                                <span class="form-hint">Floor: 300bps (IG), 400bps (HY)</span>
                             </div>
-                            <div class="form-group">
-                                <label>Tenor</label>
-                                <select id="tenor">
-                                    <option value="3Y">3 Years</option>
-                                    <option value="5Y" selected>5 Years</option>
-                                    <option value="7Y">7 Years</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label>Loan Type</label>
-                                <select id="loan-type">
-                                    <option value="Term Loan B" selected>Term Loan B</option>
-                                    <option value="Revolver">Revolver</option>
-                                    <option value="Bridge Loan">Bridge Loan</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="form-rules">
-                            <h4>Originator Rules</h4>
-                            <ul>
-                                <li id="rule-amount">✓ Amount within tier limit</li>
-                                <li id="rule-spread">✓ Spread above minimum floor</li>
-                                <li id="rule-concentration">✓ Industry concentration under 30%</li>
-                            </ul>
                         </div>
                         <div class="form-actions">
                             <button type="button" class="btn-secondary" onclick="RoleRouter.generateSuggestion()">🔄 New Suggestion</button>
@@ -406,16 +370,12 @@ const RoleRouter = {
             </div>
         `;
 
-        // Attach form handler
         document.getElementById('create-syndication-form')?.addEventListener('submit', (e) => {
             e.preventDefault();
             this.announceSyndication();
         });
     },
 
-    /**
-     * Generate AI suggestion for new syndication
-     */
     generateSuggestion() {
         const industries = ['Technology', 'Healthcare', 'Energy', 'Real Estate', 'Manufacturing'];
         const ratings = ['BBB+', 'BBB', 'BB+', 'BB', 'A'];
@@ -428,9 +388,6 @@ const RoleRouter = {
         document.getElementById('initial-spread').value = 350 + Math.floor(Math.random() * 150);
     },
 
-    /**
-     * Announce a new syndication
-     */
     announceSyndication() {
         const syndication = {
             id: `SYND-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`,
@@ -439,311 +396,67 @@ const RoleRouter = {
             amount: parseInt(document.getElementById('loan-amount').value),
             rating: document.getElementById('credit-rating').value,
             spread: parseInt(document.getElementById('initial-spread').value),
-            tenor: document.getElementById('tenor').value,
-            loanType: document.getElementById('loan-type').value,
             syndicationTarget: parseInt(document.getElementById('synd-target').value),
             originatorId: this.currentAgentId,
             status: 'open',
-            announcedAt: SimulationEngine?.getCurrentDate()?.toISOString() || new Date().toISOString()
+            announcedAt: new Date().toISOString()
         };
 
-        // Add to auto-generator if available
-        if (window.AutoGenerator) {
-            window.AutoGenerator.addSyndication(syndication);
+        if (window.SyndiData && SyndiData.syndications) {
+            SyndiData.syndications.push(syndication);
         }
 
-        alert(`✅ Syndication ${syndication.id} announced!\n\n${syndication.borrower}\n$${syndication.amount}M at ${syndication.spread}bps`);
+        window.dispatchEvent(new CustomEvent('newSyndication', { detail: syndication }));
+        alert(`✅ Syndication ${syndication.id} announced!`);
         this.navigateTo('my-deals');
     },
 
-    /**
-     * Render Available Deals (Participant)
-     */
     renderAvailableDeals(view) {
-        // Merge AutoGenerator deals with SyndiData mock deals
-        const autoDeals = window.AutoGenerator?.activeSyndications || [];
-        const mockDeals = (typeof SyndiData !== 'undefined' && SyndiData.syndications)
+        const deals = (typeof SyndiData !== 'undefined' && SyndiData.syndications)
             ? SyndiData.syndications.filter(s => s.status?.toLowerCase() === 'open')
             : [];
-
-        // Combine and dedupe by id
-        const allDeals = [...autoDeals];
-        mockDeals.forEach(md => {
-            if (!allDeals.find(d => d.id === md.id)) {
-                allDeals.push(md);
-            }
-        });
 
         view.innerHTML = `
             <div class="available-deals-page">
                 <h2 class="page-title">Available Syndications</h2>
                 <div class="deals-grid">
-                    ${allDeals.length === 0 ? '<p class="no-deals">No open syndications. Start the simulation to generate deals.</p>' : ''}
-                    ${allDeals.map(deal => {
-            // Use ParticipantView for analytics if available
-            const analyticsHtml = window.ParticipantView ? window.ParticipantView.renderDealAnalysis(deal) : '';
-
-            return `
-                        <div class="deal-card expanded-card" data-id="${deal.id}">
+                    ${deals.length === 0 ? '<p class="no-deals">No open syndications at the moment.</p>' : ''}
+                    ${deals.map(deal => `
+                        <div class="deal-card">
                             <div class="deal-header">
                                 <span class="deal-id">${deal.id}</span>
-                                <span class="deal-status status-badge open">OPEN</span>
+                                <span class="status-badge open">OPEN</span>
                             </div>
-                            <div class="deal-main-info">
-                                <div class="deal-borrower-large">${deal.borrower}</div>
-                                <div class="deal-tags">
-                                    <span class="tag tag-industry">${deal.industry}</span>
-                                    <span class="tag tag-rating">${deal.rating}</span>
-                                    <span class="tag tag-tenor">${deal.tenor || '5Y'}</span>
-                                </div>
+                            <div class="deal-borrower">${deal.borrower}</div>
+                            <div class="deal-details">
+                                <div>Industry: ${deal.industry}</div>
+                                <div>Amount: $${deal.amount}M</div>
+                                <div>Spread: ${deal.spread} bps</div>
                             </div>
-                            
-                            <!-- Participant Analytics Section -->
-                            ${analyticsHtml}
-
-                            <div class="deal-details-row">
-                                <div class="detail-item">
-                                    <div class="detail-label">Amount</div>
-                                    <div class="detail-value">$${deal.amount}M</div>
-                                </div>
-                                <div class="detail-item">
-                                    <div class="detail-label">Spread</div>
-                                    <div class="detail-value">${deal.spread} bps</div>
-                                </div>
-                                <div class="detail-item">
-                                    <div class="detail-label">Fees</div>
-                                    <div class="detail-value">1.25%</div> 
-                                </div>
-                            </div>
-
                             <div class="deal-actions">
-                                <span class="auto-bid-status">🤖 Auto-bid enabled</span>
-                                <button class="btn-cancel-bid" data-id="${deal.id}">Cancel Bid</button>
                                 <button class="btn-primary" onclick="RoleRouter.placeManualBid('${deal.id}')">Place Bid</button>
                             </div>
                         </div>
-                    `}).join('')}
+                    `).join('')}
                 </div>
             </div>
         `;
-
-        // Attach cancel handlers
-        view.querySelectorAll('.btn-cancel-bid').forEach(btn => {
-            btn.addEventListener('click', () => this.cancelBid(btn.dataset.id));
-        });
     },
 
-    /**
-<<<<<<< HEAD
-     * Cancel a bid (from Available Deals view)
-=======
-     * Place manual bid (placeholder)
-     */
     placeManualBid(dealId) {
-        alert(`Bid placement for ${dealId} coming in Phase 2.3!`);
+        alert(`Bidding on ${dealId}...`);
+        // Implementation here
     },
 
-    /**
-     * Cancel a bid
->>>>>>> syndication-change
-     */
-    cancelBid(dealId) {
-        if (!confirm(`Cancel bid on ${dealId}? A 0.2% break fee may apply.`)) {
-            return;
-        }
-
-        // Find the bid for this deal
-        let result = { success: false };
-
-        if (window.AutoBidder) {
-            // Get participant's bids for this deal
-            const bids = AutoBidder.getParticipantBids(this.currentAgentId);
-            const bid = bids.find(b => b.syndicationId === dealId && b.status === 'executed');
-
-            if (bid) {
-                result = AutoBidder.cancelBid(bid.id);
-            } else {
-                result = { success: false, error: 'No active bid found for this deal' };
-            }
-        }
-
-        if (result.success) {
-            alert(`Bid on ${dealId} cancelled. Break fee of $${result.breakFee?.toLocaleString() || 'TBD'} applied.`);
-
-            // Refresh the current view
-            const currentView = document.getElementById(`view-${this.currentRoute}`);
-            if (currentView) {
-                this.renderViewContent(this.currentRoute);
-            }
-        } else {
-            alert(`Could not cancel bid: ${result.error || 'Unknown error'}`);
-        }
-    },
-
-
-    /**
-     * Render My Bids (Participant)
-     */
-    renderMyBids(view) {
-        const bids = window.AutoBidder ? window.AutoBidder.getParticipantBids(this.currentAgentId) : [];
-
-        // Also check if we have mock bids in SyndiData for this agent
-        if (typeof SyndiData !== 'undefined' && SyndiData.bids) {
-            // This logic is imperfect as SyndiData.bids is loose, but let's try to match by name
-            // Assuming currentAgentId maps to a name
-            const agentName = this.getAgentName(this.currentAgentId);
-            const mockBids = SyndiData.bids.filter(b => b.participant === agentName);
-            mockBids.forEach(mb => {
-                // Dedupe
-                if (!bids.find(b => b.syndicationId === 'SYND-2025-001' && b.amount === mb.amount)) {
-                    bids.push({
-                        syndicationId: 'SYND-2025-001', // Mock ID
-                        borrower: 'TechFlow Solutions', // Mock
-                        amount: mb.amount,
-                        spread: mb.spread,
-                        status: mb.action === 'BID' ? 'executed' : 'passed',
-                        canCancel: false
-                    });
-                }
-            });
-        }
-
-        view.innerHTML = `
-            <div class="my-bids-page">
-                <h2 class="page-title">My Bids</h2>
-                <table class="bids-table">
-                    <thead>
-                        <tr>
-                            <th>Syndication</th>
-                            <th>Borrower</th>
-                            <th>Bid Amount</th>
-                            <th>Spread</th>
-                            <th>Status</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="my-bids-body">
-                        ${bids.length === 0 ? '<tr><td colspan="6" class="text-muted">No bids yet. Bids will appear here as the simulation runs.</td></tr>' : ''}
-                        ${bids.map(bid => `
-                            <tr>
-                                <td>${bid.syndicationId}</td>
-                                <td>${bid.borrower || bid.participantName || 'Unknown'}</td> <!-- mixed data models -->
-                                <td>$${bid.amount}M</td>
-                                <td>${bid.spread || '—'} bps</td>
-                                <td><span class="status-badge ${bid.status}">${bid.status}</span></td>
-                                <td>
-                                    ${bid.canCancel ? `<button class="btn-cancel-bid" data-id="${bid.id}">Cancel</button>` : '—'}
-                                </td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-
-        // Attach handlers
-        view.querySelectorAll('.btn-cancel-bid').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const bidId = btn.dataset.id;
-
-                // Add confirmation dialog
-                if (!confirm(`Cancel this bid? A 0.2% break fee may apply.`)) {
-                    return;
-                }
-
-                // Call AutoBidder cancel
-                if (window.AutoBidder) {
-                    const result = AutoBidder.cancelBid(bidId);
-                    if (result && result.success) {
-                        alert(`Bid cancelled. Break fee: $${result.breakFee?.toLocaleString() || 'TBD'}`);
-                    }
-                    this.renderMyBids(view); // Re-render
-                }
-            });
-        });
-    },
-
-    getAgentName(id) {
-        return this.agentNames[id] || id;
-    },
-
-    /**
-     * Render Portfolio (Participant)
-     */
     async renderPortfolio(view) {
         try {
             view.innerHTML = '<div class="loading-state">Loading portfolio data...</div>';
 
-<<<<<<< HEAD
-        view.innerHTML = `
-            <div class="portfolio-page">
-                <div class="page-header-flex">
-                    <h2 class="page-title">Portfolio Overview</h2>
-                    <div class="page-controls">
-                        <button class="btn-refresh" onclick="RoleRouter.refreshPortfolio()">🔄 Refresh</button>
-                        <div class="last-updated">Last updated: <span id="portfolio-time">${new Date().toLocaleTimeString()}</span></div>
-                        <span class="live-indicator" id="portfolio-live">● LIVE</span>
-                    </div>
-                </div>
+            const stats = (window.API && API.getPortfolio)
+                ? await API.getPortfolio(this.currentAgentId)
+                : this.fallbackPortfolioStats(this.currentAgentId);
 
-                <!-- Summary Cards -->
-                <div class="wealth-cards">
-                    <div class="wealth-card">
-                        <div class="wealth-label">Total Exposure</div>
-                        <div class="wealth-value" id="stat-exposure">$${stats.totalExposure.toFixed(1)}M</div>
-                        <div class="wealth-sub">across <span id="stat-deals">${stats.dealCount}</span> active deals</div>
-                    </div>
-                    <div class="wealth-card">
-                        <div class="wealth-label">Weighted Avg Yield</div>
-                        <div class="wealth-value" id="stat-yield">${stats.weightedYield.toFixed(2)}%</div>
-                        <div class="wealth-sub">Spread: <span id="stat-spread">${Math.round(stats.weightedSpread)}</span> bps</div>
-                    </div>
-                    <div class="wealth-card highlight">
-                        <div class="wealth-label">Available Capacity</div>
-                        <div class="wealth-value" id="stat-capacity">$${stats.availableCapacity.toFixed(1)}M</div>
-                        <div class="wealth-sub">Utilization: <span id="stat-util">${stats.utilization}</span>%</div>
-                    </div>
-                    <div class="wealth-card success">
-                        <div class="wealth-label">Net ROI (YTD)</div>
-                        <div class="wealth-value" id="stat-roi">+${stats.roi.toFixed(1)}%</div>
-                        <div class="wealth-sub">Interest: $<span id="stat-interest">${(stats.interestYTD / 1000000).toFixed(1)}</span>M</div>
-                    </div>
-                </div>
-
-                <!-- ESG & Geography Summary -->
-                <div class="esg-geo-section" style="margin-top: 1.5rem;">
-                    <div class="analytics-grid">
-                        <div class="metric-card">
-                            <h4 class="chart-title">🌱 ESG Composition</h4>
-                            <div class="esg-bar">
-                                <div class="esg-segment high" style="width: ${stats.esgHigh || 40}%;" title="ESG 75+">High (${stats.esgHigh || 40}%)</div>
-                                <div class="esg-segment med" style="width: ${stats.esgMed || 45}%;" title="ESG 50-74">Med (${stats.esgMed || 45}%)</div>
-                                <div class="esg-segment low" style="width: ${stats.esgLow || 15}%;" title="ESG <50">Low (${stats.esgLow || 15}%)</div>
-                            </div>
-                            <div class="esg-avg">Portfolio Avg ESG: <strong>${stats.avgEsg || 72}</strong></div>
-                        </div>
-                        <div class="metric-card">
-                            <h4 class="chart-title">🌍 Geographic Distribution</h4>
-                            <div class="geo-list">
-                                ${(stats.geography || [{ name: 'North America', pct: 75 }, { name: 'Europe', pct: 25 }]).map(g => `
-                                    <div class="geo-row">
-                                        <span class="geo-name">${g.name}</span>
-                                        <div class="geo-bar-track">
-                                            <div class="geo-bar-fill" style="width: ${g.pct}%;"></div>
-                                        </div>
-                                        <span class="geo-pct">${g.pct}%</span>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-=======
-            // Fetch real portfolio from API
-            const stats = await API.getPortfolio(this.currentAgentId);
-
-            if (!stats) throw new Error('No portfolio data returned');
->>>>>>> syndication-change
+            if (!stats) throw new Error('No portfolio data');
 
             view.innerHTML = `
                 <div class="portfolio-page">
@@ -752,380 +465,99 @@ const RoleRouter = {
                         <div class="last-updated">Last updated: ${new Date().toLocaleTimeString()}</div>
                     </div>
 
-                    <!-- Summary Cards -->
                     <div class="wealth-cards">
                         <div class="wealth-card">
                             <div class="wealth-label">Total Exposure</div>
-                            <div class="wealth-value">$${(stats.total_exposure / 1000000).toFixed(1)}M</div>
-                            <div class="wealth-sub">across ${stats.deal_count} active deals</div>
+                            <div class="wealth-value">$${((stats.total_exposure || stats.totalExposure || 0) / 1000000).toFixed(1)}M</div>
                         </div>
                         <div class="wealth-card">
-                            <div class="wealth-label">Weighted Avg Yield</div>
-                            <div class="wealth-value">${stats.weighted_yield.toFixed(2)}%</div>
-                            <div class="wealth-sub">Spread: ${Math.round(stats.weighted_spread)} bps</div>
+                            <div class="wealth-label">Yield</div>
+                            <div class="wealth-value">${(stats.weighted_yield || stats.weightedYield || 0).toFixed(2)}%</div>
                         </div>
                         <div class="wealth-card highlight">
-                            <div class="wealth-label">Available Capacity</div>
-                            <div class="wealth-value">$${(stats.available_capacity / 1000000).toFixed(1)}M</div>
-                            <div class="wealth-sub">Utilization: ${stats.utilization}%</div>
+                            <div class="wealth-label">Utilization</div>
+                            <div class="wealth-value">${stats.utilization || 0}%</div>
                         </div>
                         <div class="wealth-card success">
-                            <div class="wealth-label">Net ROI (YTD)</div>
-                            <div class="wealth-value">+${stats.roi_ytd.toFixed(1)}%</div>
-                            <div class="wealth-sub">Interest: $${(stats.interest_ytd / 1000000).toFixed(1)}M</div>
+                            <div class="wealth-label">ROI (YTD)</div>
+                            <div class="wealth-value">+${(stats.roi_ytd || stats.roi || 0).toFixed(1)}%</div>
                         </div>
                     </div>
 
-                    <!-- Concentration Analysis -->
-                    <div class="charts-section" style="margin-top: 2rem;">
-                        <h3 class="section-title">Risk Concentration</h3>
-                        <div class="analytics-grid">
-                            
-                            <!-- Sector Exposure -->
-                            <div class="metric-card">
-                                <h4 class="chart-title">Sector Exposure</h4>
-                                <div class="bar-chart-vertical">
-                                    ${stats.sectors.map(s => `
-                                        <div class="bar-group">
-                                            <div class="bar-fill" style="height: ${s.pct}%; background: var(--primary);"></div>
-                                            <span class="bar-label">${s.name}</span>
-                                            <span class="bar-value">${s.pct}%</span>
-                                        </div>
-                                    `).join('')}
-                                </div>
-                            </div>
-
-                            <!-- Credit Rating -->
-                            <div class="metric-card">
-                                <h4 class="chart-title">Credit Quality</h4>
-                                <div class="bar-chart-vertical">
-                                    ${stats.ratings.map(r => `
-                                        <div class="bar-group">
-                                            <div class="bar-fill" style="height: ${r.pct}%; background: ${this.getRatingColor(r.name)};"></div>
-                                            <span class="bar-label">${r.name}</span>
-                                            <span class="bar-value">${r.pct}%</span>
-                                        </div>
-                                    `).join('')}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-<<<<<<< HEAD
-                <!-- Active Holdings -->
-                <h3 class="section-title" style="margin-top: 2rem;">Active Holdings</h3>
-                <div class="table-container">
-                    <table class="portfolio-table">
-                        <thead>
-                            <tr>
-                                <th>Borrower</th>
-                                <th>Sector</th>
-                                <th>Rating</th>
-                                <th>ESG</th>
-                                <th>Allocated</th>
-                                <th>Spread</th>
-                                <th>Tenor</th>
-                                <th>Performance</th>
-                            </tr>
-                        </thead>
-                        <tbody id="holdings-body">
-                            ${stats.holdings.length === 0 ? '<tr><td colspan="8" class="text-muted">No active holdings.</td></tr>' : ''}
-                            ${stats.holdings.map(h => `
-                                <tr>
-                                    <td><strong>${h.borrower}</strong><div class="text-xs text-muted">${h.id}</div></td>
-                                    <td>${h.industry}</td>
-                                    <td><span class="rating-badge ${h.rating.replace('+', '').replace('-', '').toLowerCase()}">${h.rating}</span></td>
-                                    <td><span class="esg-score ${this.getEsgClass(h.esg)}">${h.esg || 70}</span></td>
-                                    <td>$${h.amount.toFixed(1)}M</td>
-                                    <td>${h.spread} bps</td>
-                                    <td>${h.tenor}</td>
-                                    <td><span class="status-dot green"></span> Performing</td>
-=======
-                    <!-- Active Holdings -->
-                    <h3 class="section-title" style="margin-top: 2rem;">Active Holdings</h3>
-                    <div class="table-container">
+                    <div class="holdings-section">
+                        <h3>Active Holdings</h3>
                         <table class="portfolio-table">
                             <thead>
                                 <tr>
                                     <th>Borrower</th>
                                     <th>Sector</th>
                                     <th>Rating</th>
+                                    <th>ESG</th>
                                     <th>Allocated</th>
-                                    <th>Spread</th>
-                                    <th>Tenor</th>
                                     <th>Performance</th>
->>>>>>> syndication-change
                                 </tr>
                             </thead>
                             <tbody>
-                                ${stats.holdings.length === 0 ? '<tr><td colspan="7" class="text-muted">No active holdings. (Place bids to build portfolio)</td></tr>' : ''}
-                                ${stats.holdings.map(h => `
+                                ${(stats.holdings || []).map(h => `
                                     <tr>
-                                        <td><strong>${h.borrower}</strong><div class="text-xs text-muted">${h.id}</div></td>
+                                        <td><strong>${h.borrower || h.borrower_name}</strong></td>
                                         <td>${h.industry}</td>
-                                        <td><span class="rating-badge ${h.rating.replace('+', '').replace('-', '').toLowerCase()}">${h.rating}</span></td>
-                                        <td>$${h.amount.toFixed(1)}M</td>
-                                        <td>${h.spread} bps</td>
-                                        <td>${h.tenor}</td>
+                                        <td><span class="rating-badge">${h.rating || h.credit_rating}</span></td>
+                                        <td><span class="esg-score">${h.esg || h.esg_score || 70}</span></td>
+                                        <td>$${((h.amount || h.final_allocation || 0) / 1000000).toFixed(1)}M</td>
                                         <td><span class="status-dot green"></span> Performing</td>
                                     </tr>
                                 `).join('')}
+                                ${(!stats.holdings || stats.holdings.length === 0) ? '<tr><td colspan="6">No holdings yet.</td></tr>' : ''}
                             </tbody>
                         </table>
                     </div>
                 </div>
-<<<<<<< HEAD
-            </div>
-        `;
-
-        // Start auto-refresh (every 10 seconds)
-        this.startPortfolioAutoRefresh(view);
-    },
-
-    // Auto-refresh portfolio data
-    portfolioRefreshInterval: null,
-
-    startPortfolioAutoRefresh(view) {
-        // Clear existing interval
-        if (this.portfolioRefreshInterval) {
-            clearInterval(this.portfolioRefreshInterval);
-        }
-
-        this.portfolioRefreshInterval = setInterval(async () => {
-            if (this.currentRoute !== 'portfolio') {
-                clearInterval(this.portfolioRefreshInterval);
-                return;
-            }
-
-            await this.updatePortfolioStats();
-        }, 10000); // Refresh every 10 seconds
-    },
-
-    async updatePortfolioStats() {
-        const timeEl = document.getElementById('portfolio-time');
-        const liveEl = document.getElementById('portfolio-live');
-
-        if (liveEl) liveEl.style.animation = 'pulse 0.5s';
-
-        try {
-            // Fetch real-time data from API
-            const stats = await this.fetchPortfolioFromAPI();
-
-            // Update DOM elements
-            if (document.getElementById('stat-exposure')) {
-                document.getElementById('stat-exposure').textContent = `$${stats.totalExposure.toFixed(1)}M`;
-                document.getElementById('stat-deals').textContent = stats.dealCount;
-                document.getElementById('stat-yield').textContent = `${stats.weightedYield.toFixed(2)}%`;
-                document.getElementById('stat-spread').textContent = Math.round(stats.weightedSpread);
-                document.getElementById('stat-capacity').textContent = `$${stats.availableCapacity.toFixed(1)}M`;
-                document.getElementById('stat-util').textContent = stats.utilization;
-                document.getElementById('stat-roi').textContent = `+${stats.roi.toFixed(1)}%`;
-                document.getElementById('stat-interest').textContent = (stats.interestYTD / 1000000).toFixed(1);
-            }
-
-            if (timeEl) timeEl.textContent = new Date().toLocaleTimeString();
-        } catch (e) {
-            console.error('Portfolio update failed:', e);
-        }
-    },
-
-    async fetchPortfolioFromAPI() {
-        try {
-            // Try to fetch from backend API using new endpoint
-            const data = await API.getPortfolio(this.currentAgentId);
-            if (data && data.total_exposure !== undefined) {
-                return this.transformAPIPortfolio(data);
-            }
-        } catch (e) {
-            console.log('API not available, using calculated stats', e);
-        }
-
-        // Fallback to calculated stats
-        return this.calculatePortfolioStats(this.currentAgentId);
-    },
-
-    transformAPIPortfolio(data) {
-        return {
-            totalExposure: (data.total_exposure || 0) / 1000000,
-            availableCapacity: (data.available_capacity || 500000000) / 1000000,
-            utilization: data.utilization || 45,
-            dealCount: data.deal_count || 0,
-            weightedYield: data.weighted_yield || 8.0,
-            weightedSpread: data.weighted_spread || 400,
-            roi: data.roi_ytd || 10.0,
-            interestYTD: data.interest_ytd || 0,
-            avgEsg: data.avg_esg || 70,
-            esgHigh: data.esg_high_pct || 40,
-            esgMed: data.esg_med_pct || 45,
-            esgLow: data.esg_low_pct || 15,
-            geography: data.geography || [],
-            sectors: data.sectors || [],
-            ratings: data.ratings || [],
-            holdings: (data.holdings || []).map(h => ({
-                id: h._id || h.id,
-                borrower: h.borrower_name || h.borrower,
-                industry: h.industry,
-                rating: h.credit_rating || h.rating,
-                esg: h.esg_score || h.esg,
-                amount: (h.final_allocation || h.amount * 1000000) / 1000000,
-                spread: h.final_spread || h.spread,
-                tenor: h.tenor || '5Y'
-            }))
-        };
-    },
-
-    refreshPortfolio() {
-        const view = document.getElementById('view-portfolio');
-        if (view) {
-            this.renderPortfolio(view);
-        }
-    },
-
-    getEsgClass(score) {
-        if (!score) return 'med';
-        if (score >= 75) return 'high';
-        if (score >= 50) return 'med';
-        return 'low';
-    },
-
-
-    calculatePortfolioStats(agentId) {
-        const holdings = [];
-        let totalExposure = 0;
-        let weightedSpreadSum = 0;
-
-        // 1. Check finalized allocations (from data.js)
-        if (SyndiData.allocations) {
-            Object.entries(SyndiData.allocations).forEach(([syndId, allocs]) => {
-                const myAlloc = allocs.find(a => a.participant === this.roles.participant.name || a.participant === 'Apollo Global'); // Mock name match
-                // We need to match agentId to name or use mock.
-                // Assuming Name matching for now as per data.js structure.
-                // Or robust lookup.
-            });
-=======
             `;
         } catch (error) {
             console.error('Portfolio render error:', error);
-            view.innerHTML = `
-                <div class="error-state">
-                    <h3>Failed to load portfolio</h3>
-                    <p>Could not fetch data for ${this.currentAgentId}</p>
-                    <button class="btn-secondary" onclick="RoleRouter.renderPortfolio(document.getElementById('view-portfolio'))">Try Again</button>
-                    ${Config.IS_DEV ? `<pre class="debug-info">${error.message}</pre>` : ''}
-                </div>
-            `;
->>>>>>> syndication-change
+            view.innerHTML = `<div class="error-state">Error loading portfolio: ${error.message}</div>`;
         }
     },
 
-    // Legacy mock function removed
-    /* calculatePortfolioStats(agentId) { ... } */
-
-    getRatingColor(rating) {
-        if (rating.startsWith('A')) return '#10B981'; // Green
-        if (rating.startsWith('BBB')) return '#3B82F6'; // Blue
-        if (rating.startsWith('BB')) return '#F59E0B'; // Orange
-        return '#EF4444'; // Red
+    fallbackPortfolioStats(id) {
+        return {
+            totalExposure: 250000000,
+            weightedYield: 8.2,
+            utilization: 45,
+            roi: 10.5,
+            holdings: []
+        };
     },
 
-    /**
-     * Render Earnings (Participant) - with transaction history
-     */
     renderEarnings(view) {
-        const wealth = window.SimulationEngine?.getWealth(this.currentAgentId) || {
-            totalEarnings: 0,
-            totalFeesPaid: 0
-        };
-
-        // Get transactions for this participant
-        const allTx = window.SimulationEngine?.transactions || [];
-        const myTransactions = allTx.filter(tx =>
-            tx.to === this.currentAgentId || tx.from === this.currentAgentId
-        ).slice(-30).reverse();
-
-        // Categorize transactions
-        const interestPayments = myTransactions.filter(tx => tx.type === 'interest_payment' && tx.to === this.currentAgentId);
-        const feesPaid = myTransactions.filter(tx => tx.from === this.currentAgentId);
-        const totalInterest = interestPayments.reduce((sum, tx) => sum + (tx.amount || 0), 0);
-        const totalFees = feesPaid.reduce((sum, tx) => sum + (tx.amount || 0), 0);
-
+        const wealth = window.SimulationEngine?.getWealth(this.currentAgentId) || { totalEarnings: 0 };
         view.innerHTML = `
             <div class="earnings-page">
-                <h2 class="page-title">Earnings & Transaction History</h2>
+                <h2 class="page-title">Earnings History</h2>
                 <div class="wealth-cards">
                     <div class="wealth-card success">
-                        <div class="wealth-label">Interest Earned</div>
-                        <div class="wealth-value">+$${(totalInterest / 1000000).toFixed(2)}M</div>
-                    </div>
-                    <div class="wealth-card">
-                        <div class="wealth-label">Fees Paid</div>
-                        <div class="wealth-value">-$${(totalFees / 1000000).toFixed(2)}M</div>
-                    </div>
-                    <div class="wealth-card highlight">
-                        <div class="wealth-label">Net Earnings</div>
-                        <div class="wealth-value ${totalInterest - totalFees >= 0 ? 'positive' : 'negative'}">
-                            ${totalInterest - totalFees >= 0 ? '+' : ''}$${((totalInterest - totalFees) / 1000000).toFixed(2)}M
-                        </div>
-                    </div>
-                    <div class="wealth-card">
-                        <div class="wealth-label">Total Transactions</div>
-                        <div class="wealth-value">${myTransactions.length}</div>
+                        <div class="wealth-label">Total Earnings</div>
+                        <div class="wealth-value">$${((wealth.totalEarnings || 0) / 1000000).toFixed(2)}M</div>
                     </div>
                 </div>
-
-                <h3>Transaction History</h3>
-                <table class="transactions-table">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Type</th>
-                            <th>Counterparty</th>
-                            <th>Deal</th>
-                            <th>Amount</th>
-                            <th>Direction</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${myTransactions.length === 0 ? '<tr><td colspan="6" class="text-muted">No transactions yet. As the simulation runs, interest payments and fees will appear here.</td></tr>' : ''}
-                        ${myTransactions.map(tx => {
-            const isIncoming = tx.to === this.currentAgentId;
-            const counterparty = isIncoming ? tx.from : tx.to;
-            return `
-                            <tr class="${isIncoming ? 'tx-incoming' : 'tx-outgoing'}">
-                                <td>${new Date(tx.timestamp).toLocaleDateString()}</td>
-                                <td><span class="tx-type-badge">${tx.type.replace('_', ' ')}</span></td>
-                                <td>${counterparty || '—'}</td>
-                                <td>${tx.dealId || '—'}</td>
-                                <td class="tx-amount ${isIncoming ? 'positive' : 'negative'}">
-                                    ${isIncoming ? '+' : '-'}$${((tx.amount || 0) / 1000000).toFixed(2)}M
-                                </td>
-                                <td>${isIncoming ? '<span class="tx-dir in">↓ IN</span>' : '<span class="tx-dir out">↑ OUT</span>'}</td>
-                            </tr>
-                        `}).join('')}
-                    </tbody>
-                </table>
             </div>
         `;
     },
 
-    /**
-     * Render My Deals (Originator)
-     */
     renderMyDeals(view) {
-        const deals = window.AutoGenerator?.activeSyndications?.filter(s => s.originatorId === this.currentAgentId) || [];
-
+        const deals = (window.SyndiData?.syndications || []).filter(s => s.originatorId === this.currentAgentId);
         view.innerHTML = `
             <div class="my-deals-page">
                 <h2 class="page-title">My Syndications</h2>
-                <button class="btn-primary" onclick="RoleRouter.navigateTo('create-syndication')">+ Create New Syndication</button>
+                <button class="btn-primary" onclick="RoleRouter.navigateTo('create-syndication')">+ Create New</button>
                 <div class="deals-list">
-                    ${deals.length === 0 ? '<p class="text-muted">No deals yet. Create your first syndication!</p>' : ''}
-                    ${deals.map(deal => `
+                    ${deals.map(d => `
                         <div class="deal-row">
-                            <span class="deal-id">${deal.id}</span>
-                            <span class="deal-borrower">${deal.borrower}</span>
-                            <span class="deal-amount">$${deal.amount}M</span>
-                            <span class="deal-status status-badge ${deal.status}">${deal.status}</span>
+                            <span>${d.id}</span>
+                            <span>${d.borrower}</span>
+                            <span>$${d.amount}M</span>
+                            <span class="status-badge ${d.status}">${d.status}</span>
                         </div>
                     `).join('')}
                 </div>
@@ -1133,163 +565,25 @@ const RoleRouter = {
         `;
     },
 
-    /**
-     * Render Payments Received (Originator) - with transaction history
-     */
     renderPaymentsReceived(view) {
-        const wealth = window.SimulationEngine?.getWealth(this.currentAgentId) || {
-            totalOriginated: 0,
-            totalFeesEarned: 0,
-            activeDeals: 0,
-            completedDeals: 0
-        };
-
-        // Get transactions for this originator
-        const allTx = window.SimulationEngine?.transactions || [];
-        const myTransactions = allTx.filter(tx =>
-            tx.to === this.currentAgentId || tx.from === this.currentAgentId
-        ).slice(-30).reverse();
-
-        // Calculate incoming vs outgoing
-        const incoming = myTransactions.filter(tx => tx.to === this.currentAgentId);
-        const outgoing = myTransactions.filter(tx => tx.from === this.currentAgentId);
-        const totalIncoming = incoming.reduce((sum, tx) => sum + (tx.amount || 0), 0);
-        const totalOutgoing = outgoing.reduce((sum, tx) => sum + (tx.amount || 0), 0);
-
-        view.innerHTML = `
-            <div class="payments-received-page">
-                <h2 class="page-title">Payments & Transactions</h2>
-                <div class="wealth-cards">
-                    <div class="wealth-card">
-                        <div class="wealth-label">Total Originated</div>
-                        <div class="wealth-value">$${(wealth.totalOriginated / 1000000).toFixed(0)}M</div>
-                    </div>
-                    <div class="wealth-card success">
-                        <div class="wealth-label">Fees Earned</div>
-                        <div class="wealth-value">+$${(wealth.totalFeesEarned / 1000000).toFixed(2)}M</div>
-                    </div>
-                    <div class="wealth-card">
-                        <div class="wealth-label">Active Deals</div>
-                        <div class="wealth-value">${wealth.activeDeals || 0}</div>
-                    </div>
-                    <div class="wealth-card">
-                        <div class="wealth-label">Completed</div>
-                        <div class="wealth-value">${wealth.completedDeals || 0}</div>
-                    </div>
-                </div>
-                
-                <div class="tx-summary">
-                    <div class="tx-summary-item incoming">
-                        <span class="tx-arrow">↓</span>
-                        <span>Incoming: <strong>$${(totalIncoming / 1000000).toFixed(2)}M</strong></span>
-                    </div>
-                    <div class="tx-summary-item outgoing">
-                        <span class="tx-arrow">↑</span>
-                        <span>Outgoing: <strong>$${(totalOutgoing / 1000000).toFixed(2)}M</strong></span>
-                    </div>
-                </div>
-
-                <h3>Transaction History</h3>
-                <table class="transactions-table">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Type</th>
-                            <th>Counterparty</th>
-                            <th>Deal</th>
-                            <th>Amount</th>
-                            <th>Direction</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${myTransactions.length === 0 ? '<tr><td colspan="6" class="text-muted">No transactions yet. Start the simulation to see activity.</td></tr>' : ''}
-                        ${myTransactions.map(tx => {
-            const isIncoming = tx.to === this.currentAgentId;
-            const counterparty = isIncoming ? tx.from : tx.to;
-            return `
-                            <tr class="${isIncoming ? 'tx-incoming' : 'tx-outgoing'}">
-                                <td>${new Date(tx.timestamp).toLocaleDateString()}</td>
-                                <td><span class="tx-type-badge">${tx.type.replace('_', ' ')}</span></td>
-                                <td>${counterparty || '—'}</td>
-                                <td>${tx.dealId || '—'}</td>
-                                <td class="tx-amount ${isIncoming ? 'positive' : 'negative'}">
-                                    ${isIncoming ? '+' : '-'}$${((tx.amount || 0) / 1000000).toFixed(2)}M
-                                </td>
-                                <td>${isIncoming ? '<span class="tx-dir in">↓ IN</span>' : '<span class="tx-dir out">↑ OUT</span>'}</td>
-                            </tr>
-                        `}).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
+        view.innerHTML = '<div class="payments-received-page"><h2 class="page-title">Payments Received</h2><p>Feature coming soon.</p></div>';
     },
 
-    /**
-     * Render Transactions (Admin)
-     */
     renderTransactions(view) {
         const transactions = window.SimulationEngine?.transactions || [];
-
-        // Agent name lookup
-        const agentNames = {
-            // Participants
-            'PA-001': 'Apollo Global',
-            'PA-002': 'CalPERS',
-            'PA-003': 'BNP Paribas AM',
-            'PA-004': 'MUFG Bank',
-            'PA-005': 'Palmer Square',
-            'PA-101': 'State Street',
-            'PA-102': 'PNC Bank',
-            'PA-103': 'Northern Trust',
-            'PA-104': 'KeyBank',
-            'PA-105': 'Fifth Third',
-            // Originators
-            'OA-001': 'JPMorgan Chase',
-            'OA-002': 'Bank of America',
-            'OA-003': 'Wells Fargo',
-            'OA-004': 'Citi',
-            'OA-005': 'Goldman Sachs',
-            'OA-006': 'Morgan Stanley',
-            'OA-007': 'Credit Suisse',
-            'OA-008': 'Deutsche Bank',
-            'platform': 'Platform'
-        };
-
-        const getAgentName = (id) => agentNames[id] || id || '—';
-
-        const getSyndicationInfo = (dealId) => {
-            if (!dealId) return '—';
-            const synd = window.AutoGenerator?.getSyndication(dealId);
-            if (synd) {
-                return `<span class="synd-link">${dealId}<br><small>${synd.borrower}</small></span>`;
-            }
-            return dealId;
-        };
-
         view.innerHTML = `
             <div class="transactions-page">
-                <h2 class="page-title">Transaction History</h2>
+                <h2 class="page-title">Transaction Log</h2>
                 <table class="transactions-table">
                     <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Type</th>
-                            <th>From</th>
-                            <th>To</th>
-                            <th>Syndication</th>
-                            <th>Amount</th>
-                        </tr>
+                        <tr><th>Time</th><th>Type</th><th>Amount</th></tr>
                     </thead>
                     <tbody>
-                        ${transactions.length === 0 ? '<tr><td colspan="6" class="text-muted">No transactions yet. Start the simulation to generate activity.</td></tr>' : ''}
-                        ${transactions.slice(-50).reverse().map(tx => `
+                        ${transactions.slice(-20).reverse().map(tx => `
                             <tr>
-                                <td>${new Date(tx.timestamp).toLocaleDateString()}</td>
-                                <td><span class="tx-type-badge">${(tx.type || '').replace(/_/g, ' ')}</span></td>
-                                <td><strong>${getAgentName(tx.from)}</strong></td>
-                                <td><strong>${getAgentName(tx.to)}</strong></td>
-                                <td>${getSyndicationInfo(tx.dealId)}</td>
-                                <td class="tx-amount">$${((tx.amount || 0) / 1000000).toFixed(2)}M</td>
+                                <td>${new Date(tx.timestamp).toLocaleTimeString()}</td>
+                                <td>${tx.type}</td>
+                                <td>$${(tx.amount / 1000000).toFixed(2)}M</td>
                             </tr>
                         `).join('')}
                     </tbody>
@@ -1298,115 +592,32 @@ const RoleRouter = {
         `;
     },
 
-    /**
-     * Render Settings page
-     */
     renderSettings(view) {
-        view.innerHTML = `
-            <div class="settings-page">
-                <h2 class="page-title">Agent Settings</h2>
-                <form class="settings-form">
-                    <div class="form-group">
-                        <label>Risk Appetite</label>
-                        <select id="risk-appetite">
-                            <option value="conservative">Conservative (AAA-A only)</option>
-                            <option value="moderate" selected>Moderate (AAA-BBB)</option>
-                            <option value="aggressive">Aggressive (AAA-B)</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Target Yield (%)</label>
-                        <input type="number" id="target-yield" value="8.5" min="5" max="15" step="0.5">
-                    </div>
-                    <div class="form-group">
-                        <label>Max Single Allocation ($M)</label>
-                        <input type="number" id="max-allocation" value="100" min="10" max="500">
-                    </div>
-                    <div class="form-group">
-                        <label>Preferred Industries</label>
-                        <div class="checkbox-group">
-                            <label><input type="checkbox" checked> Technology</label>
-                            <label><input type="checkbox" checked> Healthcare</label>
-                            <label><input type="checkbox"> Energy</label>
-                            <label><input type="checkbox" checked> Real Estate</label>
-                            <label><input type="checkbox"> Manufacturing</label>
-                        </div>
-                    </div>
-                    <button type="submit" class="btn-primary">Save Settings</button>
-                </form>
-            </div>
-        `;
+        view.innerHTML = '<div class="settings-page"><h2 class="page-title">Settings</h2><p>Agent profile settings.</p></div>';
+    },
+
+    getAgentName(id) {
+        return this.agentNames[id] || id;
     }
 };
 
-// Add role-router styles
 const routerStyles = document.createElement('style');
 routerStyles.textContent = `
-    .page-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 1.5rem; }
-    .create-syndication-page, .available-deals-page, .my-bids-page, .portfolio-page, .earnings-page, .my-deals-page, .payments-received-page, .transactions-page, .settings-page {
-        padding: 1rem;
-    }
-    .create-form-container { max-width: 800px; }
-    .syndication-form { background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border-color); }
-    .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-    .form-group { display: flex; flex-direction: column; gap: 0.375rem; }
-    .form-group label { font-size: 0.875rem; font-weight: 500; color: var(--text-secondary); }
-    .form-group input, .form-group select { padding: 0.625rem; background: var(--bg-main); border: 1px solid var(--border-color); border-radius: var(--radius-md); color: var(--text-primary); font-size: 0.875rem; }
-    .form-hint { font-size: 0.75rem; color: var(--text-muted); }
-    .form-rules { background: var(--bg-main); padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1rem; }
-    .form-rules h4 { margin-bottom: 0.5rem; font-size: 0.875rem; }
-    .form-rules ul { list-style: none; font-size: 0.8125rem; color: var(--success); }
-    .form-actions { display: flex; gap: 1rem; justify-content: flex-end; }
-    .btn-primary { background: var(--primary); color: white; padding: 0.625rem 1.5rem; border: none; border-radius: var(--radius-md); cursor: pointer; font-weight: 500; }
-    .btn-secondary { background: var(--bg-card); color: var(--text-secondary); padding: 0.625rem 1.5rem; border: 1px solid var(--border-color); border-radius: var(--radius-md); cursor: pointer; }
-    .ai-suggestion { background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.2); border-radius: var(--radius-md); padding: 1rem; margin-bottom: 1rem; }
-    .deals-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; }
-    .deal-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 1rem; }
-    .deal-header { display: flex; justify-content: space-between; margin-bottom: 0.5rem; }
-    .deal-borrower { font-size: 1.125rem; font-weight: 600; margin-bottom: 0.75rem; }
-    .deal-details { font-size: 0.875rem; margin-bottom: 1rem; }
-    .deal-actions { display: flex; justify-content: space-between; align-items: center; padding-top: 0.75rem; border-top: 1px solid var(--border-color); }
-    .auto-bid-status { font-size: 0.75rem; color: var(--success); }
-    .btn-cancel-bid { background: var(--danger-bg); color: var(--danger); border: none; padding: 0.375rem 0.75rem; border-radius: var(--radius-sm); cursor: pointer; font-size: 0.75rem; }
-    .wealth-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2rem; }
-    .wealth-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 1.25rem; text-align: center; }
-    .wealth-card.highlight { border-color: var(--primary); }
-    .wealth-card.success .wealth-value { color: var(--success); }
-    .wealth-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.5rem; }
-    .wealth-value { font-size: 1.5rem; font-weight: 700; }
-    .transactions-table, .bids-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
-    .transactions-table th, .bids-table th { text-align: left; padding: 0.75rem; background: var(--bg-card); border-bottom: 1px solid var(--border-color); }
-    .transactions-table td, .bids-table td { padding: 0.75rem; border-bottom: 1px solid var(--border-color); }
-    .settings-form { max-width: 500px; background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-lg); }
-    .settings-form .form-group { margin-bottom: 1rem; }
-    .checkbox-group { display: flex; flex-wrap: wrap; gap: 1rem; }
-    .checkbox-group label { display: flex; align-items: center; gap: 0.375rem; font-size: 0.875rem; }
-    .no-deals { color: var(--text-muted); text-align: center; padding: 2rem; }
-    .deal-row { display: grid; grid-template-columns: 120px 1fr 100px 100px; gap: 1rem; padding: 0.75rem; background: var(--bg-card); border-radius: var(--radius-md); margin-bottom: 0.5rem; align-items: center; }
-    
-    /* Transaction Table Styles */
-    .tx-summary { display: flex; gap: 2rem; margin-bottom: 1.5rem; }
-    .tx-summary-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1rem; background: var(--bg-card); border-radius: var(--radius-md); border: 1px solid var(--border-color); }
-    .tx-summary-item.incoming .tx-arrow { color: var(--success); }
-    .tx-summary-item.outgoing .tx-arrow { color: var(--danger); }
-    .tx-arrow { font-size: 1.25rem; }
-    .tx-amount.positive { color: var(--success); font-weight: 600; }
-    .tx-amount.negative { color: var(--danger); font-weight: 600; }
-    .tx-dir { padding: 0.25rem 0.5rem; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 600; }
-    .tx-dir.in { background: var(--success-bg); color: var(--success); }
-    .tx-dir.out { background: var(--danger-bg); color: var(--danger); }
-    .tx-type-badge { background: var(--info-bg); color: var(--info); padding: 0.25rem 0.5rem; border-radius: var(--radius-sm); font-size: 0.75rem; text-transform: capitalize; }
-    .tx-incoming { background: rgba(5, 150, 105, 0.03); }
-    .tx-outgoing { background: rgba(220, 38, 38, 0.03); }
-    .wealth-value.positive { color: var(--success); }
-    .wealth-value.negative { color: var(--danger); }
+    .view { display: none; padding: 20px; }
+    .view.active { display: block; }
+    .nav-tab.active { font-weight: bold; border-bottom: 2px solid var(--primary); }
+    .wealth-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
+    .wealth-card { background: var(--bg-card); padding: 20px; border-radius: 8px; border: 1px solid var(--border); }
+    .wealth-label { font-size: 12px; color: var(--text-secondary); text-transform: uppercase; }
+    .wealth-value { font-size: 24px; font-weight: bold; margin-top: 5px; }
+    .deals-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+    .deal-card { background: var(--bg-card); border: 1px solid var(--border); padding: 20px; border-radius: 8px; }
+    .status-badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+    .status-badge.open { background: rgba(16, 185, 129, 0.1); color: #10B981; }
+    .portfolio-table { width: 100%; border-collapse: collapse; }
+    .portfolio-table th, .portfolio-table td { text-align: left; padding: 12px; border-bottom: 1px solid var(--border); }
+    .rating-badge { background: #3B82F6; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
 `;
 document.head.appendChild(routerStyles);
 
-// Initialize on page load
-document.addEventListener('DOMContentLoaded', () => {
-    RoleRouter.init();
-});
-
-// Export
 window.RoleRouter = RoleRouter;

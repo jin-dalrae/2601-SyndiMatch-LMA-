@@ -461,12 +461,17 @@ select {
 }
 
 /* Role-based UI adjustments */
-body.role-participant .originator-only {
+.originator-only,
+.participant-only {
     display: none;
 }
 
-body.role-originator .participant-only {
-    display: none;
+body.role-originator .originator-only {
+    display: block;
+}
+
+body.role-participant .participant-only {
+    display: block;
 }
 
 body.role-participant .metric-card:nth-child(5) {

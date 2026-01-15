@@ -17,7 +17,7 @@ load_dotenv()
 
 # Connect to MongoDB
 client = MongoClient(os.getenv("MONGODB_URI"))
-db = client["syndimatch"]
+db = client[os.getenv("DATABASE_NAME", "syndimatch")]
 
 # Current date for demo (use 2025)
 NOW = datetime.utcnow()

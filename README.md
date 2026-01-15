@@ -1,6 +1,6 @@
 # SyndiMatch
 
-AI-powered loan syndication platform with a real-time dashboard, multi-agent orchestration, and a mock x402 payment flow.
+AI-powered loan syndication platform with real-time dashboard, LangGraph multi-agent orchestration, and x402 blockchain payment integration.
 
 ## Problem
 
@@ -8,32 +8,58 @@ Loan syndication is slow, manual, and opaque. Originators coordinate dozens of c
 
 ## Solution
 
-SyndiMatch automates the workflow with specialized AI agents that broadcast opportunities, run Dutch auctions for price discovery, and manage settlement. A real-time dashboard surfaces pipeline status, bids, and payments, while a mock x402 flow simulates blockchain-based fee collection and reconciliation.
+SyndiMatch automates the end-to-end workflow with specialized AI agents:
+
+| Agent | Role |
+|-------|------|
+| **Originator** | Broadcasts loan opportunities with ESG scores and geographic data |
+| **Participant** | Evaluates deals using LLM reasoning and submits competitive bids |
+| **Negotiation** | Runs multi-round Dutch auctions to find clearing price |
+| **Settlement** | Manages documentation, compliance, and signature collection |
+| **Payment** | Processes x402 blockchain payments with retry logic |
+
+A real-time dashboard surfaces pipeline status, agent decisions, and payment flows.
 
 ## Impact
 
-- Faster syndication timelines (weeks to hours).
-- More transparent pricing and allocation decisions.
-- Lower operational cost through end-to-end automation.
-- Better matching between originators and institutional participants.
-
-## What this repo contains
-
-- Node.js API server that serves the frontend and reads/writes MongoDB.
-- Python FastAPI agents service (LangGraph/LangChain) for orchestration.
-- Vanilla JS dashboard UI with live pipeline, analytics, and payments views.
+- ⚡ **Faster**: Syndication timelines reduced from weeks to hours
+- 👁️ **Transparent**: Full visibility into agent reasoning and pricing decisions
+- 💰 **Efficient**: Lower operational cost through end-to-end automation
+- 🎯 **Better Matching**: AI-driven participant selection based on risk appetite
 
 ## Architecture
 
 ```
-Browser UI
-  ↓
-Node.js API (server/index.js) ── MongoDB
-  ↓
-Python Agents Service (agents/server.py)
+┌─────────────────────────────────────────────────────────────┐
+│                    Browser UI (Vanilla JS)                  │
+│  ┌──────────┐ ┌──────────────┐ ┌──────────┐ ┌───────────┐  │
+│  │ Overview │ │ Orchestration│ │ Payments │ │ Analytics │  │
+│  └──────────┘ └──────────────┘ └──────────┘ └───────────┘  │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│              Node.js API (server/index.js)                  │
+│                          ↓                                  │
+│                       MongoDB                               │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│           Python Agents Service (LangGraph)                 │
+│  ┌────────────┐ ┌─────────────┐ ┌────────────┐             │
+│  │ Originator │→│ Participants│→│ Negotiation│→ ...        │
+│  └────────────┘ └─────────────┘ └────────────┘             │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-## Quick start (local)
+## User Roles
+
+| Role | Access | Key Features |
+|------|--------|--------------|
+| **Platform Admin** | Full system view | Simulation controls, all views |
+| **Originator** | Create & track deals | Originate tab, pipeline, fee earnings |
+| **Participant** | Bid on deals | Portfolio, my bids, auto-bidder |
+
+## Quick Start (Local)
 
 ### 1) Install dependencies
 
@@ -51,19 +77,20 @@ pip install -r agents/requirements.txt
 
 ### 2) Configure environment
 
-Create or update `.env` (do not commit secrets):
+Create `.env` (do not commit secrets):
 
 ```bash
 MONGODB_URI=mongodb://127.0.0.1:27017/syndimatch
 PORT=3001
 
-# Optional: point Node.js to the agents service
+# Optional: agents service
 AGENTS_SERVICE_URL=http://localhost:8000
 
-# Optional: enable Gemini reports
+# Optional: LLM providers
+ANTHROPIC_API_KEY=your-key
 GEMINI_API_KEY=your-key
 
-# Optional: Coinbase/CDP config (used by agents/x402 client)
+# Optional: Coinbase x402
 CDP_API_KEY_NAME=...
 CDP_API_KEY_PRIVATE_KEY=...
 CDP_NETWORK=base-sepolia
@@ -71,22 +98,18 @@ CDP_NETWORK=base-sepolia
 
 ### 3) Start services
 
-MongoDB must be running locally (or use Atlas in `MONGODB_URI`).
-
-Start the agents service (optional but recommended for orchestration):
+MongoDB must be running locally (or use Atlas).
 
 ```bash
+# Terminal 1: Agents service (optional but recommended)
 cd agents
 python -m uvicorn server:app --host 0.0.0.0 --port 8000
+
+# Terminal 2: Node.js API + UI
+npm run dev
 ```
 
-Start the Node.js API + UI:
-
-```bash
-npm start
-```
-
-Open `http://localhost:3001`.
+Open `http://localhost:3001`
 
 ### 4) Seed demo data (optional)
 
@@ -94,51 +117,55 @@ Open `http://localhost:3001`.
 python agents/seed_all.py
 ```
 
-Or:
+## Demo Scenario
 
-```bash
-./scripts/seed-db.sh
-```
+1. **Select Role**: Choose `[Originator] JPMorgan Chase`
+2. **Create Deal**: Click `Originate` → `Quick Demo Deal` → `Create & Run`
+3. **Watch Orchestration**: Switch to `Orchestration` tab to see agent workflow
+4. **Track Pipeline**: Go to `Overview` to see deal progress through stages
+5. **Start Simulation**: Click `▶ Start` to auto-generate additional deals
 
-### 5) Smoke tests (optional)
+## Key Features
 
-```bash
-./scripts/smoke-node.sh
-./scripts/smoke-agents.sh
-```
+- **Role-Based UI**: Different navigation and views per user type
+- **Real-Time Pipeline**: Kanban-style deal tracking (Open → Negotiating → Closing → Completed)
+- **Agent Transparency**: Decision reasoning visible in Orchestration dashboard
+- **Simulation Engine**: Time-accelerated market simulation with configurable speed
+- **x402 Payments**: Mock blockchain settlement with escrow and fee processing
+
+## API Highlights
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/syndications` | List all syndications |
+| `POST /api/syndications` | Create new syndication (originator-only) |
+| `POST /api/syndications/run` | Trigger agent workflow |
+| `GET /api/syndication-events` | Real-time event polling |
+| `GET /api/agents/health` | Agent service status |
+| `POST /api/x402/join-syndication` | Mock x402 payment |
+
+See `server/index.js` for full API documentation.
 
 ## Scripts
 
-- `npm start` / `npm run dev`: run the Node.js server.
-- `npm run serve`: serve the frontend statically (no API).
+| Command | Description |
+|---------|-------------|
+| `npm start` | Production server |
+| `npm run dev` | Development server with auto-reload |
+| `npm run serve` | Static frontend only |
 
-## Demo mode
+## Deployment
 
-Use the “Demo” toggle in the header to force mock data when the backend isn’t running. The setting is stored in local storage and skips API calls until turned off.
+- Combined guide: `DEPLOYMENT.md`
+- Node.js: `NODEJS_DEPLOYMENT.md`
+- Cloud Run: `CLOUDRUN_DEPLOYMENT.md`
+- Troubleshooting: `TROUBLESHOOTING.md`
 
 ## Security
 
-- Do not commit real secrets in `.env`. Use `.env.example` as a template.
-- Rotate any keys that were previously stored locally.
-
-## API highlights
-
-- `GET /api/health`
-- `GET /api/ready`
-- `GET /api/syndications`
-- `POST /api/syndications` (originator-only)
-- `POST /api/syndications/run` (calls agents service)
-- `GET /api/agents/health`
-- `POST /api/x402/join-syndication` (mock x402 flow)
-
-See `server/index.js` for the full list.
-
-## Deployment notes
-
-- Combined guide: `DEPLOYMENT.md`
-- Node.js deployment guide: `NODEJS_DEPLOYMENT.md`
-- Cloud Run troubleshooting: `TROUBLESHOOTING.md`
-- Quick fixes: `QUICK_FIX.md`
+- Never commit `.env` files with real secrets
+- Use `.env.example` as a template
+- Rotate any keys that were previously exposed
 
 ## License
 

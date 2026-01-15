@@ -1,101 +1,50 @@
-<<<<<<< HEAD
-// ========================================
-// AppState - Centralized State Management
-// Implements simple Pub/Sub pattern
-// ========================================
-
-const AppState = {
-    // Initial State
-    state: {
-        user: null, // Current user/role
-        activeSyndication: null, // Currently selected syndication
-        syndications: [], // List of syndications
-        participants: [], // List of participants
-        bids: [], // Active bids
-        marketConditions: 'neutral', // Current market state
-
-        // UI State
-        isLoading: true,
-        loadingMessage: 'Initializing...',
-        error: null,
-        currentView: 'overview', // overview, syndication-detail, portfolio, etc.
-        sidebarOpen: true,
-
-        // System State
-        connected: false, // API connection status
-        lastUpdated: null
-    },
-
-    // Subscribers
-    listeners: new Map(),
-
-    /**
-     * Get a specific state value
-     */
-    get(key) {
-        return key ? this.state[key] : this.state;
-    },
-
-    /**
-     * Set state value and notify listeners
-     */
-    set(key, value) {
-        // Deep equality check could go here, for now simple strict check
-        if (this.state[key] === value) return;
-
-        const oldValue = this.state[key];
-        this.state[key] = value;
-        this.state.lastUpdated = new Date();
-
-        // Notify listeners for this specific key
-        this.notify(key, value, oldValue);
-
-        if (Config?.DEBUG) {
-            console.log(`🔄 State Update: ${key}`, { from: oldValue, to: value });
-=======
 /**
  * SyndiMatch App State
  * Centralized state management using Pub/Sub pattern
- * 
- * SCOPE: This is a UI/session state container, NOT application state.
- * - UI state: theme, activeView, isLoading, notifications
- * - Session state: currentUser, currentRole
- * 
- * Market state (syndications, bids, allocations) lives in:
- * - SimulationEngine (for simulation mode)
- * - MongoDB via API (for production mode)
- * 
- * Do NOT store syndication lifecycle data here to avoid dual sources of truth.
  */
 const AppState = {
-    // State Store - UI/session state only
+    // Initial State
     data: {
-        activeView: 'overview',
-        currentUser: null,
+        // User/Role state
         currentRole: 'platform',
+        currentUser: null,
+
+        // Navigation state
+        currentView: 'overview',
+        currentPath: '/',
+        activeView: 'overview',
+        routeParams: {},
+        activeSyndicationId: null,
+
+        // UI status state
         isLoading: false,
-        theme: 'light',
+        loadingMessage: 'Initializing...',
+        error: null,
+        sidebarOpen: true,
+
+        // System state
+        connected: false,
         marketConditions: 'neutral',
+        lastUpdated: null,
+        theme: 'light',
         notifications: [],
         agentConnected: false
     },
 
-    // Subscribers (Map for deduplication)
-    subscribers: {},
+    // Subscribers (Set for deduplication)
+    listeners: new Map(),
 
-    // Allowed keys for persistence (whitelist)
+    // Allowed keys for persistence
     persistableKeys: ['theme', 'currentRole'],
 
     /**
      * Initialize State
      */
     init() {
-        // Load persistable state with whitelist validation
         const saved = localStorage.getItem('syndimatch_state');
         if (saved) {
             try {
                 const parsed = JSON.parse(saved);
-                // Only merge whitelisted keys to prevent stale/corrupted data injection
                 for (const key of this.persistableKeys) {
                     if (parsed[key] !== undefined) {
                         this.data[key] = parsed[key];
@@ -109,50 +58,40 @@ const AppState = {
     },
 
     /**
-     * Get State Value (returns copy to prevent external mutation)
+     * Get a specific state value
      */
     get(key) {
         if (key) {
             const value = this.data[key];
-            // Return copy of objects/arrays to prevent mutation
             if (value !== null && typeof value === 'object') {
                 return Array.isArray(value) ? [...value] : { ...value };
             }
             return value;
         }
-        // Return shallow copy of entire state
         return { ...this.data };
     },
 
     /**
-     * Set State Value and Notify
+     * Set state value and notify listeners
      */
     set(key, value, persist = false) {
-        // Deep equality check for objects/arrays
         if (this._isEqual(this.data[key], value)) return;
 
         const oldValue = this.data[key];
         this.data[key] = value;
+        this.data.lastUpdated = new Date();
 
         this.notify(key, value, oldValue);
 
         if (persist && this.persistableKeys.includes(key)) {
             this.persist();
->>>>>>> syndication-change
         }
     },
 
     /**
-<<<<<<< HEAD
      * Update multiple state values at once
      */
-    update(updates) {
-        for (const [key, value] of Object.entries(updates)) {
-            this.set(key, value);
-=======
-     * Batch update multiple keys (single notification cycle)
-     */
-    batch(updates, persist = false) {
+    update(updates, persist = false) {
         const changes = [];
 
         for (const [key, value] of Object.entries(updates)) {
@@ -163,19 +102,19 @@ const AppState = {
             }
         }
 
-        // Notify all changes
+        this.data.lastUpdated = new Date();
+
+        // Notify for all changes
         for (const change of changes) {
             this.notify(change.key, change.newValue, change.oldValue);
         }
 
         if (persist) {
             this.persist();
->>>>>>> syndication-change
         }
     },
 
     /**
-<<<<<<< HEAD
      * Subscribe to state changes
      */
     subscribe(key, callback) {
@@ -211,52 +150,10 @@ const AppState = {
                 }
             });
         }
-    },
 
-    /**
-     * Reset state to defaults
-     */
-    reset() {
-        // Logic to reset specific parts of state
-        this.set('error', null);
-        this.set('isLoading', false);
-    }
-};
-
-// Expose globally
-=======
-     * Subscribe to changes (with deduplication)
-     */
-    subscribe(key, callback) {
-        if (!this.subscribers[key]) {
-            this.subscribers[key] = new Set();
-        }
-
-        // Set automatically deduplicates - same callback won't be added twice
-        this.subscribers[key].add(callback);
-
-        // Return unsubscribe function
-        return () => {
-            this.subscribers[key]?.delete(callback);
-        };
-    },
-
-    /**
-     * Notify subscribers
-     */
-    notify(key, newValue, oldValue) {
-        if (this.subscribers[key]) {
-            this.subscribers[key].forEach(cb => {
-                try {
-                    cb(newValue, oldValue);
-                } catch (e) {
-                    console.error(`AppState subscriber error for ${key}:`, e);
-                }
-            });
-        }
         // Emit global event for decoupled components
         window.dispatchEvent(new CustomEvent('stateChange', {
-            detail: { key, newValue, oldValue }
+            detail: { key, newValue: value, oldValue }
         }));
     },
 
@@ -272,7 +169,7 @@ const AppState = {
     },
 
     /**
-     * Simple equality check (handles primitives, arrays, objects)
+     * Simple equality check
      */
     _isEqual(a, b) {
         if (a === b) return true;
@@ -292,8 +189,16 @@ const AppState = {
         }
 
         return false;
+    },
+
+    /**
+     * Reset state to defaults
+     */
+    reset() {
+        this.set('error', null);
+        this.set('isLoading', false);
     }
 };
 
->>>>>>> syndication-change
+// Expose globally
 window.AppState = AppState;

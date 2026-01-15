@@ -5,13 +5,9 @@
 const PaymentsComponent = {
     state: {
         balances: null,
-<<<<<<< HEAD
-        activeSyndicationId: null  // Set from Orchestration view
-=======
+        activeSyndicationId: null,
         payments: [],
-        summary: {},
-        syndicationId: null
->>>>>>> syndication-change
+        summary: {}
     },
 
     init() {
@@ -20,552 +16,154 @@ const PaymentsComponent = {
         this.fetchBackendData();
         this.render();
 
-<<<<<<< HEAD
         // Listen for syndication selection events from Orchestration
         window.addEventListener('syndicationSelected', (e) => {
             this.state.activeSyndicationId = e.detail.syndicationId;
             this.fetchBackendData();
-            this.render();
         });
-    },
 
-    setActiveSyndication(syndId) {
-        this.state.activeSyndicationId = syndId;
-        this.fetchBackendData();
-        this.render();
-    },
-
-    getActiveSyndicationId() {
-        // Use explicitly set ID, or fall back to first available
-        return this.state.activeSyndicationId ||
-            (SyndiData.syndications && SyndiData.syndications.length > 0
-                ? SyndiData.syndications[0].id
-                : 'SYND-2025-001');
-    },
-
-    async fetchBackendData() {
-        const syndId = this.getActiveSyndicationId();
-        const escrow = await API.getEscrowDetails(syndId);
-        const originatorBal = await API.getX402Balance('originator_01');
-
-        if (escrow || originatorBal) {
-            this.state.balances = {
-                escrow: escrow?.balance ? escrow.balance / 1000000 : 256.6,
-                originator: originatorBal?.balance ? originatorBal.balance / 1000000 : 250,
-                borrower: originatorBal?.balance ? (originatorBal.balance / 1000000) * 0.95 : 237.5
-=======
         // Delegate "Pay now" button clicks
         document.addEventListener('click', (e) => {
             const btn = e.target.closest('button[data-pay-id]');
             if (btn) {
                 const paymentId = btn.getAttribute('data-pay-id');
-                const paymentType = btn.getAttribute('data-pay-type');
-                this._payNow(paymentId, paymentType);
+                this._payNow(paymentId);
             }
         });
+
+        // Polling for updates
+        setInterval(() => this.fetchBackendData(), 15000);
     },
 
     detectActiveSyndication() {
-        // Try to read currently viewed syndication from global state/router if available
-        if (window.AppState && typeof AppState.get === 'function') {
-            const active = AppState.get('activeSyndicationId');
-            if (active) this.state.syndicationId = active;
-        } else if (window.location.hash?.includes('syndication')) {
-            const match = window.location.hash.match(/syndication=([^&]+)/);
-            if (match) this.state.syndicationId = decodeURIComponent(match[1]);
+        if (window.AppState && AppState.get('currentSyndicationId')) {
+            this.state.activeSyndicationId = AppState.get('currentSyndicationId');
+        } else if (window.location.hash?.includes('syndicationId=')) {
+            const match = window.location.hash.match(/syndicationId=([^&]+)/);
+            if (match) this.state.activeSyndicationId = match[1];
         }
-        // Fallback to first mock if still unset
-        if (!this.state.syndicationId && typeof SyndiData !== 'undefined' && SyndiData.syndications?.length) {
-            this.state.syndicationId = SyndiData.syndications[0].id;
+
+        if (!this.state.activeSyndicationId && window.SyndiData?.syndications?.length) {
+            this.state.activeSyndicationId = SyndiData.syndications[0].id;
         }
     },
 
+    getActiveSyndicationId() {
+        return this.state.activeSyndicationId || 'SYND-2025-001';
+    },
+
     async fetchBackendData() {
-        const syndId = this.state.syndicationId || 'SYND-2025-001';
+        const syndId = this.getActiveSyndicationId();
 
-        const [payments, summary, escrow, originatorBal] = await Promise.all([
-            API.getPayments().then(list => (list || []).filter(p => p.syndication_id === syndId)),
-            API.get(`/payments/summary/${syndId}`),
-            API.getEscrowDetails(syndId),
-            API.getX402Balance('originator_01')
-        ]);
+        try {
+            const [payments, summary, escrow, originatorBal] = await Promise.all([
+                API.getPayments ? API.getPayments(syndId) : Promise.resolve([]),
+                API.get ? API.get('server', `/payments/summary/${syndId}`) : Promise.resolve({}),
+                API.getEscrowDetails ? API.getEscrowDetails(syndId) : Promise.resolve(null),
+                API.getX402Balance ? API.getX402Balance('originator_01') : Promise.resolve(null)
+            ]);
 
-        this.state.payments = payments || [];
-        this.state.summary = summary || {};
+            this.state.payments = Array.isArray(payments) ? payments : (SyndiData.payments?.[syndId] || []);
+            this.state.summary = summary || {};
 
-        if (escrow || originatorBal) {
-            this.state.balances = {
-                escrow: escrow?.balance ? escrow.balance / 1000000 : 0, // Convert USDC base units if needed
-                originator: originatorBal?.balance ? originatorBal.balance / 1000000 : 0,
-                borrower: originatorBal?.balance ? (originatorBal.balance / 1000000) * 0.95 : 0
->>>>>>> syndication-change
-            };
+            if (escrow || originatorBal) {
+                this.state.balances = {
+                    escrow: escrow?.balance ? escrow.balance / 1000000 : (this.state.balances?.escrow || 0),
+                    originator: originatorBal?.balance ? originatorBal.balance / 1000000 : (this.state.balances?.originator || 0),
+                    borrower: originatorBal?.balance ? (originatorBal.balance / 1000000) * 0.95 : (this.state.balances?.borrower || 0)
+                };
+            }
+        } catch (e) {
+            console.warn('Payments data fetch error:', e);
+            this.state.payments = SyndiData.payments?.[syndId] || [];
         }
+
         this.render();
     },
 
     render() {
-        this.renderSyndicationHeader();
-        this.renderPipelineVisual();
-        this.renderProgressBars();
-        this.renderPaymentTable();
-        this.renderTransactionLog();
-    },
-
-    renderSyndicationHeader() {
         const container = document.getElementById('payment-pipeline-visual');
         if (!container) return;
 
         const syndId = this.getActiveSyndicationId();
-        const syndication = SyndiData.syndications.find(s => s.id === syndId);
+        const syndication = window.SyndiData?.syndications?.find(s => s.id === syndId);
 
-        // Prepend syndication info if we have a header area, or add visually
-        let headerEl = container.querySelector('.payment-syndication-header');
-        if (!headerEl) {
-            headerEl = document.createElement('div');
-            headerEl.className = 'payment-syndication-header';
-            headerEl.style.cssText = 'padding: 1rem; background: var(--bg-muted); border-radius: var(--radius-md); margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;';
-            container.parentNode?.insertBefore(headerEl, container);
-        }
+        const activeParticipants = this.state.payments
+            ? new Set(this.state.payments.map(p => p.participant || p.payer?.participant_agent_id)).size
+            : 0;
+        const totalPaid = this.state.summary?.totalPaid ||
+            this.state.payments.filter(p => p.status === 'paid' || p.status === 'completed').reduce((sum, p) => sum + (p.amount || p.amount_paid || 0), 0);
+        const totalDue = this.state.summary?.totalDue ||
+            this.state.payments.reduce((sum, p) => sum + (p.amount || p.amount_due || 0), 0);
+        const escrowHeld = this.state.balances?.escrow !== undefined ? this.state.balances.escrow : (totalPaid / 1000000);
+        const settleRate = totalDue > 0 ? Math.round((totalPaid / totalDue) * 100) : 0;
 
-        headerEl.innerHTML = `
-            <div>
-                <strong style="font-size: 1.25rem;">${syndId}</strong>
-                <span style="color: var(--text-muted); margin-left: 0.5rem;">${syndication?.borrower || 'Unknown Borrower'}</span>
-            </div>
-            <div style="color: var(--text-muted); font-size: 0.875rem;">
-                ${syndication ? `${syndication.originator} • ${syndication.industry}` : ''}
-            </div>
-        `;
-    },
-
-    injectStyles() {
-        if (document.getElementById('payments-enhanced-styles')) return;
-
-        const styles = document.createElement('style');
-        styles.id = 'payments-enhanced-styles';
-        styles.textContent = `
-            /* Enhanced Payment Pipeline */
-            .payment-pipeline-container {
-                background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-muted) 100%);
-                border-radius: var(--radius-lg);
-                padding: 2rem;
-                margin-bottom: 1.5rem;
-                border: 1px solid var(--border-color);
-            }
-            
-            .pipeline-flow {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                gap: 1rem;
-                position: relative;
-            }
-            
-            .pipeline-stage {
-                flex: 1;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                text-align: center;
-                position: relative;
-                z-index: 1;
-            }
-            
-            .pipeline-stage-icon {
-                width: 72px;
-                height: 72px;
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 2rem;
-                margin-bottom: 0.75rem;
-                transition: all 0.3s ease;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            }
-            
-            .pipeline-stage:hover .pipeline-stage-icon {
-                transform: scale(1.1);
-                box-shadow: 0 6px 20px rgba(0,0,0,0.15);
-            }
-            
-            .stage-participants .pipeline-stage-icon {
-                background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-            }
-            
-            .stage-escrow .pipeline-stage-icon {
-                background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-            }
-            
-            .stage-originator .pipeline-stage-icon {
-                background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            }
-            
-            .stage-borrower .pipeline-stage-icon {
-                background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
-            }
-            
-            .pipeline-stage-title {
-                font-weight: 600;
-                font-size: 0.875rem;
-                color: var(--text-primary);
-                margin-bottom: 0.25rem;
-            }
-            
-            .pipeline-stage-amount {
-                font-size: 1.125rem;
-                font-weight: 700;
-                color: var(--primary);
-            }
-            
-            .pipeline-stage-sub {
-                font-size: 0.75rem;
-                color: var(--text-muted);
-            }
-            
-            /* Animated Connectors */
-            .pipeline-connector {
-                flex: 0 0 60px;
-                height: 4px;
-                background: var(--border-color);
-                position: relative;
-                border-radius: 2px;
-                overflow: hidden;
-            }
-            
-            .connector-flow {
-                position: absolute;
-                top: 0;
-                left: -100%;
-                width: 100%;
-                height: 100%;
-                background: linear-gradient(90deg, transparent, var(--primary), transparent);
-                animation: flowPulse 2s ease-in-out infinite;
-            }
-            
-            @keyframes flowPulse {
-                0% { left: -100%; }
-                50% { left: 100%; }
-                100% { left: 100%; }
-            }
-            
-            .connector-arrow {
-                position: absolute;
-                right: -8px;
-                top: 50%;
-                transform: translateY(-50%);
-                font-size: 0.75rem;
-                color: var(--text-muted);
-            }
-            
-            /* Payment Stats Grid */
-            .payment-stats-grid {
-                display: grid;
-                grid-template-columns: repeat(4, 1fr);
-                gap: 1rem;
-                margin-bottom: 1.5rem;
-            }
-            
-            .payment-stat-card {
-                background: var(--bg-card);
-                border-radius: var(--radius-md);
-                padding: 1.25rem;
-                border: 1px solid var(--border-color);
-                text-align: center;
-            }
-            
-            .payment-stat-label {
-                font-size: 0.75rem;
-                color: var(--text-muted);
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-                margin-bottom: 0.5rem;
-            }
-            
-            .payment-stat-value {
-                font-size: 1.5rem;
-                font-weight: 700;
-                color: var(--text-primary);
-            }
-            
-            .payment-stat-trend {
-                font-size: 0.75rem;
-                margin-top: 0.25rem;
-            }
-            
-            .trend-up { color: #10b981; }
-            .trend-down { color: #ef4444; }
-            
-            /* Enhanced Progress Bars */
-            .progress-section {
-                display: grid;
-                grid-template-columns: repeat(3, 1fr);
-                gap: 1rem;
-                margin-bottom: 1.5rem;
-            }
-            
-            .progress-card {
-                background: var(--bg-card);
-                border-radius: var(--radius-md);
-                padding: 1rem;
-                border: 1px solid var(--border-color);
-            }
-            
-            .progress-header {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 0.75rem;
-            }
-            
-            .progress-title {
-                font-weight: 600;
-                font-size: 0.875rem;
-            }
-            
-            .progress-percent {
-                font-size: 0.875rem;
-                font-weight: 700;
-                color: var(--primary);
-            }
-            
-            .progress-bar-enhanced {
-                height: 8px;
-                background: var(--bg-muted);
-                border-radius: 4px;
-                overflow: hidden;
-            }
-            
-            .progress-fill-enhanced {
-                height: 100%;
-                border-radius: 4px;
-                transition: width 0.5s ease;
-            }
-            
-            .fill-green { background: linear-gradient(90deg, #10b981, #34d399); }
-            .fill-orange { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
-            .fill-blue { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
-            
-            .progress-amounts {
-                display: flex;
-                justify-content: space-between;
-                margin-top: 0.5rem;
-                font-size: 0.75rem;
-                color: var(--text-muted);
-            }
-            
-            /* Transaction Feed */
-            .tx-feed {
-                background: var(--bg-card);
-                border-radius: var(--radius-md);
-                border: 1px solid var(--border-color);
-                overflow: hidden;
-            }
-            
-            .tx-feed-header {
-                padding: 1rem;
-                background: var(--bg-muted);
-                border-bottom: 1px solid var(--border-color);
-                font-weight: 600;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-            }
-            
-            .tx-feed-live {
-                display: flex;
-                align-items: center;
-                gap: 0.5rem;
-                font-size: 0.75rem;
-                color: #10b981;
-            }
-            
-            .live-dot {
-                width: 8px;
-                height: 8px;
-                background: #10b981;
-                border-radius: 50%;
-                animation: livePulse 1.5s ease-in-out infinite;
-            }
-            
-            @keyframes livePulse {
-                0%, 100% { opacity: 1; }
-                50% { opacity: 0.4; }
-            }
-            
-            .tx-feed-list {
-                max-height: 300px;
-                overflow-y: auto;
-            }
-            
-            .tx-feed-item {
-                display: flex;
-                align-items: flex-start;
-                gap: 1rem;
-                padding: 1rem;
-                border-bottom: 1px solid var(--border-color);
-                transition: background 0.2s ease;
-            }
-            
-            .tx-feed-item:hover {
-                background: var(--bg-muted);
-            }
-            
-            .tx-feed-item:last-child {
-                border-bottom: none;
-            }
-            
-            .tx-status-icon {
-                width: 32px;
-                height: 32px;
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 0.875rem;
-                flex-shrink: 0;
-            }
-            
-            .tx-status-confirmed {
-                background: rgba(16, 185, 129, 0.1);
-                color: #10b981;
-            }
-            
-            .tx-status-pending {
-                background: rgba(245, 158, 11, 0.1);
-                color: #f59e0b;
-            }
-            
-            .tx-status-failed {
-                background: rgba(239, 68, 68, 0.1);
-                color: #ef4444;
-            }
-            
-            .tx-feed-content {
-                flex: 1;
-            }
-            
-            .tx-feed-main {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 0.25rem;
-            }
-            
-            .tx-feed-parties {
-                font-weight: 500;
-                font-size: 0.875rem;
-            }
-            
-            .tx-feed-amount {
-                font-weight: 700;
-                color: var(--success);
-            }
-            
-            .tx-feed-meta {
-                font-size: 0.75rem;
-                color: var(--text-muted);
-                display: flex;
-                gap: 1rem;
-            }
-        `;
-        document.head.appendChild(styles);
-    },
-
-    renderPipelineVisual() {
-        const container = document.getElementById('payment-pipeline-visual');
-        if (!container) return;
-
-        const activeParticipants = Object.keys(window.AutoBidder?.participants || {}).length;
-
-        // Derive amounts from live summary if available
-        const totalPaid = this.state.summary?.totalPaid || 0;
-        const totalDue = this.state.summary?.totalDue || 0;
-
-        const escrowHeld = this.state.balances?.escrow !== undefined
-            ? this.state.balances.escrow.toFixed(1)
-            : (totalPaid ? (totalPaid / 1_000_000).toFixed(1) : '0.0');
-
-        const principalFunded = this.state.balances?.originator !== undefined
-            ? this.state.balances.originator.toFixed(1)
-            : (totalPaid ? (totalPaid / 1_000_000).toFixed(1) : '0.0');
-
-        const borrowerReceived = this.state.balances?.borrower !== undefined
-            ? this.state.balances.borrower.toFixed(1)
-            : (totalPaid ? ((totalPaid * 0.95) / 1_000_000).toFixed(1) : '0.0');
-
+        // Build entire payments section
         container.innerHTML = `
-            <div class="payment-pipeline-container">
-                <div class="pipeline-flow">
-                    <div class="pipeline-stage stage-participants">
-                        <div class="pipeline-stage-icon">👥</div>
-                        <div class="pipeline-stage-title">Participants</div>
-                        <div class="pipeline-stage-amount">${activeParticipants} Active</div>
-                        <div class="pipeline-stage-sub">Syndicate Members</div>
-                    </div>
-                    
-                    <div class="pipeline-connector">
-                        <div class="connector-flow"></div>
-                        <span class="connector-arrow">▶</span>
-                    </div>
-                    
-                    <div class="pipeline-stage stage-escrow">
-                        <div class="pipeline-stage-icon">🔐</div>
-                        <div class="pipeline-stage-title">Escrow Wallet</div>
-                        <div class="pipeline-stage-amount">$${escrowHeld}M</div>
-                        <div class="pipeline-stage-sub">USDC Held</div>
-                    </div>
-                    
-                    <div class="pipeline-connector">
-                        <div class="connector-flow" style="animation-delay: 0.5s"></div>
-                        <span class="connector-arrow">▶</span>
-                    </div>
-                    
-                    <div class="pipeline-stage stage-originator">
-                        <div class="pipeline-stage-icon">🏛️</div>
-                        <div class="pipeline-stage-title">Originator</div>
-                        <div class="pipeline-stage-amount">$${principalFunded}M</div>
-                        <div class="pipeline-stage-sub">Principal Funded</div>
-                    </div>
-                    
-                    <div class="pipeline-connector">
-                        <div class="connector-flow" style="animation-delay: 1s"></div>
-                        <span class="connector-arrow">▶</span>
-                    </div>
-                    
-                    <div class="pipeline-stage stage-borrower">
-                        <div class="pipeline-stage-icon">🏢</div>
-                        <div class="pipeline-stage-title">Borrower</div>
-                        <div class="pipeline-stage-amount">$${borrowerReceived}M</div>
-                        <div class="pipeline-stage-sub">Net Received</div>
-                    </div>
+            <!-- Syndication Header -->
+            <div class="payments-header-card">
+                <div class="payments-header-left">
+                    <div class="payments-header-id">${syndId}</div>
+                    <div class="payments-header-borrower">${syndication?.borrower || 'Syndication Facility'}</div>
+                </div>
+                <div class="payments-header-right">
+                    <span class="payments-header-meta">${syndication?.originator || 'Lead Bank'}</span>
+                    <span class="payments-header-industry">${syndication?.industry || 'Commercial'}</span>
                 </div>
             </div>
-            
-            <div class="payment-stats-grid">
-                <div class="payment-stat-card">
-                    <div class="payment-stat-label">Total Funded</div>
-                    <div class="payment-stat-value">$${(totalPaid / 1_000_000).toFixed(1)}M</div>
-                    <div class="payment-stat-trend ${totalPaid ? 'trend-up' : ''}">${totalPaid ? 'Live collected' : 'Waiting for payments'}</div>
+
+            <!-- Flow Visualization -->
+            <div class="payments-flow-container">
+                <div class="payments-flow-stage">
+                    <div class="payments-flow-icon participants">👥</div>
+                    <div class="payments-flow-label">Participants</div>
+                    <div class="payments-flow-value">${activeParticipants} Active</div>
                 </div>
-                <div class="payment-stat-card">
-                    <div class="payment-stat-label">Pending</div>
-                    <div class="payment-stat-value">$${((totalDue - totalPaid) / 1_000_000).toFixed(1)}M</div>
-                    <div class="payment-stat-trend">${this._countByStatus('pending')} payments awaiting</div>
+                <div class="payments-flow-connector">
+                    <div class="payments-flow-line"></div>
+                    <div class="payments-flow-arrow">→</div>
                 </div>
-                <div class="payment-stat-card">
-                    <div class="payment-stat-label">Fees Collected</div>
-                    <div class="payment-stat-value">$${this._sumByType(['commitment_fee', 'arrangement_fee']).toFixed(2)}M</div>
-                    <div class="payment-stat-trend trend-up">Commitment + Arrangement</div>
+                <div class="payments-flow-stage">
+                    <div class="payments-flow-icon escrow">🔐</div>
+                    <div class="payments-flow-label">Escrow</div>
+                    <div class="payments-flow-value">$${escrowHeld.toFixed(1)}M</div>
                 </div>
-                <div class="payment-stat-card">
-                    <div class="payment-stat-label">Settlement Rate</div>
-                    <div class="payment-stat-value">98.2%</div>
-                    <div class="payment-stat-trend trend-up">↑ On-time payments</div>
+                <div class="payments-flow-connector">
+                    <div class="payments-flow-line"></div>
+                    <div class="payments-flow-arrow">→</div>
+                </div>
+                <div class="payments-flow-stage">
+                    <div class="payments-flow-icon originator">🏛️</div>
+                    <div class="payments-flow-label">Originator</div>
+                    <div class="payments-flow-value">$${(totalPaid / 1000000).toFixed(1)}M</div>
+                </div>
+            </div>
+
+            <!-- KPI Cards -->
+            <div class="payments-kpi-grid">
+                <div class="payments-kpi-card">
+                    <div class="payments-kpi-label">Total Funded</div>
+                    <div class="payments-kpi-value">$${(totalPaid / 1000000).toFixed(1)}M</div>
+                </div>
+                <div class="payments-kpi-card">
+                    <div class="payments-kpi-label">Funding Gap</div>
+                    <div class="payments-kpi-value gap">$${((totalDue - totalPaid) / 1000000).toFixed(1)}M</div>
+                </div>
+                <div class="payments-kpi-card">
+                    <div class="payments-kpi-label">Settlement Rate</div>
+                    <div class="payments-kpi-value">${settleRate}%</div>
+                </div>
+                <div class="payments-kpi-card">
+                    <div class="payments-kpi-label">Status</div>
+                    <div class="payments-kpi-value status-active">● Active</div>
                 </div>
             </div>
         `;
+
+        // Render progress bars
+        this.renderProgressBars();
+        this.renderPaymentTable();
+        this.renderTransactionLog();
     },
 
     renderProgressBars() {
@@ -573,26 +171,27 @@ const PaymentsComponent = {
         if (!container) return;
 
         const byType = this._byType();
-        const progress = [
-            { name: 'Commitment Fees', ...byType.commitment_fee, color: 'green' },
-            { name: 'Arrangement Fees', ...byType.arrangement_fee, color: 'orange' },
-            { name: 'Principal', ...byType.principal, color: 'blue' }
-        ];
+        const types = Object.keys(byType);
+
+        if (types.length === 0) {
+            container.innerHTML = `<div class="payments-no-data">No payment types recorded yet.</div>`;
+            return;
+        }
 
         container.innerHTML = `
-            <div class="progress-section">
-                ${progress.map(p => `
-                    <div class="progress-card">
-                        <div class="progress-header">
-                            <span class="progress-title">${p.name}</span>
-                            <span class="progress-percent">${p.percent || 0}%</span>
+            <div class="payments-progress-grid">
+                ${types.map(type => `
+                    <div class="payments-progress-card">
+                        <div class="payments-progress-header">
+                            <span class="payments-progress-title">${type.replace(/_/g, ' ').toUpperCase()}</span>
+                            <span class="payments-progress-percent">${byType[type].percent}%</span>
                         </div>
-                        <div class="progress-bar-enhanced">
-                            <div class="progress-fill-enhanced fill-${p.color}" style="width: ${p.percent || 0}%"></div>
+                        <div class="payments-progress-bar">
+                            <div class="payments-progress-fill" style="width: ${byType[type].percent}%;"></div>
                         </div>
-                        <div class="progress-amounts">
-                            <span>${Utils.formatCurrency(p.collected || 0)}</span>
-                            <span>${Utils.formatCurrency(p.total || 0)}</span>
+                        <div class="payments-progress-amounts">
+                            <span>$${(byType[type].collected / 1000000).toFixed(2)}M</span>
+                            <span>of $${(byType[type].total / 1000000).toFixed(2)}M</span>
                         </div>
                     </div>
                 `).join('')}
@@ -604,216 +203,399 @@ const PaymentsComponent = {
         const container = document.getElementById('payment-table-container');
         if (!container) return;
 
-<<<<<<< HEAD
-        const syndId = this.getActiveSyndicationId();
-        const payments = SyndiData.payments[syndId];
-        if (!payments || payments.length === 0) {
-            container.innerHTML = `<div style="padding: 2rem; text-align: center; color: var(--text-muted);">No payment data for ${syndId}</div>`;
-=======
         const payments = this.state.payments;
         if (!payments || payments.length === 0) {
-            container.innerHTML = '<p style="color: var(--text-muted); padding: 1rem;">No payment data available</p>';
->>>>>>> syndication-change
+            container.innerHTML = `<div class="payments-no-data">No payments recorded.</div>`;
             return;
         }
 
         container.innerHTML = `
-            <table class="payment-table">
-                <thead>
-                    <tr>
-                        <th>Participant</th>
-                        <th>Commitment Fee</th>
-                        <th>Arrangement Fee</th>
-                        <th>Principal</th>
-                        <th>Total</th>
-                        <th>Status</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${payments.map(p => this._renderPaymentRow(p)).join('')}
-                </tbody>
-            </table>
+            <div class="payments-table-wrapper">
+                <table class="payments-table">
+                    <thead>
+                        <tr>
+                            <th>Participant</th>
+                            <th>Type</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${payments.map(p => {
+            const status = (p.status || p.payment_status || 'pending').toLowerCase();
+            const isCompleted = status === 'paid' || status === 'completed';
+            return `
+                                <tr>
+                                    <td><strong>${p.participant || p.payer?.participant_agent_id || 'Unknown'}</strong></td>
+                                    <td>${(p.type || p.payment_type || 'fee').replace(/_/g, ' ')}</td>
+                                    <td>$${((p.amount || p.amount_due || 0) / 1000000).toFixed(2)}M</td>
+                                    <td><span class="payments-status-badge ${isCompleted ? 'completed' : 'pending'}">${status.toUpperCase()}</span></td>
+                                    <td>${isCompleted ? '<span class="payments-check">✓</span>' : `<button class="payments-btn-pay" data-pay-id="${p.id || p.payment_id}">Pay Now</button>`}</td>
+                                </tr>
+                            `;
+        }).join('')}
+                    </tbody>
+                </table>
+            </div>
         `;
-    },
-
-    getStatusIcon(status) {
-        const icons = { paid: '✓', pending: '⏳', overdue: '⚠️' };
-        return icons[status] || '—';
     },
 
     renderTransactionLog() {
         const container = document.getElementById('transaction-log');
         if (!container) return;
 
-        const transactions = (this.state.payments || []).filter(p => p.payment_status === 'completed');
-
-        if (transactions.length === 0) {
-            container.innerHTML = `
-                <div class="tx-feed">
-                    <div class="tx-feed-header">
-                        <span>Transaction Feed</span>
-                    </div>
-                    <div style="padding: 2rem; text-align: center; color: var(--text-muted);">
-                        No transactions yet
-                    </div>
-                </div>
-            `;
-            return;
-        }
+        const transactions = this.state.payments.filter(p => {
+            const status = (p.status || p.payment_status || '').toLowerCase();
+            return status === 'paid' || status === 'completed';
+        });
 
         container.innerHTML = `
-            <div class="tx-feed">
-                <div class="tx-feed-header">
-                    <span>Transaction Feed</span>
-                    <div class="tx-feed-live">
-                        <span class="live-dot"></span>
-                        Live
-                    </div>
-                </div>
-                <div class="tx-feed-list">
-                    ${transactions.map(tx => {
-            const participantName = this._resolveParticipantName(tx.payer?.participant_agent_id || tx.participant);
-            const amount = tx.amount_paid || tx.amount_due || tx.amount || 0;
-            const type = tx.payment_type || tx.type || 'Payment';
-            const time = tx.paid_at || tx.time || tx.timestamp || '';
-            const txHash = tx.tx_hash || tx.tx || tx.txHash || 'Pending';
-            const status = tx.payment_status || tx.status || 'confirmed';
-
-            return `
-                        <div class="tx-feed-item">
-                            <div class="tx-status-icon tx-status-${status === 'overdue' || status === 'failed' ? 'failed' : status === 'pending' ? 'pending' : 'confirmed'}">
-                                ${status === 'overdue' || status === 'failed' ? '⚠️' : status === 'pending' ? '⏳' : '✓'}
-                            </div>
-                            <div class="tx-feed-content">
-                                <div class="tx-feed-main">
-                                    <span class="tx-feed-parties">${participantName} → ${type === 'principal' ? 'Escrow' : 'Originator'}</span>
-                                    <span class="tx-feed-amount">+${Utils.formatCurrency(amount)}</span>
+            <div class="payments-tx-list">
+                ${transactions.length === 0
+                ? '<div class="payments-no-data">No transactions yet.</div>'
+                : transactions.slice(-10).reverse().map(tx => `
+                        <div class="payments-tx-item">
+                            <div class="payments-tx-icon">💰</div>
+                            <div class="payments-tx-content">
+                                <div class="payments-tx-main">
+                                    <span>${tx.participant || tx.payer?.participant_agent_id || 'Agent'}</span>
+                                    <span class="payments-tx-amount">+$${((tx.amount || tx.amount_paid || 0) / 1000000).toFixed(2)}M</span>
                                 </div>
-                                <div class="tx-feed-meta">
-                                    <span>${type}</span>
-                                    <span>${time ? new Date(time).toLocaleString() : ''}</span>
-                                    <span>${(txHash || '').toString().slice(0, 10)}...</span>
+                                <div class="payments-tx-meta">
+                                    <span>${(tx.type || tx.payment_type || 'Fee').replace(/_/g, ' ')}</span>
+                                    <span>${new Date().toLocaleTimeString()}</span>
                                 </div>
                             </div>
                         </div>
-                    `;
-        }).join('')}
-                </div>
+                    `).join('')
+            }
             </div>
         `;
     },
 
-    /**
-     * Resolve participant name from ID or return the name directly
-     * Checks MongoDB-sourced SyndiData.participants first
-     */
-    _resolveParticipantName(participantIdOrName) {
-        if (!participantIdOrName) return 'Unknown';
-
-        // If it looks like an ID (starts with PA- or contains -), try to look up
-        if (participantIdOrName.startsWith('PA-') || participantIdOrName.includes('_agent')) {
-            // Look up in SyndiData.participants (from MongoDB)
-            const participants = SyndiData.participants || [];
-            const found = participants.find(p =>
-                p.id === participantIdOrName ||
-                p._id === participantIdOrName ||
-                p.participant_agent_id === participantIdOrName
-            );
-
-            if (found) {
-                return found.name || found.institution_name || found.entity || participantIdOrName;
-            }
-
-            // Not found - return the ID itself (better than undefined)
-            return participantIdOrName;
-        }
-
-        // Already a name, return as-is
-        return participantIdOrName;
-    },
-
-    _renderPaymentRow(p) {
-        const participantName = this._resolveParticipantName(p.payer?.participant_agent_id || p.participant);
-        const status = (p.payment_status || 'pending').toLowerCase();
-        const type = p.payment_type || '';
-
-        const commitment = type === 'commitment_fee' ? (p.amount_paid || p.amount_due || 0) : 0;
-        const arrangement = type === 'arrangement_fee' ? (p.amount_paid || p.amount_due || 0) : 0;
-        const principal = type === 'principal' ? (p.amount_paid || p.amount_due || 0) : 0;
-
-        return `
-            <tr>
-                <td><strong>${participantName}</strong></td>
-                <td><span class="payment-status ${status}">${this.getStatusIcon(status)} ${Utils.formatCurrency(commitment)}</span></td>
-                <td><span class="payment-status ${status}">${this.getStatusIcon(status)} ${Utils.formatCurrency(arrangement)}</span></td>
-                <td><span class="payment-status ${status}">${this.getStatusIcon(status)} ${Utils.formatCurrency(principal)}</span></td>
-                <td><strong>${Utils.formatCurrency(p.amount_paid || p.amount_due || 0)}</strong></td>
-                <td><span class="status-badge ${status}">${status.toUpperCase()}</span></td>
-                <td>
-                    ${status === 'pending'
-                        ? `<button class="btn-xs" data-pay-id="${p._id || p.payment_id}" data-pay-type="${type}">Pay now</button>`
-                        : ''}
-                </td>
-            </tr>
-        `;
-    },
-
     _byType() {
-        const grouped = {
-            commitment_fee: { collected: 0, total: 0 },
-            arrangement_fee: { collected: 0, total: 0 },
-            principal: { collected: 0, total: 0 }
-        };
-
-        (this.state.payments || []).forEach(p => {
-            const t = p.payment_type || 'commitment_fee';
+        const grouped = {};
+        this.state.payments.forEach(p => {
+            const t = p.type || p.payment_type || 'other';
             if (!grouped[t]) grouped[t] = { collected: 0, total: 0 };
-            grouped[t].total += p.amount_due || 0;
-            if ((p.payment_status || '').toLowerCase() === 'completed') {
-                grouped[t].collected += p.amount_paid || p.amount_due || 0;
+            grouped[t].total += p.amount || p.amount_due || 0;
+            const status = (p.status || p.payment_status || '').toLowerCase();
+            if (status === 'paid' || status === 'completed') {
+                grouped[t].collected += p.amount || p.amount_paid || 0;
             }
         });
-
-        Object.keys(grouped).forEach(t => {
-            const g = grouped[t];
-            g.percent = g.total > 0 ? Math.round((g.collected / g.total) * 100) : 0;
-            g.pendingPct = 100 - g.percent;
+        Object.keys(grouped).forEach(k => {
+            grouped[k].percent = grouped[k].total > 0 ? Math.round((grouped[k].collected / grouped[k].total) * 100) : 0;
         });
-
         return grouped;
     },
 
-    _countByStatus(status) {
-        return (this.state.payments || []).filter(p => (p.payment_status || '').toLowerCase() === status).length;
-    },
-
-    _sumByType(types) {
-        const payments = this.state.payments || [];
-        const sum = payments
-            .filter(p => types.includes(p.payment_type))
-            .reduce((acc, p) => acc + (p.amount_paid || p.amount_due || 0), 0);
-        return sum / 1_000_000; // millions for display
-    },
-
-    async _payNow(paymentId, paymentType) {
-        try {
-            const payment = (this.state.payments || []).find(p => (p._id || p.payment_id) === paymentId);
-            if (!payment) return;
-
-            const payload = {
-                paymentId,
-                walletAddress: payment.payer?.wallet_address || 'mock-participant-wallet'
-            };
-
-            // Call mock pay endpoint (Express x402) to keep flows in one place
-            const res = await API.post('server', '/x402/pay', payload);
-            if (res?.success) {
-                // Refresh payments after paying
-                await this.fetchBackendData();
+    injectStyles() {
+        if (document.getElementById('payments-component-styles')) return;
+        const style = document.createElement('style');
+        style.id = 'payments-component-styles';
+        style.textContent = `
+            /* === Payments Header === */
+            .payments-header-card {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 1rem 1.5rem;
+                background: linear-gradient(135deg, var(--primary) 0%, #4f46e5 100%);
+                border-radius: 12px;
+                margin-bottom: 1.5rem;
+                color: white;
             }
-        } catch (err) {
-            console.error('Pay now failed:', err);
+            .payments-header-id {
+                font-size: 1.25rem;
+                font-weight: 700;
+            }
+            .payments-header-borrower {
+                font-size: 0.875rem;
+                opacity: 0.85;
+            }
+            .payments-header-right {
+                text-align: right;
+                font-size: 0.875rem;
+            }
+            .payments-header-meta {
+                display: block;
+                font-weight: 600;
+            }
+            .payments-header-industry {
+                opacity: 0.75;
+            }
+
+            /* === Flow Visualization === */
+            .payments-flow-container {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 1rem;
+                padding: 2rem;
+                background: var(--bg-card);
+                border-radius: 12px;
+                border: 1px solid var(--border);
+                margin-bottom: 1.5rem;
+            }
+            .payments-flow-stage {
+                text-align: center;
+                min-width: 100px;
+            }
+            .payments-flow-icon {
+                width: 56px;
+                height: 56px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 24px;
+                margin: 0 auto 0.5rem;
+                color: white;
+            }
+            .payments-flow-icon.participants { background: var(--primary); }
+            .payments-flow-icon.escrow { background: #f59e0b; }
+            .payments-flow-icon.originator { background: #10b981; }
+            .payments-flow-label {
+                font-size: 0.75rem;
+                color: var(--text-muted);
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            .payments-flow-value {
+                font-size: 1.125rem;
+                font-weight: 600;
+                margin-top: 0.25rem;
+            }
+            .payments-flow-connector {
+                display: flex;
+                align-items: center;
+                flex: 1;
+                max-width: 120px;
+            }
+            .payments-flow-line {
+                flex: 1;
+                height: 2px;
+                background: linear-gradient(90deg, var(--primary), #10b981);
+            }
+            .payments-flow-arrow {
+                font-size: 1.25rem;
+                color: var(--primary);
+                margin-left: 4px;
+            }
+
+            /* === KPI Grid === */
+            .payments-kpi-grid {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 1rem;
+                margin-bottom: 1.5rem;
+            }
+            .payments-kpi-card {
+                background: var(--bg-card);
+                border: 1px solid var(--border);
+                border-radius: 10px;
+                padding: 1rem;
+                text-align: center;
+            }
+            .payments-kpi-label {
+                font-size: 0.7rem;
+                text-transform: uppercase;
+                color: var(--text-muted);
+                letter-spacing: 0.5px;
+            }
+            .payments-kpi-value {
+                font-size: 1.5rem;
+                font-weight: 700;
+                margin-top: 0.5rem;
+            }
+            .payments-kpi-value.gap { color: #f59e0b; }
+            .payments-kpi-value.status-active { color: #10b981; font-size: 1rem; }
+
+            /* === Progress Bars === */
+            .payments-progress-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 1rem;
+            }
+            .payments-progress-card {
+                background: var(--bg-card);
+                border: 1px solid var(--border);
+                border-radius: 10px;
+                padding: 1rem;
+            }
+            .payments-progress-header {
+                display: flex;
+                justify-content: space-between;
+                margin-bottom: 0.5rem;
+            }
+            .payments-progress-title {
+                font-size: 0.75rem;
+                font-weight: 600;
+                color: var(--text-muted);
+            }
+            .payments-progress-percent {
+                font-size: 0.875rem;
+                font-weight: 700;
+                color: var(--primary);
+            }
+            .payments-progress-bar {
+                height: 8px;
+                background: rgba(0,0,0,0.1);
+                border-radius: 4px;
+                overflow: hidden;
+            }
+            .payments-progress-fill {
+                height: 100%;
+                background: linear-gradient(90deg, var(--primary), #10b981);
+                border-radius: 4px;
+                transition: width 0.5s ease;
+            }
+            .payments-progress-amounts {
+                display: flex;
+                justify-content: space-between;
+                font-size: 0.7rem;
+                color: var(--text-muted);
+                margin-top: 0.5rem;
+            }
+
+            /* === Payments Table === */
+            .payments-table-wrapper {
+                overflow-x: auto;
+            }
+            .payments-table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            .payments-table th,
+            .payments-table td {
+                padding: 0.75rem 1rem;
+                text-align: left;
+                border-bottom: 1px solid var(--border);
+            }
+            .payments-table th {
+                font-size: 0.7rem;
+                text-transform: uppercase;
+                color: var(--text-muted);
+                background: rgba(0,0,0,0.02);
+            }
+            .payments-status-badge {
+                display: inline-block;
+                padding: 0.25rem 0.75rem;
+                border-radius: 20px;
+                font-size: 0.7rem;
+                font-weight: 600;
+            }
+            .payments-status-badge.completed {
+                background: rgba(16, 185, 129, 0.1);
+                color: #10b981;
+            }
+            .payments-status-badge.pending {
+                background: rgba(245, 158, 11, 0.1);
+                color: #f59e0b;
+            }
+            .payments-check {
+                color: #10b981;
+                font-weight: bold;
+            }
+            .payments-btn-pay {
+                padding: 0.375rem 0.75rem;
+                font-size: 0.75rem;
+                font-weight: 600;
+                color: white;
+                background: var(--primary);
+                border: none;
+                border-radius: 6px;
+                cursor: pointer;
+                transition: background 0.2s;
+            }
+            .payments-btn-pay:hover {
+                background: #4f46e5;
+            }
+
+            /* === Transaction Log === */
+            .payments-tx-list {
+                max-height: 300px;
+                overflow-y: auto;
+            }
+            .payments-tx-item {
+                display: flex;
+                gap: 0.75rem;
+                padding: 0.75rem;
+                border-bottom: 1px solid var(--border);
+            }
+            .payments-tx-item:last-child {
+                border-bottom: none;
+            }
+            .payments-tx-icon {
+                font-size: 1.25rem;
+            }
+            .payments-tx-content {
+                flex: 1;
+            }
+            .payments-tx-main {
+                display: flex;
+                justify-content: space-between;
+                font-weight: 500;
+            }
+            .payments-tx-amount {
+                color: #10b981;
+                font-weight: 600;
+            }
+            .payments-tx-meta {
+                display: flex;
+                justify-content: space-between;
+                font-size: 0.75rem;
+                color: var(--text-muted);
+                margin-top: 0.25rem;
+            }
+
+            /* === No Data === */
+            .payments-no-data {
+                padding: 2rem;
+                text-align: center;
+                color: var(--text-muted);
+            }
+
+            /* === Grid Layout for Payments View === */
+            .payments-grid {
+                display: grid;
+                gap: 1.5rem;
+            }
+            .payment-table-section,
+            .transaction-log-section {
+                background: var(--bg-card);
+                border: 1px solid var(--border);
+                border-radius: 12px;
+                padding: 1.5rem;
+            }
+            @media (min-width: 1024px) {
+                .payments-lower-grid {
+                    display: grid;
+                    grid-template-columns: 2fr 1fr;
+                    gap: 1.5rem;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    },
+
+    async _payNow(paymentId) {
+        if (!confirm('Execute payment for this item?')) return;
+        try {
+            await API.post('server', '/payments/pay', { paymentId });
+            this.fetchBackendData();
+        } catch (e) {
+            alert('Payment execution failed. Using simulation fallback.');
+            const p = this.state.payments.find(x => (x.id || x.payment_id) === paymentId);
+            if (p) {
+                p.status = 'paid';
+                p.payment_status = 'completed';
+                this.render();
+            }
         }
     }
 };
+
+window.PaymentsComponent = PaymentsComponent;

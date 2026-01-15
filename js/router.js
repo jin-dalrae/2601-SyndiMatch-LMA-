@@ -1,50 +1,33 @@
-<<<<<<< HEAD
-// ========================================
-// Router - Simple Client-Side Routing
-// Handles URL changes and view switching
-// ========================================
-
-const Router = {
-    routes: {
-        '/': 'overview',
-        '/syndications/:id': 'syndication-detail',
-        '/participants/:id': 'participant-portfolio',
-        '/analytics': 'analytics',
-        '/settings': 'settings'
-    },
-
-    // Initialize router
-    init() {
-        // Handle initial route
-        this.handleRoute(window.location.hash.slice(1) || '/');
-
-        // Listen for hash changes (using hash mode for simplicity without server config)
-        window.addEventListener('hashchange', () => {
-            this.handleRoute(window.location.hash.slice(1) || '/');
-        });
-
-        if (Config?.DEBUG) console.log('🗺️ Router initialized');
-=======
 /**
  * SyndiMatch Router
  * Simple hash-based client-side router
  */
 const Router = {
-    routes: {},
+    routes: {
+        '/': 'overview',
+        '/overview': 'overview',
+        '/syndications/:id': 'syndication-detail',
+        '/participants/:id': 'participant-portfolio',
+        '/analytics': 'analytics',
+        '/settings': 'settings',
+        '/originate': 'originate'
+    },
     currentRoute: null,
 
     init() {
+        // Handle hash changes
         window.addEventListener('hashchange', () => this.handleRoute());
+        // Handle initial load
         window.addEventListener('load', () => this.handleRoute());
+
         console.log('🧭 Router initialized');
     },
 
     /**
-     * Register a route handler
+     * Register a route handler (legacy support)
      */
     on(path, handler) {
         this.routes[path] = handler;
->>>>>>> syndication-change
     },
 
     /**
@@ -57,70 +40,71 @@ const Router = {
     /**
      * Handle route change
      */
-<<<<<<< HEAD
-    handleRoute(path) {
-        if (path === '') path = '/';
+    handleRoute() {
+        const hash = window.location.hash.slice(1) || '/';
+        const [path, queryString] = hash.split('?');
+        const queryParams = new URLSearchParams(queryString);
 
-        // Find matching route
         let matchedView = 'overview';
         let params = {};
 
-        // Direct match
-        if (this.routes[path]) {
-            matchedView = this.routes[path];
-        } else {
-            // Pattern match
-            for (const [pattern, view] of Object.entries(this.routes)) {
-                const regex = new RegExp('^' + pattern.replace(/:(\w+)/g, '([^/]+)') + '$');
-                const match = path.match(regex);
+        // Pattern match logic
+        for (const [pattern, view] of Object.entries(this.routes)) {
+            // Convert :id patterns to regex
+            const regex = new RegExp('^' + pattern.replace(/:(\w+)/g, '([^/]+)') + '$');
+            const match = path.match(regex);
 
-                if (match) {
-                    matchedView = view;
-                    // Extract params
-                    const paramNames = (pattern.match(/:(\w+)/g) || []).map(p => p.slice(1));
-                    match.slice(1).forEach((val, i) => {
-                        params[paramNames[i]] = val;
-                    });
-                    break;
+            if (match) {
+                // If the value in routes is a function (legacy .on() support)
+                if (typeof view === 'function') {
+                    this.currentRoute = path;
+                    const combinedParams = { ...Object.fromEntries(queryParams), ...params };
+                    view(combinedParams);
+                    return;
                 }
+
+                matchedView = view;
+                // Extract params from path
+                const paramNames = (pattern.match(/:(\w+)/g) || []).map(p => p.slice(1));
+                match.slice(1).forEach((val, i) => {
+                    params[paramNames[i]] = val;
+                });
+                break;
             }
         }
 
-        // Update AppState
-        AppState.update({
-            currentView: matchedView,
-            routeParams: params,
-            currentPath: path
-        });
+        // Fallback for sub-routes if not matched (e.g. SYND-xxx/orchestration)
+        const syndMatch = path.match(/^(SYND-[^/]+)\/?(orchestration|payments|transactions)?$/i);
+        if (syndMatch) {
+            matchedView = 'syndication-detail';
+            params.id = syndMatch[1];
+            params.subPage = syndMatch[2] || 'orchestration';
+        }
 
-        if (Config?.DEBUG) console.log(`📍 Route: ${path} -> ${matchedView}`, params);
+        // Update AppState
+        if (window.AppState) {
+            AppState.update({
+                currentView: matchedView,
+                routeParams: params,
+                currentPath: path,
+                activeView: matchedView.replace('view-', '')
+            });
+
+            if (params.id) {
+                AppState.set('activeSyndicationId', params.id);
+            }
+        }
+
+        this.currentRoute = path;
+
+        // Dispatch event for components that don't use AppState subscription
+        window.dispatchEvent(new CustomEvent('routeChanged', {
+            detail: { path, view: matchedView, params }
+        }));
+
+        console.log(`📍 Route: ${path} -> ${matchedView}`, params);
     }
 };
 
 // Expose globally
-=======
-    handleRoute() {
-        const hash = window.location.hash.slice(1) || '/';
-        const [path, queryString] = hash.split('?');
-
-        const params = new URLSearchParams(queryString);
-
-        // Find matching route
-        // Simple exact match for now, could add regex for params
-        let handler = this.routes[path];
-
-        // Fallback to default if not found
-        if (!handler) {
-            handler = this.routes['/'] || this.routes['/overview'];
-        }
-
-        if (handler) {
-            this.currentRoute = path;
-            AppState.set('activeView', path.replace('/', ''));
-            handler(Object.fromEntries(params));
-        }
-    }
-};
-
->>>>>>> syndication-change
 window.Router = Router;

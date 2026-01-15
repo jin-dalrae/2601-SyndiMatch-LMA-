@@ -13,7 +13,7 @@ const PipelineComponent = {
     },
 
     // Track recently updated cards for pulse animation
-    recentlyUpdated: new Map(), // Use Map to store timeout IDs
+    recentlyUpdated: new Map(),
 
     init() {
         this.render();
@@ -27,21 +27,22 @@ const PipelineComponent = {
 
         // Subscribe to SyndiData events for real-time updates
         const handleUpdate = (syndId) => {
-            // Clear existing timeout if it exists
             if (this.recentlyUpdated.has(syndId)) {
                 clearTimeout(this.recentlyUpdated.get(syndId));
             }
 
             this.recentlyUpdated.set(syndId, setTimeout(() => {
                 this.recentlyUpdated.delete(syndId);
-                this.render(); // Re-render to remove "updated" class
+                this.render();
             }, 3000));
 
             this.render();
         };
 
-        SyndiData.on('syndicationAdded', (synd) => handleUpdate(synd.id));
-        SyndiData.on('syndicationUpdated', ({ syndId }) => handleUpdate(syndId));
+        if (window.SyndiData) {
+            SyndiData.on('syndicationAdded', (synd) => handleUpdate(synd.id));
+            SyndiData.on('syndicationUpdated', ({ syndId }) => handleUpdate(syndId));
+        }
 
         // Listen for global interaction events
         window.addEventListener('newSyndication', () => this.render());
@@ -52,12 +53,13 @@ const PipelineComponent = {
         const container = document.getElementById('pipeline-columns');
         if (!container) return;
 
-        // Use event delegation to prevent listener accumulation and memory leaks
         container.addEventListener('click', (e) => {
             const card = e.target.closest('.synd-card');
             if (card) {
                 const syndId = card.dataset.syndId;
-                window.location.hash = `${syndId}/orchestration`;
+                if (window.Router) {
+                    Router.navigate(`/${syndId}/orchestration`);
+                }
             }
         });
     },
@@ -75,16 +77,6 @@ const PipelineComponent = {
                 animation: cardPulse 1s ease-in-out 3;
                 border-color: var(--primary) !important;
             }
-            .synd-card.updated::before {
-                content: '🔄';
-                position: absolute;
-                top: -8px;
-                right: -8px;
-                font-size: 1rem;
-                animation: cardPulse 1s ease-in-out infinite;
-                z-index: 10;
-            }
-            /* Keyboard focus states */
             .synd-card:focus {
                 outline: 2px solid var(--primary);
                 outline-offset: 2px;
@@ -95,36 +87,31 @@ const PipelineComponent = {
 
     render() {
         const container = document.getElementById('pipeline-columns');
-        if (!container) return;
+        if (!container || !window.SyndiData) return;
 
-<<<<<<< HEAD
-        // Skip re-render if syndication detail modal is open to prevent it from closing
+        // Skip re-render if syndication detail modal is open
         const modal = document.getElementById('modal-overlay');
         if (modal && modal.classList.contains('open')) {
-            return; // Don't re-render pipeline while user is viewing details
+            return;
         }
 
-        // Get current simulation date
-        const now = window.SimulationEngine ? SimulationEngine.state.currentDate : new Date();
+        // Get current simulation date for filtering
+        const now = window.SimulationEngine ? (SimulationEngine.state?.currentDate || new Date()) : new Date();
         const oneMonthAgo = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
 
+        // Use allSyndications getter to pick real data or fallback to mock
+        const sourceSyndications = SyndiData.allSyndications || SyndiData.syndications || [];
+
         // Filter syndications - hide completed ones older than 1 month
-        const visibleSyndications = SyndiData.syndications.filter(s => {
+        const visibleSyndications = sourceSyndications.filter(s => {
             if (s.status !== 'completed') return true;
-            // Check completion date
-            const completedDate = new Date(s.updated_at || s.created_at);
+            const completedDate = new Date(s.updated_at || s.created_at || now);
             return completedDate > oneMonthAgo;
         });
 
-        container.innerHTML = SyndiData.statuses.map(status => {
-            const items = visibleSyndications.filter(s => s.status === status);
-            const config = this.statusConfig[status];
-=======
-        // Map statuses with fallback safety
         container.innerHTML = (SyndiData.statuses || []).map(status => {
-            const items = (SyndiData.syndications || []).filter(s => s.status === status);
+            const items = visibleSyndications.filter(s => s.status === status);
             const config = this.statusConfig[status] || { title: status.toUpperCase(), class: '' };
->>>>>>> syndication-change
 
             return `
                 <div class="pipeline-column">
@@ -141,10 +128,9 @@ const PipelineComponent = {
     },
 
     renderCard(item) {
-        // Safe utility calls with fallbacks
         const sub = item.subscription || 0;
-        const statusColor = Utils.getStatusColor(sub);
-        const progressClass = Utils.getProgressClass(sub);
+        const statusColor = (window.Utils && Utils.getStatusColor) ? Utils.getStatusColor(sub) : 'blue';
+        const progressClass = (window.Utils && Utils.getProgressClass) ? Utils.getProgressClass(sub) : 'medium';
         const isUpdated = this.recentlyUpdated.has(item.id);
 
         return `
@@ -159,7 +145,7 @@ const PipelineComponent = {
                 </div>
                 <div class="synd-card-borrower">${item.borrower || 'Unknown Borrower'}</div>
                 <div class="synd-card-amount">
-                    ${Utils.formatCurrency((item.amount || 0) * 1000000)} • ${item.originator || 'TBD'}
+                    ${(window.Utils && Utils.formatCurrency) ? Utils.formatCurrency((item.amount || 0) * 1000000) : item.amount} • ${item.originator || 'TBD'}
                 </div>
                 <div class="synd-card-progress">
                     <div class="progress-bar">
@@ -174,3 +160,5 @@ const PipelineComponent = {
         `;
     }
 };
+
+window.PipelineComponent = PipelineComponent;

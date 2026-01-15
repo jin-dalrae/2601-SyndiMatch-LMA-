@@ -1,12 +1,11 @@
-<<<<<<< HEAD
 // ========================================
 // Enhanced API Client - Production-Ready
 // Replaces api.js with full CRUD, retry, caching, error handling
 // ========================================
 
 const APIClient = {
-    baseUrl: Config?.API_URL || 'http://localhost:3001/api',
-    agentUrl: Config?.AGENT_URL || 'http://localhost:8000/api',
+    baseUrl: (typeof Config !== 'undefined' && Config.API_URL) || 'http://localhost:3001/api',
+    agentUrl: (typeof Config !== 'undefined' && Config.AGENT_URL) || 'http://localhost:8000/api',
     useMockData: false,
 
     // Request state
@@ -14,7 +13,7 @@ const APIClient = {
     cache: new Map(),
     rateLimiter: {
         requests: [],
-        maxPerSecond: Config?.RATE_LIMIT_MAX_PER_SECOND || 10
+        maxPerSecond: (typeof Config !== 'undefined' && Config.RATE_LIMIT_MAX_PER_SECOND) || 10
     },
 
     // ========================================
@@ -26,24 +25,24 @@ const APIClient = {
      */
     async get(endpoint, options = {}) {
         const {
-            timeout = Config?.API_TIMEOUT || 10000,
-            retries = Config?.RETRY_MAX_ATTEMPTS || 3,
-            cache = Config?.ENABLE_CACHE !== false,
-            cacheTTL = Config?.CACHE_TTL || 300000
+            timeout = (typeof Config !== 'undefined' && Config.API_TIMEOUT) || 10000,
+            retries = (typeof Config !== 'undefined' && Config.RETRY_MAX_ATTEMPTS) || 3,
+            cache = (typeof Config !== 'undefined' && Config.ENABLE_CACHE !== false),
+            cacheTTL = (typeof Config !== 'undefined' && Config.CACHE_TTL) || 300000
         } = options;
 
         // Check cache first
         if (cache) {
             const cached = this.getFromCache(endpoint);
             if (cached) {
-                if (Config?.DEBUG) console.log(`📦 Cache hit: ${endpoint}`);
+                if (typeof Config !== 'undefined' && Config.DEBUG) console.log(`📦 Cache hit: ${endpoint}`);
                 return cached;
             }
         }
 
         // Check for pending request (deduplication)
         if (this.pendingRequests.has(endpoint)) {
-            if (Config?.DEBUG) console.log(`⏳ Deduped request: ${endpoint}`);
+            if (typeof Config !== 'undefined' && Config.DEBUG) console.log(`⏳ Deduped request: ${endpoint}`);
             return this.pendingRequests.get(endpoint);
         }
 
@@ -76,7 +75,7 @@ const APIClient = {
      */
     async post(endpoint, data, options = {}) {
         const {
-            timeout = Config?.API_TIMEOUT || 10000,
+            timeout = (typeof Config !== 'undefined' && Config.API_TIMEOUT) || 10000,
             retries = 1 // POST usually shouldn't retry
         } = options;
 
@@ -94,7 +93,7 @@ const APIClient = {
      */
     async put(endpoint, data, options = {}) {
         const {
-            timeout = Config?.API_TIMEOUT || 10000,
+            timeout = (typeof Config !== 'undefined' && Config.API_TIMEOUT) || 10000,
             retries = 1
         } = options;
 
@@ -112,7 +111,7 @@ const APIClient = {
      */
     async delete(endpoint, options = {}) {
         const {
-            timeout = Config?.API_TIMEOUT || 10000,
+            timeout = (typeof Config !== 'undefined' && Config.API_TIMEOUT) || 10000,
             retries = 1
         } = options;
 
@@ -158,8 +157,8 @@ const APIClient = {
                 }
 
                 // Exponential backoff
-                const delay = Math.pow(2, attempt) * (Config?.RETRY_BASE_DELAY || 1000);
-                if (Config?.DEBUG) {
+                const delay = Math.pow(2, attempt) * ((typeof Config !== 'undefined' && Config.RETRY_BASE_DELAY) || 1000);
+                if (typeof Config !== 'undefined' && Config.DEBUG) {
                     console.log(`🔄 Retry ${attempt + 1}/${retries} for ${endpoint} after ${delay}ms`);
                 }
                 await this._sleep(delay);
@@ -219,11 +218,11 @@ const APIClient = {
         };
 
         // Add authentication if available
-        if (Config?.AUTH_TOKEN) {
+        if (typeof Config !== 'undefined' && Config.AUTH_TOKEN) {
             headers['Authorization'] = `Bearer ${Config.AUTH_TOKEN}`;
         }
 
-        if (Config?.API_KEY) {
+        if (typeof Config !== 'undefined' && Config.API_KEY) {
             headers['X-API-Key'] = Config.API_KEY;
         }
 
@@ -243,7 +242,7 @@ const APIClient = {
         };
 
         // Log error if debug enabled
-        if (Config?.DEBUG || Config?.LOG_LEVEL === 'error') {
+        if ((typeof Config !== 'undefined' && Config.DEBUG) || (typeof Config !== 'undefined' && Config.LOG_LEVEL === 'error')) {
             console.error('❌ API Error:', apiError);
         }
 
@@ -269,7 +268,7 @@ const APIClient = {
             const oldestRequest = Math.min(...this.rateLimiter.requests);
             const waitTime = 1000 - (now - oldestRequest);
 
-            if (Config?.DEBUG) {
+            if (typeof Config !== 'undefined' && Config.DEBUG) {
                 console.log(`⏱️ Rate limit hit, waiting ${waitTime}ms`);
             }
 
@@ -346,11 +345,18 @@ const APIClient = {
 
     async checkConnection() {
         try {
-            const response = await fetch(`${this.baseUrl}/health`, {
-                signal: AbortSignal.timeout(5000)
-            });
+            const readyResponse = await fetch(`${this.baseUrl.replace('/api', '')}/ready`, {
+                signal: AbortSignal.timeout(3000)
+            }).catch(() => null);
 
-            if (response.ok) {
+            let response = readyResponse;
+            if (!response || !response.ok) {
+                response = await fetch(`${this.baseUrl}/health`, {
+                    signal: AbortSignal.timeout(3000)
+                }).catch(() => null);
+            }
+
+            if (response && response.ok) {
                 this.useMockData = false;
                 console.log('✅ Connected to API backend');
                 return true;
@@ -364,226 +370,10 @@ const APIClient = {
     }
 };
 
-// Export as global API object (backwards compatible)
+// Export as global API object
 window.APIClient = APIClient;
 
 // Check connection on load
 if (typeof window !== 'undefined') {
     APIClient.checkConnection();
-=======
-/**
- * SyndiMatch API Client
- * Robust HTTP client with caching, retries, timeouts, and error handling.
- */
-
-const APIClient = (function () {
-    class Client {
-        constructor(baseURL) {
-            this.baseURL = baseURL || (typeof Config !== 'undefined' ? Config.API_URL : '');
-            this.timeout = (typeof Config !== 'undefined' ? Config.API_TIMEOUT : 10000);
-            this.cache = new Map();
-            this.pendingRequests = new Map();
-
-            // Rate limiting
-            this.maxRequestsPerSec = 10;
-            this.lastRequestTime = 0;
-            this.retryCount = 3;
-        }
-
-        /**
-         * Core Fetch Method
-         */
-        async request(endpoint, options = {}) {
-            const url = `${this.baseURL}${endpoint}`;
-            const method = options.method || 'GET';
-            const cacheKey = `${method}:${url}`;
-
-            // Deduplication (GET only)
-            if (method === 'GET' && this.pendingRequests.has(cacheKey)) {
-                return this.pendingRequests.get(cacheKey);
-            }
-
-            // Caching (GET only)
-            if (method === 'GET' && !options.skipCache) {
-                const cached = this.cache.get(cacheKey);
-                const ttl = typeof Config !== 'undefined' ? Config.CACHE_TTL : 60000;
-                if (cached && Date.now() - cached.timestamp < ttl) {
-                    return cached.data;
-                }
-            }
-
-            // Rate Limiting
-            await this.throttle();
-
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), this.timeout);
-
-            const config = {
-                ...options,
-                signal: controller.signal,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.getAuthToken()}`,
-                    ...options.headers
-                }
-            };
-
-            // Allow body to be passed as-is if already a string or Blob/FormData
-            if (options.body && typeof options.body === 'object' && !(options.body instanceof FormData || options.body instanceof Blob)) {
-                config.body = JSON.stringify(options.body);
-            }
-
-            const requestPromise = (async () => {
-                try {
-                    const response = await this.retryFetch(url, config, options.retries || this.retryCount);
-
-                    if (!response.ok) {
-                        throw await this.createError(response);
-                    }
-
-                    // Handle valid response
-                    if (response.status === 204) return null;
-
-                    // Safe JSON Parse
-                    let data = null;
-                    try {
-                        data = await response.json();
-                    } catch (e) {
-                        console.warn('API Response was not valid JSON:', endpoint);
-                        data = null;
-                    }
-
-                    // Cache success (GET only)
-                    if (method === 'GET' && data) {
-                        this.cache.set(cacheKey, {
-                            timestamp: Date.now(),
-                            data
-                        });
-                    }
-
-                    return data;
-
-                } catch (error) {
-                    this.handleError(error, endpoint);
-                    throw error;
-                } finally {
-                    clearTimeout(timeoutId);
-                    this.pendingRequests.delete(cacheKey);
-                }
-            })();
-
-            if (method === 'GET') {
-                this.pendingRequests.set(cacheKey, requestPromise);
-            }
-
-            return requestPromise;
-        }
-
-        /**
-         * Fetch with Exponential Backoff Retry
-         */
-        async retryFetch(url, config, retries) {
-            for (let i = 0; i < retries; i++) {
-                try {
-                    return await fetch(url, config);
-                } catch (error) {
-                    if (i === retries - 1 || error.name === 'AbortError') throw error;
-
-                    const delay = Math.pow(2, i) * 1000;
-                    console.log(`Retrying API [${url}] in ${delay}ms... (Attempt ${i + 1}/${retries})`);
-                    await new Promise(r => setTimeout(r, delay));
-                }
-            }
-        }
-
-        /**
-         * Throttle Requests based on maxRequestsPerSec
-         */
-        async throttle() {
-            const now = Date.now();
-            const interval = 1000 / this.maxRequestsPerSec;
-            const timeToWait = Math.max(0, interval - (now - this.lastRequestTime));
-
-            this.lastRequestTime = now + timeToWait;
-
-            if (timeToWait > 0) {
-                await new Promise(r => setTimeout(r, timeToWait));
-            }
-        }
-
-        /**
-         * Error Factory
-         */
-        async createError(response) {
-            let message = `HTTP ${response.status}`;
-            let details = null;
-            try {
-                const json = await response.json();
-                message = json.message || json.error || message;
-                details = json;
-            } catch (e) { /* ignore json parse error */ }
-
-            const error = new Error(message);
-            error.status = response.status;
-            error.details = details;
-            return error;
-        }
-
-        handleError(error, endpoint) {
-            console.error(`API Error [${endpoint}]:`, error.message);
-            if (typeof window !== 'undefined') {
-                window.dispatchEvent(new CustomEvent('api-error', { detail: error }));
-            }
-        }
-
-        getAuthToken() {
-            if (typeof localStorage !== 'undefined') {
-                return localStorage.getItem('auth_token') || 'mock-token';
-            }
-            return 'mock-token';
-        }
-
-        // ==========================================
-        // Public Methods
-        // ==========================================
-
-        async get(endpoint, options = {}) {
-            return this.request(endpoint, { ...options, method: 'GET' });
-        }
-
-        async post(endpoint, data, options = {}) {
-            return this.request(endpoint, {
-                ...options,
-                method: 'POST',
-                body: data
-            });
-        }
-
-        async put(endpoint, data, options = {}) {
-            return this.request(endpoint, {
-                ...options,
-                method: 'PUT',
-                body: data
-            });
-        }
-
-        async delete(endpoint, options = {}) {
-            return this.request(endpoint, { ...options, method: 'DELETE' });
-        }
-
-        clearCache() {
-            this.cache.clear();
-        }
-    }
-
-    return Client;
-})();
-
-// Environment-agnostic exposure
-if (typeof window !== 'undefined') {
-    window.APIClient = APIClient;
-    window.api = new APIClient();
-} else if (typeof module !== 'undefined' && module.exports) {
-    module.exports = APIClient;
->>>>>>> syndication-change
 }

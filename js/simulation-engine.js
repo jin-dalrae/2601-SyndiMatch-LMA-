@@ -12,7 +12,9 @@ const SimulationEngine = {
         currentDate: new Date('2023-01-01T00:00:00'),
         speedMultiplier: 1, // 1x, 10x, 100x, 1000x
         tickInterval: null,
-        lastTickTime: null
+        lastTickTime: null,
+        lastSyndicationWeek: null,
+        sessionStartIso: null
     },
 
     // Initial agent data (reset point)
@@ -27,6 +29,10 @@ const SimulationEngine = {
     // Transaction history
     transactions: [],
 
+    // Live data pools
+    originatorPool: [],
+    participantPool: [],
+
     // Event listeners
     listeners: [],
 
@@ -37,6 +43,8 @@ const SimulationEngine = {
         this.loadState();
         this.renderControls();
         this.updateDisplay();
+        this.loadOriginators();
+        this.loadParticipants();
 
         // Listen for role changes - re-render controls to show/hide admin buttons
         window.addEventListener('roleChange', () => {
@@ -65,6 +73,8 @@ const SimulationEngine = {
                 this.state.speedMultiplier = data.speedMultiplier || 1;
                 this.agentWealth = data.agentWealth || {};
                 this.transactions = data.transactions || [];
+                this.state.lastSyndicationWeek = data.lastSyndicationWeek || null;
+                this.state.sessionStartIso = data.sessionStartIso || null;
             } catch (e) {
                 console.warn('Failed to load simulation state', e);
             }
@@ -84,7 +94,9 @@ const SimulationEngine = {
             currentDate: this.state.currentDate.toISOString(),
             speedMultiplier: this.state.speedMultiplier,
             agentWealth: this.agentWealth,
-            transactions: this.transactions.slice(-1000) // Keep last 1000 transactions
+            transactions: this.transactions.slice(-1000), // Keep last 1000 transactions
+            lastSyndicationWeek: this.state.lastSyndicationWeek,
+            sessionStartIso: this.state.sessionStartIso
         };
         localStorage.setItem('syndimatch_simulation', JSON.stringify(data));
     },
@@ -140,6 +152,9 @@ const SimulationEngine = {
     start() {
         if (this.state.isRunning) return;
 
+        // Always start from a fresh simulation state
+        this.reset();
+
         // Auto-reset if at end
         if (this.state.currentDate >= this.state.endDate) {
             this.reset();
@@ -168,8 +183,9 @@ const SimulationEngine = {
      * Handle day change - potentially trigger new syndications
      */
     onDayChange(data) {
-        // Random chance to trigger a new syndication each day (20% chance)
-        if (Math.random() < 0.2) {
+        const weekKey = this.getWeekKey(this.state.currentDate);
+        if (weekKey !== this.state.lastSyndicationWeek) {
+            this.state.lastSyndicationWeek = weekKey;
             this.triggerNewSyndication();
         }
     },
@@ -178,6 +194,7 @@ const SimulationEngine = {
      * Trigger a new syndication via the backend
      */
     async triggerNewSyndication() {
+        const originator = this.getRandomOriginator();
         try {
             const payload = {
                 borrower: this.getRandomBorrower(),
@@ -185,12 +202,13 @@ const SimulationEngine = {
                 rating: this.getRandomRating(),
                 spread: Utils.randomBetween(350, 550),
                 industry: this.getRandomIndustry(),
-                originator_agent_id: 'OA-001',
-                role: 'originator:OA-001'
+                originator: originator.name,
+                originator_agent_id: originator.id,
+                role: `originator:${originator.id}`
             };
             const data = await API.post('server', '/syndications', payload);
             if (data) {
-                console.log('🚀 New syndication triggered');
+                console.log(`🚀 New syndication triggered (${originator.id})`);
             }
         } catch (e) {
             // Fallback: create locally if backend unavailable
@@ -204,10 +222,60 @@ const SimulationEngine = {
                 status: 'open',
                 subscription: 0,
                 participantCount: 0,
-                originator: ['JPMorgan', 'BofA', 'Citi', 'Goldman'][Utils.randomBetween(0, 3)]
+                originator: originator.name,
+                originator_agent_id: originator.id
             });
             if (window.PipelineComponent) PipelineComponent.render();
         }
+    },
+    async loadOriginators() {
+        if (!window.API || window.API.useMockData) return;
+        try {
+            const data = await window.API.get('server', '/originators');
+            if (Array.isArray(data) && data.length) {
+                this.originatorPool = data.map((o) => ({
+                    id: o._id || o.id || o.originator_agent_id,
+                    name: o.institution?.name || o.name || o.originator || o.bank || 'Unknown'
+                })).filter(o => o.id);
+            }
+        } catch (e) {
+            console.warn('⚠️ Originator fetch failed:', e.message);
+        }
+    },
+    async loadParticipants() {
+        if (!window.API || window.API.useMockData) return;
+        try {
+            const data = await window.API.get('server', '/participants');
+            if (Array.isArray(data) && data.length) {
+                this.participantPool = data.map((p) => ({
+                    id: p._id || p.id,
+                    name: p.institution?.name || p.name || p.entity || 'Unknown'
+                })).filter(p => p.id);
+            }
+        } catch (e) {
+            console.warn('⚠️ Participant fetch failed:', e.message);
+        }
+    },
+    getRandomOriginator() {
+        if (this.originatorPool.length) {
+            return this.originatorPool[Utils.randomBetween(0, this.originatorPool.length - 1)];
+        }
+        const originators = [
+            { id: 'OA-001', name: 'JPMorgan Chase' },
+            { id: 'OA-002', name: 'Bank of America' },
+            { id: 'OA-003', name: 'Citigroup' },
+            { id: 'OA-004', name: 'Goldman Sachs' },
+            { id: 'OA-005', name: 'Wells Fargo' }
+        ];
+        return originators[Utils.randomBetween(0, originators.length - 1)];
+    },
+    getWeekKey(date) {
+        const temp = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+        const day = temp.getUTCDay() || 7;
+        temp.setUTCDate(temp.getUTCDate() + 4 - day);
+        const yearStart = new Date(Date.UTC(temp.getUTCFullYear(), 0, 1));
+        const week = Math.ceil((((temp - yearStart) / 86400000) + 1) / 7);
+        return `${temp.getUTCFullYear()}-W${week}`;
     },
 
     getRandomBorrower() {
@@ -258,6 +326,8 @@ const SimulationEngine = {
 
         // Reset time
         this.state.currentDate = new Date(this.state.startDate);
+        this.state.lastSyndicationWeek = null;
+        this.state.sessionStartIso = new Date().toISOString();
 
         // Reset agent wealth
         this.agentWealth = JSON.parse(JSON.stringify(this.initialAgentData));
@@ -275,10 +345,9 @@ const SimulationEngine = {
             AutoBidder.pendingBids = [];
         }
 
-        // Clear SyndiData mock data
-        if (typeof SyndiData !== 'undefined') {
-            SyndiData.syndications = [];
-            SyndiData.transactions = [];
+        // Clear SyndiData simulation data (preserves mock data)
+        if (typeof SyndiData !== 'undefined' && SyndiData.reset) {
+            SyndiData.reset();
         }
 
         // Clear localStorage
