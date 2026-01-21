@@ -83,7 +83,8 @@ const App = {
             { name: 'Analytics', el: window.AnalyticsComponent },
             { name: 'Alerts', el: window.AlertsComponent },
             { name: 'RoleRouter', el: window.RoleRouter },
-            { name: 'AutoBidder', el: window.AutoBidder }
+            { name: 'AutoBidder', el: window.AutoBidder },
+            { name: 'OriginatorDashboard', el: window.OriginatorDashboard }
         ];
 
         for (const component of components) {

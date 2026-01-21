@@ -10,7 +10,8 @@ const Router = {
         '/participants/:id': 'participant-portfolio',
         '/analytics': 'analytics',
         '/settings': 'settings',
-        '/originate': 'originate'
+        '/originate': 'originate',
+        '/originator': 'originator'
     },
     currentRoute: null,
 
