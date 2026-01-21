@@ -358,7 +358,7 @@ const SimulationEngine = {
 
         // Force UI re-render
         if (window.PipelineComponent) PipelineComponent.render();
-        if (window.MetricsComponent) MetricsComponent.updateMetrics();
+        if (window.MetricsComponent) MetricsComponent.updateMetrics({});
 
         this.emit('simulationReset', { date: this.state.currentDate });
 

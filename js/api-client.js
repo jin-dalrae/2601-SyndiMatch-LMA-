@@ -345,7 +345,7 @@ const APIClient = {
 
     async checkConnection() {
         try {
-            const readyResponse = await fetch(`${this.baseUrl.replace('/api', '')}/ready`, {
+            const readyResponse = await fetch(`${this.baseUrl}/ready`, {
                 signal: AbortSignal.timeout(3000)
             }).catch(() => null);
 
