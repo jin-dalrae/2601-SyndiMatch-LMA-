@@ -40,6 +40,10 @@ const App = {
             // 6. Start Background Processes
             this.startBackgroundProcesses();
 
+            // 7. Trigger initial view render (components are now ready)
+            const currentView = AppState?.get('currentView') || 'landing';
+            this.switchView(currentView);
+
             this.initialized = true;
             console.log('✅ SyndiMatch Ready');
 
@@ -84,7 +88,9 @@ const App = {
             { name: 'Alerts', el: window.AlertsComponent },
             { name: 'RoleRouter', el: window.RoleRouter },
             { name: 'AutoBidder', el: window.AutoBidder },
-            { name: 'OriginatorDashboard', el: window.OriginatorDashboard }
+            { name: 'OriginatorDashboard', el: window.OriginatorDashboard },
+            { name: 'ParticipantDashboard', el: window.ParticipantDashboard },
+            { name: 'LandingPage', el: window.LandingPage }
         ];
 
         for (const component of components) {

@@ -53,10 +53,8 @@ const SyndiData = {
     // ========================================
 
     async init() {
-        // Initial sync if not in mock mode
-        if (window.API && !window.API.useMockData) {
-            await this.refresh();
-        }
+        // Always try to load from API on init
+        await this.refresh();
 
         // Start live sync (polling/websockets)
         if (window.WebSocketManager) {
@@ -65,18 +63,25 @@ const SyndiData = {
     },
 
     async refresh() {
-        if (!window.API || window.API.useMockData) return false;
-
         try {
-            const json = await window.API.get('server', '/all-data');
-            if (json) {
-                this.updateFromLive(json);
-                return true;
+            // Try using API wrapper first
+            if (window.API && !window.API.useMockData) {
+                const allData = await window.API.get('server', '/all-data');
+                if (allData) {
+                    this.updateFromLive(allData);
+                    return true;
+                }
             }
-            const syndications = await window.API.get('server', '/syndications');
-            if (syndications) {
-                this.updateFromLive({ syndications });
-                return true;
+
+            // Fallback: direct fetch for syndications (always try this if API wrapper fails)
+            const response = await fetch('/api/syndications');
+            if (response.ok) {
+                const syndications = await response.json();
+                if (Array.isArray(syndications) && syndications.length > 0) {
+                    this.updateFromLive({ syndications });
+                    console.log(`✓ Loaded ${syndications.length} syndications from database`);
+                    return true;
+                }
             }
         } catch (e) {
             console.warn('⚠️ SyndiData sync failed:', e.message);

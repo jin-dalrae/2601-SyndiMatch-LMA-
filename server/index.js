@@ -479,10 +479,10 @@ app.get('/api/agents/health', async (req, res) => {
         const result = await callAgentsService('/api/health');
         res.json({ ...result, agents_service_url: AGENTS_SERVICE_URL });
     } catch (error) {
-        res.status(503).json({ 
-            status: 'unhealthy', 
+        res.status(503).json({
+            status: 'unhealthy',
             agents_service_url: AGENTS_SERVICE_URL,
-            error: 'Agents service unavailable' 
+            error: 'Agents service unavailable'
         });
     }
 });
@@ -804,6 +804,45 @@ app.post('/api/x402/break-fee', async (req, res) => {
     }
 });
 
+// ========================================
+// SPA Catch-All Route for Client-Side Routing
+// Must be AFTER all API routes
+// ========================================
+const path = require('path');
+
+// Client-side routes that should serve index.html
+const clientRoutes = [
+    '/landing',
+    '/overview',
+    '/orchestration',
+    '/payments',
+    '/analytics',
+    '/transactions',
+    '/settings',
+    '/originate',
+    '/originator',
+    '/participant',
+    '/syndications',
+    '/participants'
+];
+
+// Catch-all handler: serve index.html for client-side routes
+// Use regex pattern for Express 5.x compatibility
+app.get(/^\/(?!api).*/, (req, res, next) => {
+    // Check if this is a client-side route or root
+    const isClientRoute = req.path === '/' ||
+        clientRoutes.some(route => req.path.startsWith(route)) ||
+        req.path.match(/^\/SYND-/i);
+
+    if (isClientRoute) {
+        // Serve index.html for SPA routing
+        res.sendFile(path.join(__dirname, '..', 'index.html'));
+    } else {
+        // Let express.static handle actual files
+        next();
+    }
+});
+
 // Start server
 async function startServer() {
     try {
@@ -814,6 +853,7 @@ async function startServer() {
             console.log(`📊 Dashboard available at http://0.0.0.0:${PORT}`);
             console.log(`💳 x402 Mock Payment endpoints active`);
             console.log(`🔗 MongoDB connected`);
+            console.log(`🧭 SPA routing enabled (History API)`);
         });
     } catch (error) {
         console.error('❌ Failed to start server:', error);

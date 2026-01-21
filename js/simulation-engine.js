@@ -41,14 +41,14 @@ const SimulationEngine = {
      */
     init() {
         this.loadState();
-        this.renderControls();
+        // this.renderControls(); // Disabled - simulation bar removed
         this.updateDisplay();
         this.loadOriginators();
         this.loadParticipants();
 
-        // Listen for role changes - re-render controls to show/hide admin buttons
+        // Listen for role changes
         window.addEventListener('roleChange', () => {
-            this.renderControls();
+            // this.renderControls(); // Disabled - simulation bar removed
             this.updateDisplay();
         });
 

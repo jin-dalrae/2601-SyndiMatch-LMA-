@@ -300,7 +300,7 @@ const AgentsComponent = {
 
         // Build syndication cards grid
         const cardsHtml = syndications.length > 0 ? syndications.map(s => `
-            <div class="orch-synd-card" data-synd-id="${s.id}" onclick="window.location.hash='${s.id}/orchestration'">
+            <div class="orch-synd-card" data-synd-id="${s.id}" onclick="Router.navigate('/${s.id}/orchestration')">
                 <div class="orch-card-header">
                     <span class="orch-card-id">${s.id}</span>
                     <span class="orch-card-status status-${s.status}">${s.status}</span>

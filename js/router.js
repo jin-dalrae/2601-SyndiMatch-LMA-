@@ -1,27 +1,51 @@
 /**
  * SyndiMatch Router
- * Simple hash-based client-side router
+ * History API-based client-side router (no hash #)
+ * Routes persist on page refresh
  */
 const Router = {
     routes: {
-        '/': 'overview',
+        '/': 'landing',
+        '/landing': 'landing',
         '/overview': 'overview',
-        '/syndications/:id': 'syndication-detail',
-        '/participants/:id': 'participant-portfolio',
+        '/orchestration': 'orchestration',
+        '/payments': 'payments',
         '/analytics': 'analytics',
+        '/transactions': 'transactions',
         '/settings': 'settings',
         '/originate': 'originate',
-        '/originator': 'originator'
+        '/originator': 'originator',
+        '/participant': 'participant',
+        '/syndications/:id': 'syndication-detail',
+        '/participants/:id': 'participant-portfolio'
     },
     currentRoute: null,
+    initialized: false,
 
     init() {
-        // Handle hash changes
-        window.addEventListener('hashchange', () => this.handleRoute());
-        // Handle initial load
-        window.addEventListener('load', () => this.handleRoute());
+        if (this.initialized) return;
+        this.initialized = true;
 
-        console.log('🧭 Router initialized');
+        // Handle browser back/forward buttons
+        window.addEventListener('popstate', () => this.handleRoute());
+
+        // Handle initial page load - use current pathname
+        this.handleRoute();
+
+        // Intercept all link clicks for SPA navigation
+        document.addEventListener('click', (e) => {
+            const link = e.target.closest('a[href]');
+            if (link) {
+                const href = link.getAttribute('href');
+                // Only handle internal links (starting with /)
+                if (href && href.startsWith('/') && !href.startsWith('//')) {
+                    e.preventDefault();
+                    this.navigate(href);
+                }
+            }
+        });
+
+        console.log('🧭 Router initialized (History API)');
     },
 
     /**
@@ -32,21 +56,25 @@ const Router = {
     },
 
     /**
-     * Navigate to a path
+     * Navigate to a path using History API
      */
     navigate(path) {
-        window.location.hash = path;
+        // Don't navigate if already on this path
+        if (window.location.pathname === path) return;
+
+        window.history.pushState({}, '', path);
+        this.handleRoute();
     },
 
     /**
      * Handle route change
      */
     handleRoute() {
-        const hash = window.location.hash.slice(1) || '/';
-        const [path, queryString] = hash.split('?');
-        const queryParams = new URLSearchParams(queryString);
+        // Get the actual pathname (no hash)
+        const path = window.location.pathname || '/';
+        const queryParams = new URLSearchParams(window.location.search);
 
-        let matchedView = 'overview';
+        let matchedView = null;
         let params = {};
 
         // Pattern match logic
@@ -74,12 +102,17 @@ const Router = {
             }
         }
 
-        // Fallback for sub-routes if not matched (e.g. SYND-xxx/orchestration)
-        const syndMatch = path.match(/^(SYND-[^/]+)\/?(orchestration|payments|transactions)?$/i);
+        // Fallback for sub-routes if not matched (e.g. /SYND-xxx/orchestration)
+        const syndMatch = path.match(/^\/(SYND-[^\/]+)\/?(?:orchestration|payments|transactions)?$/i);
         if (syndMatch) {
             matchedView = 'syndication-detail';
             params.id = syndMatch[1];
             params.subPage = syndMatch[2] || 'orchestration';
+        }
+
+        // Default to overview if no route matched (not landing, as that requires explicit /)
+        if (!matchedView) {
+            matchedView = 'overview';
         }
 
         // Update AppState

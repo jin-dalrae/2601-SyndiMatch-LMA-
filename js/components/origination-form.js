@@ -80,7 +80,7 @@ const OriginationForm = {
 
             // Navigate to the orchestration page for the new deal
             if (window.App) {
-                window.location.hash = `${synd._id || synd.syndication_id}/orchestration`;
+                Router.navigate(`/${synd._id || synd.syndication_id}/orchestration`);
             }
 
             statusEl.textContent = 'Live. Agents running.';

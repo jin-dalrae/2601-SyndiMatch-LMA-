@@ -14,14 +14,14 @@ const RoleRouter = {
         },
         originator: {
             name: 'Originator',
-            routes: ['overview', 'orchestration', 'my-deals', 'create-syndication', 'payments-received', 'analytics', 'settings'],
-            defaultRoute: 'overview',
+            routes: ['originator', 'overview', 'orchestration', 'my-deals', 'create-syndication', 'payments-received', 'analytics', 'settings'],
+            defaultRoute: 'originator',
             features: ['create-deal', 'fee-earnings']
         },
         participant: {
             name: 'Participant',
-            routes: ['overview', 'orchestration', 'available-deals', 'my-bids', 'portfolio', 'earnings', 'analytics', 'settings'],
-            defaultRoute: 'overview',
+            routes: ['participant', 'overview', 'orchestration', 'available-deals', 'my-bids', 'portfolio', 'earnings', 'analytics', 'settings'],
+            defaultRoute: 'participant',
             features: ['auto-bid', 'cancel-bid', 'wealth-tracking']
         }
     },
@@ -40,7 +40,27 @@ const RoleRouter = {
         await this.loadAgents(); // Load agents first
         this.bindRoleSelector();
         this.createRoleViews();
-        this.switchRole('platform', null);
+
+        // Check current URL path to determine initial role/route
+        const currentPath = window.location.pathname.replace(/^\//, '') || 'overview';
+
+        // Determine role based on current path
+        if (currentPath === 'originator' || currentPath.startsWith('originator')) {
+            this.currentRole = 'originator';
+            this.currentRoute = 'originator';
+        } else if (currentPath === 'participant' || currentPath.startsWith('participant')) {
+            this.currentRole = 'participant';
+            this.currentRoute = 'participant';
+        } else {
+            this.currentRole = 'platform';
+            this.currentRoute = currentPath;
+        }
+
+        // Update UI without forcing navigation (let Router handle it)
+        this.updateNavigation();
+        this.renderViewContent(this.currentRoute);
+
+        console.log(`🔀 RoleRouter initialized with route: ${this.currentRoute}`);
     },
 
     /**
@@ -199,15 +219,17 @@ const RoleRouter = {
 
         this.currentRoute = route;
 
+        // Update browser URL using History API
+        const newPath = `/${route}`;
+        if (window.location.pathname !== newPath) {
+            window.history.pushState({}, '', newPath);
+        }
+
         document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
 
         let targetView = document.getElementById(targetId);
         if (!targetView) {
             targetView = this.createView(route);
-        }
-
-        if (targetView) {
-            targetView.classList.add('active');
         }
 
         if (targetView) {
@@ -269,6 +291,17 @@ const RoleRouter = {
 
         if (route === 'overview' && this.currentRole === 'platform' && window.AdminView) {
             window.AdminView.renderDashboard(view);
+            return;
+        }
+
+        // Handle dedicated dashboards
+        if (route === 'participant' && window.ParticipantDashboard) {
+            window.ParticipantDashboard.render();
+            return;
+        }
+
+        if (route === 'originator' && window.OriginatorDashboard) {
+            window.OriginatorDashboard.render();
             return;
         }
 

@@ -7,17 +7,77 @@ const OriginatorDashboard = {
     selectedOriginatorId: 'OA-001',
     selectedSyndicationId: null,
     refreshInterval: null,
+    originatorsLoaded: false,
 
-    // Originator mapping
-    originators: {
-        'OA-001': 'JPMorgan Chase',
-        'OA-002': 'Bank of America',
-        'OA-003': 'Citigroup',
-        'OA-004': 'Goldman Sachs',
-        'OA-005': 'Wells Fargo',
-        'OA-006': 'BNP Paribas',
-        'OA-007': 'Barclays',
-        'OA-008': 'MUFG Bank'
+    // Originator mapping - loaded from database
+    originators: {},
+
+    // Load originators from database
+    async loadOriginators() {
+        if (this.originatorsLoaded) return;
+
+        try {
+            const response = await fetch('/api/originators');
+            if (response.ok) {
+                const data = await response.json();
+                if (Array.isArray(data) && data.length > 0) {
+                    this.originators = {};
+                    data.forEach(o => {
+                        const id = o._id || o.originator_id || o.id;
+                        // Use institution.name if available, otherwise fall back to entity or other name fields
+                        const name = o.institution?.name || o.entity || o.name || o.originator_name || `Originator ${id}`;
+                        this.originators[id] = name;
+                    });
+
+                    const firstId = Object.keys(this.originators)[0];
+                    if (firstId && !this.originators[this.selectedOriginatorId]) {
+                        this.selectedOriginatorId = firstId;
+                    }
+
+                    this.originatorsLoaded = true;
+                    console.log(`✓ Loaded ${Object.keys(this.originators).length} originators from database`);
+                    return;
+                }
+            }
+        } catch (err) {
+            console.warn('Failed to load originators from API, using defaults:', err);
+        }
+
+        // Fallback to defaults
+        this.originators = {
+            'OA-001': 'JPMorgan Chase',
+            'OA-002': 'Bank of America',
+            'OA-003': 'Citigroup',
+            'OA-004': 'Goldman Sachs',
+            'OA-005': 'Wells Fargo',
+            'OA-006': 'BNP Paribas',
+            'OA-007': 'Barclays',
+            'OA-008': 'MUFG Bank'
+        };
+        this.originatorsLoaded = true;
+    },
+
+    // Random data for form generation
+    randomBorrowers: [
+        'TechNova Industries', 'Apex Healthcare', 'Meridian Energy', 'Summit Financial',
+        'Atlas Manufacturing', 'Quantum Dynamics', 'Evergreen Holdings', 'Pacific Ventures',
+        'Nova Pharmaceuticals', 'Titan Aerospace', 'Pinnacle Logistics', 'Vertex Solutions',
+        'Horizon Telecom', 'Sterling Properties', 'Catalyst Innovations', 'Vanguard Systems',
+        'Nexus Global', 'Aurora Technologies', 'Spectrum Industries', 'Prime Capital'
+    ],
+
+    industries: ['Technology', 'Healthcare', 'Energy', 'Financial Services', 'Manufacturing', 'Real Estate', 'Consumer', 'Telecommunications'],
+    ratings: ['AAA', 'AA+', 'AA', 'AA-', 'A+', 'A', 'A-', 'BBB+', 'BBB', 'BBB-', 'BB+', 'BB', 'BB-', 'B+', 'B'],
+
+    // Generate random form data
+    generateRandomFormData() {
+        const borrower = this.randomBorrowers[Math.floor(Math.random() * this.randomBorrowers.length)];
+        const industry = this.industries[Math.floor(Math.random() * this.industries.length)];
+        const rating = this.ratings[Math.floor(Math.random() * this.ratings.length)];
+        const amount = Math.floor(Math.random() * 90 + 10) * 10; // 100-1000 in steps of 10
+        const spread = Math.floor(Math.random() * 50 + 20) * 5; // 100-350 in steps of 5
+
+        return { borrower, industry, rating, amount, spread };
     },
 
     init() {
@@ -25,13 +85,34 @@ const OriginatorDashboard = {
         if (window.AppState) {
             AppState.subscribe('currentView', (view) => {
                 if (view === 'originator') {
+                    this.showOriginatorMode();
                     this.render();
                     this.startAutoRefresh();
                 } else {
+                    this.hideOriginatorMode();
                     this.stopAutoRefresh();
                 }
             });
+
+            // Check if we're already on originator view (initial load)
+            const currentView = AppState.get('currentView');
+            if (currentView === 'originator') {
+                this.showOriginatorMode();
+                this.render();
+                this.startAutoRefresh();
+            }
         }
+
+        // Also listen for route changes directly
+        window.addEventListener('routeChanged', (e) => {
+            if (e.detail?.view === 'originator') {
+                this.showOriginatorMode();
+                this.render();
+                this.startAutoRefresh();
+            } else {
+                this.hideOriginatorMode();
+            }
+        });
 
         // Listen for data updates
         window.addEventListener('syndiDataRefresh', () => {
@@ -44,9 +125,30 @@ const OriginatorDashboard = {
         console.log('Originator Dashboard initialized');
     },
 
-    render() {
+    // Hide the main app header and metrics bar
+    showOriginatorMode() {
+        document.body.classList.add('originator-mode');
+        const header = document.querySelector('.header');
+        const metricsBar = document.querySelector('.metrics-bar');
+        if (header) header.style.display = 'none';
+        if (metricsBar) metricsBar.style.display = 'none';
+    },
+
+    // Restore the main app header and metrics bar
+    hideOriginatorMode() {
+        document.body.classList.remove('originator-mode');
+        const header = document.querySelector('.header');
+        const metricsBar = document.querySelector('.metrics-bar');
+        if (header) header.style.display = '';
+        if (metricsBar) metricsBar.style.display = '';
+    },
+
+    async render() {
         const container = document.getElementById('view-originator');
         if (!container) return;
+
+        // Load originators from database first
+        await this.loadOriginators();
 
         container.innerHTML = `
             <div class="originator-dashboard">
@@ -68,12 +170,12 @@ const OriginatorDashboard = {
     renderHeader() {
         return `
             <div class="originator-header">
-                <div class="originator-header-left">
-                    <h1>Originator Dashboard</h1>
-                    <p>Create and monitor syndications</p>
-                </div>
+                <a href="/" class="originator-logo">
+                    <div class="originator-logo-icon">S</div>
+                    <span class="originator-logo-text">SyndiMatch</span>
+                </a>
                 <div class="originator-selector">
-                    <label>Acting as:</label>
+                    <label>Originator:</label>
                     <select id="originator-select">
                         ${Object.entries(this.originators).map(([id, name]) => `
                             <option value="${id}" ${id === this.selectedOriginatorId ? 'selected' : ''}>${name}</option>
@@ -91,32 +193,30 @@ const OriginatorDashboard = {
                 <div class="originator-metric-card">
                     <div class="originator-metric-label">Active Deals</div>
                     <div class="originator-metric-value">${metrics.activeDeals}</div>
-                    <div class="originator-metric-change ${metrics.activeDealsChange >= 0 ? 'positive' : 'negative'}">
-                        ${metrics.activeDealsChange >= 0 ? '+' : ''}${metrics.activeDealsChange} this week
-                    </div>
+                    <div class="originator-metric-change neutral">in progress</div>
                 </div>
                 <div class="originator-metric-card">
                     <div class="originator-metric-label">Total Value</div>
-                    <div class="originator-metric-value">${this.formatCurrency(metrics.totalValue)}</div>
-                    <div class="originator-metric-change positive">in pipeline</div>
+                    <div class="originator-metric-value">${metrics.totalValue > 0 ? this.formatCurrency(metrics.totalValue) : '$0'}</div>
+                    <div class="originator-metric-change neutral">in pipeline</div>
                 </div>
                 <div class="originator-metric-card">
                     <div class="originator-metric-label">Avg Subscription</div>
                     <div class="originator-metric-value">${metrics.avgSubscription}%</div>
                     <div class="originator-metric-change ${metrics.avgSubscription >= 80 ? 'positive' : 'neutral'}">
-                        ${metrics.avgSubscription >= 100 ? 'fully subscribed' : 'across active'}
+                        ${metrics.avgSubscription >= 100 ? 'fully subscribed' : metrics.activeDeals > 0 ? 'across active' : 'no active deals'}
                     </div>
                 </div>
                 <div class="originator-metric-card">
-                    <div class="originator-metric-label">Fees YTD</div>
-                    <div class="originator-metric-value">${this.formatCurrency(metrics.feesYTD)}</div>
-                    <div class="originator-metric-change positive">collected</div>
+                    <div class="originator-metric-label">Fees Collected</div>
+                    <div class="originator-metric-value">${metrics.feesYTD > 0 ? this.formatCurrency(metrics.feesYTD) : '$0'}</div>
+                    <div class="originator-metric-change neutral">from completed</div>
                 </div>
                 <div class="originator-metric-card">
                     <div class="originator-metric-label">Success Rate</div>
                     <div class="originator-metric-value">${metrics.successRate}%</div>
                     <div class="originator-metric-change ${metrics.successRate >= 90 ? 'positive' : 'neutral'}">
-                        deals closed
+                        ${metrics.successRate > 0 ? 'deals closed' : 'no data yet'}
                     </div>
                 </div>
             </div>
@@ -124,54 +224,44 @@ const OriginatorDashboard = {
     },
 
     renderCreateForm() {
+        const randomData = this.generateRandomFormData();
+
         return `
             <section class="create-syndication-section">
-                <h2>Create Syndication</h2>
+                <div class="section-header-row">
+                    <h2>Create Syndication</h2>
+                    <button type="button" class="btn-randomize" id="btn-randomize" title="Generate random values">
+                        🎲 Randomize
+                    </button>
+                </div>
                 <form id="originator-create-form" class="create-form">
                     <div class="form-group">
                         <label>Borrower</label>
-                        <input type="text" name="borrower" placeholder="Acme Holdings" required />
+                        <input type="text" name="borrower" id="form-borrower" value="${randomData.borrower}" required />
                     </div>
                     <div class="form-group">
                         <label>Industry</label>
-                        <select name="industry">
-                            <option value="Technology">Technology</option>
-                            <option value="Healthcare">Healthcare</option>
-                            <option value="Energy">Energy</option>
-                            <option value="Financial Services">Financial Services</option>
-                            <option value="Manufacturing">Manufacturing</option>
-                            <option value="Real Estate">Real Estate</option>
-                            <option value="Consumer">Consumer</option>
-                            <option value="Telecommunications">Telecommunications</option>
+                        <select name="industry" id="form-industry">
+                            ${this.industries.map(ind => `
+                                <option value="${ind}" ${ind === randomData.industry ? 'selected' : ''}>${ind}</option>
+                            `).join('')}
                         </select>
                     </div>
                     <div class="form-group">
                         <label>Amount ($M)</label>
-                        <input type="number" name="amount" min="10" step="10" placeholder="500" required />
+                        <input type="number" name="amount" id="form-amount" min="10" step="10" value="${randomData.amount}" required />
                     </div>
                     <div class="form-group">
                         <label>Rating</label>
-                        <select name="rating">
-                            <option value="AAA">AAA</option>
-                            <option value="AA+">AA+</option>
-                            <option value="AA">AA</option>
-                            <option value="AA-">AA-</option>
-                            <option value="A+">A+</option>
-                            <option value="A">A</option>
-                            <option value="A-">A-</option>
-                            <option value="BBB+">BBB+</option>
-                            <option value="BBB" selected>BBB</option>
-                            <option value="BBB-">BBB-</option>
-                            <option value="BB+">BB+</option>
-                            <option value="BB">BB</option>
-                            <option value="BB-">BB-</option>
-                            <option value="B+">B+</option>
-                            <option value="B">B</option>
+                        <select name="rating" id="form-rating">
+                            ${this.ratings.map(r => `
+                                <option value="${r}" ${r === randomData.rating ? 'selected' : ''}>${r}</option>
+                            `).join('')}
                         </select>
                     </div>
                     <div class="form-group full-width">
                         <label>Initial Spread (bps)</label>
-                        <input type="number" name="spread" min="100" max="800" step="5" placeholder="400" required />
+                        <input type="number" name="spread" id="form-spread" min="100" max="800" step="5" value="${randomData.spread}" required />
                     </div>
                     <div class="form-actions">
                         <button type="submit" class="btn-create">Create & Announce</button>
@@ -207,7 +297,7 @@ const OriginatorDashboard = {
         const isSelected = synd.id === this.selectedSyndicationId;
         const subscription = synd.subscription || 0;
         const progressClass = subscription >= 100 ? 'high' : subscription >= 50 ? 'medium' : 'low';
-        const bidCount = synd.bids?.length || Math.floor(Math.random() * 15) + 3;
+        const bidCount = synd.bids?.length || 0;
 
         return `
             <div class="syndication-row ${isSelected ? 'selected' : ''}" data-synd-id="${synd.id}">
@@ -271,8 +361,8 @@ const OriginatorDashboard = {
             `;
         }
 
-        const bids = synd.bids || this.generateMockBids(synd);
-        const allocations = this.generateAllocations(synd, bids);
+        const bids = synd.bids || [];
+        const allocations = synd.allocations || this.calculateAllocationsFromBids(synd, bids);
 
         return `
             <div class="detail-content">
@@ -310,35 +400,44 @@ const OriginatorDashboard = {
                 <!-- Recent Bids -->
                 <div class="detail-section">
                     <h3>Recent Bids (${bids.length})</h3>
-                    <div class="bids-list">
-                        ${bids.slice(0, 5).map(bid => `
-                            <div class="bid-item">
-                                <div>
-                                    <span class="bid-participant">${bid.participant}</span>
-                                    <span class="bid-time">${bid.time}</span>
+                    ${bids.length === 0 ? `
+                        <div class="empty-bids">No bids yet</div>
+                    ` : `
+                        <div class="bids-list">
+                            ${bids.slice(0, 5).map(bid => `
+                                <div class="bid-item">
+                                    <div>
+                                        <span class="bid-participant">${bid.participant || bid.participant_id || 'Unknown'}</span>
+                                        <span class="bid-time">${this.formatBidTime(bid.timestamp || bid.time)}</span>
+                                    </div>
+                                    <span class="bid-amount">$${bid.amount || bid.commitment_amount || 0}M</span>
                                 </div>
-                                <span class="bid-amount">$${bid.amount}M</span>
-                            </div>
-                        `).join('')}
-                        ${bids.length > 5 ? `<div class="bid-item" style="justify-content:center;color:var(--text-muted);">+${bids.length - 5} more bids</div>` : ''}
-                    </div>
+                            `).join('')}
+                            ${bids.length > 5 ? `<div class="bid-item" style="justify-content:center;color:var(--text-muted);">+${bids.length - 5} more bids</div>` : ''}
+                        </div>
+                    `}
                 </div>
 
                 <!-- Allocations (if closing/completed) -->
                 ${['closing', 'settlement', 'funding', 'completed'].includes(synd.status) ? `
                 <div class="detail-section">
                     <h3>Allocations</h3>
-                    <div class="allocations-list">
-                        ${allocations.slice(0, 5).map(alloc => `
-                            <div class="allocation-item">
-                                <span class="allocation-participant">${alloc.participant}</span>
-                                <div>
-                                    <span class="allocation-amount">$${alloc.amount}M</span>
-                                    <span class="allocation-share">(${alloc.share}%)</span>
+                    ${allocations.length === 0 ? `
+                        <div class="empty-bids">No allocations finalized</div>
+                    ` : `
+                        <div class="allocations-list">
+                            ${allocations.slice(0, 5).map(alloc => `
+                                <div class="allocation-item">
+                                    <span class="allocation-participant">${alloc.participant}</span>
+                                    <div>
+                                        <span class="allocation-amount">$${alloc.amount}M</span>
+                                        <span class="allocation-share">(${alloc.share}%)</span>
+                                    </div>
                                 </div>
-                            </div>
-                        `).join('')}
-                    </div>
+                            `).join('')}
+                            ${allocations.length > 5 ? `<div class="allocation-item" style="justify-content:center;color:var(--text-muted);">+${allocations.length - 5} more</div>` : ''}
+                        </div>
+                    `}
                 </div>
                 ` : ''}
 
@@ -399,16 +498,24 @@ const OriginatorDashboard = {
             ? Math.round(active.reduce((sum, s) => sum + (s.subscription || 0), 0) / active.length)
             : 0;
 
-        // Estimate fees (2% of completed deal value)
+        // Calculate fees from completed deals (2% arrangement fee)
         const feesYTD = completed.reduce((sum, s) => sum + ((s.amount || 0) * 0.02), 0) * 1000000;
 
         const successRate = syndications.length > 0
             ? Math.round((completed.length / syndications.length) * 100)
-            : 100;
+            : 0;
+
+        // Count deals created this week (real data)
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+        const dealsThisWeek = syndications.filter(s => {
+            const created = s.createdAt ? new Date(s.createdAt) : null;
+            return created && created >= oneWeekAgo;
+        }).length;
 
         return {
             activeDeals: active.length,
-            activeDealsChange: Math.floor(Math.random() * 3),
+            activeDealsChange: dealsThisWeek,
             totalValue: totalValue * 1000000,
             avgSubscription: avgSub,
             feesYTD: feesYTD,
@@ -423,8 +530,8 @@ const OriginatorDashboard = {
         return SyndiData.syndications.filter(s => {
             // Match by originator name or ID
             return s.originator === originatorName ||
-                   s.originator_agent_id === this.selectedOriginatorId ||
-                   s.originatorId === this.selectedOriginatorId;
+                s.originator_agent_id === this.selectedOriginatorId ||
+                s.originatorId === this.selectedOriginatorId;
         });
     },
 
@@ -433,51 +540,53 @@ const OriginatorDashboard = {
         return SyndiData.syndications.find(s => s.id === id);
     },
 
-    generateMockBids(synd) {
-        const participants = [
-            'Apollo Global', 'CalPERS', 'BNP Paribas AM', 'MUFG Bank',
-            'Palmer Square', 'PNC Bank', 'Ares Management', 'MetLife',
-            'Blackstone', 'KKR', 'Carlyle Group', 'Goldman Sachs AM'
-        ];
+    // Calculate allocations from accepted bids (real data)
+    calculateAllocationsFromBids(synd, bids) {
+        if (!bids || bids.length === 0) return [];
 
-        const count = Math.floor(Math.random() * 8) + 4;
-        const bids = [];
-
-        for (let i = 0; i < count; i++) {
-            bids.push({
-                participant: participants[Math.floor(Math.random() * participants.length)],
-                amount: Math.floor(Math.random() * 50) + 10,
-                time: `${Math.floor(Math.random() * 12) + 1}h ago`
-            });
-        }
-
-        return bids;
-    },
-
-    generateAllocations(synd, bids) {
         const totalAmount = synd.amount || 100;
         const allocations = [];
-        let remaining = totalAmount;
 
-        const uniqueParticipants = [...new Set(bids.map(b => b.participant))];
+        // Group bids by participant and sum their amounts
+        const participantTotals = {};
+        bids.forEach(bid => {
+            const participant = bid.participant || bid.participant_id || 'Unknown';
+            const amount = bid.amount || bid.commitment_amount || 0;
+            if (!participantTotals[participant]) {
+                participantTotals[participant] = 0;
+            }
+            participantTotals[participant] += amount;
+        });
 
-        uniqueParticipants.forEach((participant, idx) => {
-            if (remaining <= 0) return;
-
-            const amount = idx === uniqueParticipants.length - 1
-                ? remaining
-                : Math.min(remaining, Math.floor(Math.random() * 30) + 10);
-
+        // Convert to allocations array
+        Object.entries(participantTotals).forEach(([participant, amount]) => {
             allocations.push({
                 participant,
                 amount,
-                share: Math.round((amount / totalAmount) * 100)
+                share: totalAmount > 0 ? Math.round((amount / totalAmount) * 100) : 0
             });
-
-            remaining -= amount;
         });
 
+        // Sort by amount descending
+        allocations.sort((a, b) => b.amount - a.amount);
+
         return allocations;
+    },
+
+    // Format bid time from timestamp
+    formatBidTime(timestamp) {
+        if (!timestamp) return 'Just now';
+        const now = new Date();
+        const bidTime = new Date(timestamp);
+        const diffMs = now - bidTime;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMins / 60);
+        const diffDays = Math.floor(diffHours / 24);
+
+        if (diffDays > 0) return `${diffDays}d ago`;
+        if (diffHours > 0) return `${diffHours}h ago`;
+        if (diffMins > 0) return `${diffMins}m ago`;
+        return 'Just now';
     },
 
     formatCurrency(value) {
@@ -507,11 +616,33 @@ const OriginatorDashboard = {
             form.addEventListener('submit', (e) => this.handleCreateSubmit(e));
         }
 
+        // Randomize button
+        const randomizeBtn = document.getElementById('btn-randomize');
+        if (randomizeBtn) {
+            randomizeBtn.addEventListener('click', () => this.randomizeFormFields());
+        }
+
         // Syndication row clicks
         this.attachRowListeners();
 
         // Detail panel actions
         this.attachDetailActionListeners();
+    },
+
+    randomizeFormFields() {
+        const data = this.generateRandomFormData();
+
+        const borrowerInput = document.getElementById('form-borrower');
+        const industrySelect = document.getElementById('form-industry');
+        const amountInput = document.getElementById('form-amount');
+        const ratingSelect = document.getElementById('form-rating');
+        const spreadInput = document.getElementById('form-spread');
+
+        if (borrowerInput) borrowerInput.value = data.borrower;
+        if (industrySelect) industrySelect.value = data.industry;
+        if (amountInput) amountInput.value = data.amount;
+        if (ratingSelect) ratingSelect.value = data.rating;
+        if (spreadInput) spreadInput.value = data.spread;
     },
 
     attachRowListeners() {
@@ -537,7 +668,7 @@ const OriginatorDashboard = {
                 const syndId = e.currentTarget.dataset.syndId;
 
                 if (action === 'view-detail' && syndId) {
-                    window.location.hash = `${syndId}/orchestration`;
+                    Router.navigate(`/${syndId}/orchestration`);
                 } else if (action === 'run-agents' && syndId) {
                     this.runAgents(syndId);
                 }
@@ -570,7 +701,9 @@ const OriginatorDashboard = {
                     subscription: 0,
                     status: 'open',
                     round: 1,
-                    bids: []
+                    bids: [],
+                    allocations: [],
+                    createdAt: new Date().toISOString()
                 };
 
                 if (window.SyndiData) {
@@ -589,12 +722,15 @@ const OriginatorDashboard = {
                         amount: synd.amount,
                         rating: synd.rating,
                         originator: synd.originator,
+                        originator_agent_id: synd.originator_agent_id || this.selectedOriginatorId,
                         industry: synd.industry,
                         spread: synd.spread,
                         subscription: synd.subscription || 0,
                         status: synd.status || 'open',
                         round: synd.round || 1,
-                        bids: []
+                        bids: synd.bids || [],
+                        allocations: synd.allocations || [],
+                        createdAt: synd.created_at || synd.createdAt || new Date().toISOString()
                     };
                     SyndiData.syndications.unshift(entry);
                     window.dispatchEvent(new CustomEvent('newSyndication', { detail: entry }));
@@ -670,32 +806,30 @@ const OriginatorDashboard = {
             <div class="originator-metric-card">
                 <div class="originator-metric-label">Active Deals</div>
                 <div class="originator-metric-value">${metrics.activeDeals}</div>
-                <div class="originator-metric-change ${metrics.activeDealsChange >= 0 ? 'positive' : 'negative'}">
-                    ${metrics.activeDealsChange >= 0 ? '+' : ''}${metrics.activeDealsChange} this week
-                </div>
+                <div class="originator-metric-change neutral">in progress</div>
             </div>
             <div class="originator-metric-card">
                 <div class="originator-metric-label">Total Value</div>
-                <div class="originator-metric-value">${this.formatCurrency(metrics.totalValue)}</div>
-                <div class="originator-metric-change positive">in pipeline</div>
+                <div class="originator-metric-value">${metrics.totalValue > 0 ? this.formatCurrency(metrics.totalValue) : '$0'}</div>
+                <div class="originator-metric-change neutral">in pipeline</div>
             </div>
             <div class="originator-metric-card">
                 <div class="originator-metric-label">Avg Subscription</div>
                 <div class="originator-metric-value">${metrics.avgSubscription}%</div>
                 <div class="originator-metric-change ${metrics.avgSubscription >= 80 ? 'positive' : 'neutral'}">
-                    ${metrics.avgSubscription >= 100 ? 'fully subscribed' : 'across active'}
+                    ${metrics.avgSubscription >= 100 ? 'fully subscribed' : metrics.activeDeals > 0 ? 'across active' : 'no active deals'}
                 </div>
             </div>
             <div class="originator-metric-card">
-                <div class="originator-metric-label">Fees YTD</div>
-                <div class="originator-metric-value">${this.formatCurrency(metrics.feesYTD)}</div>
-                <div class="originator-metric-change positive">collected</div>
+                <div class="originator-metric-label">Fees Collected</div>
+                <div class="originator-metric-value">${metrics.feesYTD > 0 ? this.formatCurrency(metrics.feesYTD) : '$0'}</div>
+                <div class="originator-metric-change neutral">from completed</div>
             </div>
             <div class="originator-metric-card">
                 <div class="originator-metric-label">Success Rate</div>
                 <div class="originator-metric-value">${metrics.successRate}%</div>
                 <div class="originator-metric-change ${metrics.successRate >= 90 ? 'positive' : 'neutral'}">
-                    deals closed
+                    ${metrics.successRate > 0 ? 'deals closed' : 'no data yet'}
                 </div>
             </div>
         `;

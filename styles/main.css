@@ -156,12 +156,10 @@ select {
     align-items: center;
     justify-content: space-between;
     padding: 0.5rem 1.5rem;
-    /* Slimmer */
     background: var(--bg-elevated);
     border-bottom: 1px solid var(--border-color);
     position: sticky;
-    top: 40px;
-    /* Below sim bar */
+    top: 0;
     z-index: var(--z-dropdown);
 }
 

@@ -38,8 +38,12 @@ const PaymentsComponent = {
     detectActiveSyndication() {
         if (window.AppState && AppState.get('currentSyndicationId')) {
             this.state.activeSyndicationId = AppState.get('currentSyndicationId');
-        } else if (window.location.hash?.includes('syndicationId=')) {
-            const match = window.location.hash.match(/syndicationId=([^&]+)/);
+        } else if (window.location.search?.includes('syndicationId=')) {
+            const params = new URLSearchParams(window.location.search);
+            const syndId = params.get('syndicationId');
+            if (syndId) this.state.activeSyndicationId = syndId;
+        } else if (window.location.pathname?.match(/SYND-/i)) {
+            const match = window.location.pathname.match(/(SYND-[^\/]+)/i);
             if (match) this.state.activeSyndicationId = match[1];
         }
 
