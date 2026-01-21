@@ -16,6 +16,8 @@ const Router = {
         '/originate': 'originate',
         '/originator': 'originator',
         '/participant': 'participant',
+        '/agent-rules': 'agent-rules',
+        '/syndication-process': 'syndication-process',
         '/syndications/:id': 'syndication-detail',
         '/participants/:id': 'participant-portfolio'
     },

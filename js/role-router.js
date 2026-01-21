@@ -336,6 +336,16 @@ const RoleRouter = {
                     AgentOrchestration.render(view);
                 }
                 break;
+            case 'agent-rules':
+                if (window.AgentRulesetPage) {
+                    AgentRulesetPage.render(view);
+                }
+                break;
+            case 'syndication-process':
+                if (window.ProcessDetailsPage) {
+                    ProcessDetailsPage.render(view);
+                }
+                break;
             case 'settings':
                 this.renderSettings(view);
                 break;
