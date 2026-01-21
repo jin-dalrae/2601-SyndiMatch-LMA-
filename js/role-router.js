@@ -8,8 +8,8 @@ const RoleRouter = {
     roles: {
         platform: {
             name: 'Platform Admin',
-            routes: ['overview', 'orchestration', 'payments', 'analytics', 'transactions'],
-            defaultRoute: 'overview',
+            routes: ['platform', 'overview', 'orchestration', 'payments', 'analytics', 'transactions'],
+            defaultRoute: 'platform',
             features: ['simulation-controls', 'global-stats', 'all-agents']
         },
         originator: {
@@ -190,6 +190,7 @@ const RoleRouter = {
      */
     getRouteLabel(route) {
         const labels = {
+            'platform': 'Platform',
             'overview': 'Overview',
             'orchestration': 'Orchestration',
             'payments': 'Payments',
@@ -302,6 +303,11 @@ const RoleRouter = {
 
         if (route === 'originator' && window.OriginatorDashboard) {
             window.OriginatorDashboard.render();
+            return;
+        }
+
+        if (route === 'platform' && window.PlatformDashboard) {
+            window.PlatformDashboard.render();
             return;
         }
 
