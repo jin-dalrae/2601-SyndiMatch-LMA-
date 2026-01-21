@@ -73,8 +73,8 @@ const SyndiData = {
                 }
             }
 
-            // Fallback: direct fetch for syndications (always try this if API wrapper fails)
-            const response = await fetch('/api/syndications');
+            // Fallback: direct fetch for syndications (limited to prevent timeout)
+            const response = await fetch('/api/syndications?limit=100');
             if (response.ok) {
                 const syndications = await response.json();
                 if (Array.isArray(syndications) && syndications.length > 0) {
