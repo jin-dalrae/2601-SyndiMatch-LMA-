@@ -142,16 +142,13 @@ The role dropdown (top right) swaps the active view and feature set. Selector va
 │   ├── auto-generator.js      # Client-side syndication generator
 │   ├── market-conditions.js   # Volatility / spread regime model
 │   ├── agent-orchestration.js # Frontend agent state model
-│   ├── components/            # 18 components: dashboards, pipeline, payments, etc.
-│   └── services/              # Orphaned: market-data-provider.js, metrics-service.js
+│   └── components/            # 16 components: dashboards, pipeline, payments, etc.
 ├── styles/                    # main, components, originator, participant, landing, form-enhanced
 ├── server/
 │   ├── index.js               # Express app, all routes (903 LOC)
 │   ├── db.js                  # Mongo connection
 │   ├── seed.js                # Legacy seed (smaller dataset, partial coverage)
-│   ├── agents-seed.js         # Data-only module (no entrypoint)
-│   └── check_*.js, count_*.js, compare_*.js, list_collections.js
-│                              # One-off debug scripts (move to scripts/ in phase 2)
+│   └── scripts/               # Ad-hoc Mongo inspection scripts (see scripts/README.md)
 ├── agents/
 │   ├── server.py              # FastAPI app
 │   ├── config.py              # Env + feature flags, SIMULATION_MODE toggle
@@ -226,11 +223,11 @@ Python agents service on `:8000` exposes `/api/health`, `/api/all-data`, `/api/s
 
 ## Deployment
 
-- **Cloud Run**: `Dockerfile` (Node) and `agents/Dockerfile` build the two services separately. See [DEPLOYMENT.md](DEPLOYMENT.md) and [agents/CLOUDRUN_DEPLOYMENT.md](agents/CLOUDRUN_DEPLOYMENT.md). Recent gotchas in [QUICK_FIX.md](QUICK_FIX.md).
-- **Firebase Hosting**: `firebase.json` ships `index.html` + `js/` + `styles/`. `npm run deploy`. Static-only — points the frontend at a separately-hosted Node API.
-- **Local Docker**: root `Dockerfile` runs the Node API; pair with a Mongo container for an isolated demo.
+Full deploy guide: [DEPLOY.md](DEPLOY.md).
 
-Deploy docs are scattered across several files today; consolidation is queued for the refactor branch.
+- **Cloud Run** — two services (Node + Python), each deployed from `--source`, both scaling to zero.
+- **Firebase Hosting** — static frontend only; points at a separately-hosted Node API.
+- **Local Docker** — root `Dockerfile` for Node, `agents/Dockerfile` for Python.
 
 ---
 
@@ -239,7 +236,7 @@ Deploy docs are scattered across several files today; consolidation is queued fo
 The codebase is mid-refactor on `refactor/main`. Phases planned:
 
 1. **Phase 1 — Baseline (done)**: local boot reproducible, demo verified.
-2. **Phase 2 — Dead code + doc consolidation**: remove orphaned `js/services/`, `js/components/{originator,participant}-view.js`, move `server/check_*.js` into `server/scripts/`, fold 10 deployment docs into this README + a single DEPLOY.md.
+2. **Phase 2 — Dead code + doc consolidation (done)**: removed orphaned `js/services/`, `js/components/{originator,participant}-view.js`, `server/agents-seed.js`; relocated `server/check_*.js` into `server/scripts/`; folded 6 deployment docs into one [DEPLOY.md](DEPLOY.md).
 3. **Phase 3 — Backend modularize**: split `server/index.js` (903 LOC) into route modules; collapse `js/api.js` into `js/api-client.js`; fix the `/api/analytics/platform` 404 and `/api/agents/bid` 502 rate.
 4. **Phase 4 — Vite + ESM frontend**: replace 31 `<script>` globals with ES modules; break up the 40–52 KB dashboard components; remove the dual mock/sim/API data-source confusion.
 
