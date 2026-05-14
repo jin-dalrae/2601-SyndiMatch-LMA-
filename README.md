@@ -1,269 +1,257 @@
 # SyndiMatch
-### AI-Powered Loan Syndication Platform
 
-<p align="center">
-  <img src="public/syndimatch-logo.png" alt="SyndiMatch Logo" width="120"/>
-</p>
+AI-native loan syndication platform. Three-role demo (Platform Admin, Originator, Participant) over a Node API and a Python LangGraph agent service backed by MongoDB. Includes mock x402 micropayments and a built-in market simulation.
 
-<p align="center">
-  <strong>Transforming the $5.2 trillion loan syndication market with AI-driven automation</strong>
-</p>
+Business case lives in [PITCH_DECK.md](PITCH_DECK.md) and [PROJECT_DESCRIPTION.md](PROJECT_DESCRIPTION.md). This README covers what the code does and how to run it.
 
 ---
 
-## 📊 The Problem: A $5 Trillion Market Stuck in the 1990s
+## Status
 
-**Loan syndication** is how major banks distribute large corporate loans—$100M to $5B deals—among dozens of institutional investors. It's the backbone of U.S. corporate lending, funding everything from infrastructure projects to M&A financing.
+What works on `refactor/main` @ `f005f5c`, verified by clicking through a fresh local boot:
 
-### The Reality Today
+- Landing page → Platform Admin overview with seeded syndications in the pipeline
+- Originator dashboard: create-and-announce form POSTs to `/api/syndications`, persists to MongoDB, UI updates
+- Participant dashboard: 10 available deals (mix of seeded + client-side simulated), quick-bid buttons
+- Python agents service boots in `SIMULATION_MODE` (no Anthropic / Gemini keys required)
 
-| Pain Point | Current State | Business Impact |
-|------------|---------------|-----------------|
-| **Settlement Time** | 25-51+ days average | Liquidity risk, counterparty exposure |
-| **Manual Processes** | Spreadsheets, email, fax | $50K+ per deal in operational costs |
-| **Data Fragmentation** | Siloed systems, no standard formats | Compliance failures, reconciliation errors |
-| **Coordination Overhead** | 15-50 participants per deal | Lead arrangers need 2-3 FTEs per active deal |
-| **Pricing Opacity** | Phone calls, relationship-based | Suboptimal allocation, adverse selection |
+Known issues, not blocking the demo:
 
-> *"Despite efforts by LMA and LSTA to reduce settlement times, systemic inefficiencies persist. Many trades still settle over 51 days."* — McKinsey
+- `GET /api/analytics/platform` returns 404; polled every 10s
+- `POST /api/agents/bid` is flaky (~40% 502 rate via Node→Python proxy)
+- Metrics bar (`47 Active Participants / $550M / 94.2% Success`) is hardcoded HTML
+- `/api/all-data` merge logic duplicates syndications (matches on `_id` vs `id` inconsistently)
+- Frontend mixes real API data with client-side `SimulationEngine` data, two sources of truth
 
-### Why This Matters Now
-
-- **Rising interest rates** have reignited leveraged loan activity ($1.4T in 2024 issuance)
-- **Regulatory pressure** (Basel IV, CECL) demands better data and faster compliance
-- **Generative AI** has reached the capability threshold for complex financial reasoning
-- **Post-SVB environment** requires faster risk assessment and capital reallocation
+A refactor branch is in flight to address these — see [Roadmap](#roadmap).
 
 ---
 
-## 💡 The Solution: SyndiMatch
+## Quick start (local dev)
 
-SyndiMatch is an **AI-native syndication platform** that automates the entire loan syndication lifecycle—from deal origination to final settlement—using specialized LLM agents that reason, negotiate, and execute in real-time.
-
-### How It Works
-
-```mermaid
-graph LR
-    A[Originator Agent] --> B[Participant Agents]
-    B --> C[Negotiation Agent]
-    C --> D[Settlement Agent]
-    D --> E[Payment Agent]
-    
-    style A fill:#4f46e5
-    style B fill:#7c3aed
-    style C fill:#2563eb
-    style D fill:#0891b2
-    style E fill:#059669
-```
-
-| Agent | What It Does | Why It Matters |
-|-------|--------------|----------------|
-| **Originator** | Structures deals, sets initial pricing, selects target participants | Replaces 2-3 weeks of manual syndicate formation |
-| **Participant** | Evaluates deals against portfolio constraints, submits competitive bids | Enables 24/7 deal evaluation with consistent credit analysis |
-| **Negotiation** | Runs multi-round reverse auctions, finds clearing price | Eliminates back-and-forth phone negotiations |
-| **Settlement** | Manages documentation, KYC verification, closing conditions | Reduces T+25 to T+3 settlement |
-| **Payment** | Processes fund flows, manages escrow, handles distributions | Blockchain-ready with x402 protocol integration |
-
-### Key Differentiators
-
-| Feature | SyndiMatch | Legacy Platforms |
-|---------|------------|------------------|
-| Deal formation | **Minutes** (AI-selected participants) | 2-3 weeks (manual outreach) |
-| Bid evaluation | **Real-time** (parallel LLM analysis) | Days (sequential human review) |
-| Price discovery | **Algorithmic** (multi-round auctions) | Opaque (relationship-based) |
-| Settlement | **T+3 target** (automated workflows) | T+25-51 (manual handoffs) |
-| Audit trail | **Complete** (every agent decision logged) | Partial (email/phone gaps) |
-
----
-
-## 📈 Market Opportunity
-
-### Total Addressable Market
-
-| Segment | Size (Annual) | SyndiMatch Opportunity |
-|---------|---------------|------------------------|
-| **Global Syndicated Loans** | $5.2 trillion | Target: U.S. leveraged loan segment |
-| **U.S. Leveraged Loans** | $1.4 trillion (2024) | 30+ bps fee pool = $4.2B |
-| **CLO Issuance** | $180 billion | Secondary trading platform |
-| **Middle Market** | $400 billion | Underserved by current tech |
-
-### Fee Structure Opportunity
-
-```
-Traditional Arrangement Fees: 100-300 bps
-├── Lead Arranger: 50-150 bps
-├── Underwriting: 25-75 bps  
-├── Agent Fees: 10-25 bps
-└── Participation Fees: 10-25 bps
-
-SyndiMatch Revenue Model:
-├── Platform Fee: 5-10 bps per deal (vs 50+ bps operational costs saved)
-├── Seat Licenses: $50K-200K/year per institution
-└── API Access: Usage-based pricing for data/analytics
-```
-
-**Conservative Year 3 Target**: 0.5% of U.S. leveraged loan flow = **$7B in facilitated volume → $3.5M ARR**
-
----
-
-## 🏆 Competitive Landscape
-
-### Current Market Solutions
-
-| Competitor | What They Do | Limitations |
-|------------|--------------|-------------|
-| **Versana** | Loan data aggregation | Data layer only, no execution |
-| **Finastra Loan IQ** | Back-office servicing | Legacy tech, no AI, no price discovery |
-| **FIS Loanscape** | Origination workflow | Single-lender focused |
-| **IHS Markit** | Loan pricing data | Information service, no transaction layer |
-| **Bloomberg Terminal** | News, analytics | No syndication workflow |
-
-### Why SyndiMatch Wins
-
-| Dimension | SyndiMatch | Versana | Finastra |
-|-----------|------------|---------|----------|
-| AI-native | ✅ LangGraph agents | ❌ None | ❌ None |
-| Real-time execution | ✅ Async workflows | ❌ Data only | ❌ Batch processing |
-| Multi-party coordination | ✅ Built-in | ❌ External | ⚠️ Limited |
-| Modern stack | ✅ React, Node, Python | ⚠️ Mixed | ❌ Legacy |
-| Blockchain-ready | ✅ x402 integration | ❌ None | ❌ None |
-
----
-
-## 🔧 Technology Stack
-
-### Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Browser UI (Vanilla JS)                  │
-│  ┌──────────┐ ┌──────────────┐ ┌──────────┐ ┌───────────┐  │
-│  │ Overview │ │ Orchestration│ │ Payments │ │ Analytics │  │
-│  └──────────┘ └──────────────┘ └──────────┘ └───────────┘  │
-└─────────────────────────────────────────────────────────────┘
-                              ↓ REST/WebSocket
-┌─────────────────────────────────────────────────────────────┐
-│              Node.js API (Express + MongoDB)                │
-│         Real-time events │ Agent orchestration              │
-└─────────────────────────────────────────────────────────────┘
-                              ↓ gRPC/REST
-┌─────────────────────────────────────────────────────────────┐
-│              Python Agent Service (LangGraph)               │
-│  ┌────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
-│  │ Claude 3.5 │  │ Gemini Pro  │  │ Custom Credit Model │  │
-│  └────────────┘  └─────────────┘  └─────────────────────┘  │
-│                    State Machine Orchestration              │
-└─────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────┐
-│                   x402 Payment Layer                        │
-│            Coinbase CDP │ Base L2 │ Smart Escrow            │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Core Technologies
-
-- **LangGraph**: Multi-agent workflow orchestration with state persistence
-- **Claude/Gemini**: Financial reasoning and document analysis
-- **MongoDB**: Deal state, bids, and event sourcing
-- **x402 Protocol**: Micropayment integration with Base L2
-
----
-
-## 👥 User Roles
-
-| Role | Use Case | Key Value |
-|------|----------|-----------|
-| **Platform Admin** | System-wide monitoring, simulation controls | Operational visibility |
-| **Originator (Bank)** | Create deals, track syndication progress | Faster book-building |
-| **Participant (Investor)** | Evaluate deals, manage bids, track portfolio | Automated credit analysis |
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-- Node.js 18+
-- MongoDB 6+
-- Python 3.10+ (for agents)
-
-### Quick Start
+Prereqs: Node 18+, Python 3.10+, `mongod` (e.g. `brew install mongodb-community`).
 
 ```bash
-# Install dependencies
+# 1. MongoDB
+brew services start mongodb-community
+
+# 2. Node deps + Python venv
 npm install
+python3 -m venv .venv
+.venv/bin/pip install -r agents/requirements.txt
 
-# Configure environment
+# 3. Env (defaults point at localhost; no API keys required for the demo)
 cp .env.example .env
-# Edit .env with your API keys
 
-# Start the platform
+# 4. Seed the database (canonical seeder — populates both collection name patterns)
+.venv/bin/python agents/seed_all.py
+
+# 5. Start the Node API on :3001
 npm run dev
 
-# Open http://localhost:3001
+# 6. In a second shell, start the Python agents service on :8000
+.venv/bin/python -m uvicorn agents.server:app --host 0.0.0.0 --port 8000
+
+# 7. Open http://localhost:3001
 ```
 
-### Demo Walkthrough
+Smoke tests once everything is up:
 
-1. **Select Role**: Choose `[Originator] JPMorgan Chase` from the dropdown
-2. **Create Deal**: Fill out the syndication form → Click "Create & Announce"
-3. **Watch Orchestration**: See participant agents evaluate and bid in real-time
-4. **Track Pipeline**: Monitor deal progression through stages (Open → Negotiating → Closing → Completed)
+```bash
+./scripts/smoke-node.sh     # checks Node /api/health + /api/ready
+./scripts/smoke-agents.sh   # checks Python /api/health + /api/ready
+```
 
----
+### Notes
 
-## 📋 API Reference
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/syndications` | GET | List all syndications |
-| `/api/syndications` | POST | Create new syndication |
-| `/api/syndications/run` | POST | Trigger agent workflow |
-| `/api/bids` | GET/POST | Bid management |
-| `/api/participants` | GET | Participant registry |
-| `/api/syndication-events` | GET | Real-time event stream |
-
-Full API documentation in `server/index.js`.
+- `agents/seed_all.py` is the canonical seeder. It writes to both legacy (`participant_agents`, `originator_agents`, `syndications`) and current (`participants`, `originator`, `syndication_original`) collection names. Running `server/seed.js` alone is **not** enough — the Node API reads from the current-name collections, which only the Python seed populates.
+- Node always uses DB name `syndimatch` (hardcoded in `server/db.js`). The Python config defaults to `syndimatch_dev` when `ENVIRONMENT=development`, so `.env.example` pins `DATABASE_NAME=syndimatch` to keep both services on the same DB.
+- The agents service uses package-relative imports (`from .orchestrator`). Run it as `uvicorn agents.server:app` from the repo root, not `uvicorn server:app` from inside `agents/`. The included `agents/start.sh` detects context and picks the right form.
+- No LLM keys are required to demo. `agents/config.py` sets `SIMULATION_MODE = True` whenever `ANTHROPIC_API_KEY` is unset, which short-circuits all real LLM calls to deterministic stubs.
 
 ---
 
-## 🎯 Roadmap
+## Architecture
 
-### Phase 1: Foundation (Current)
-- [x] Multi-agent workflow engine
-- [x] Real-time syndication dashboard
-- [x] Mock x402 payment integration
-- [x] Role-based access control
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Browser (vanilla JS, 31 globals loaded via <script> tags)  │
+│  index.html + js/ + styles/                                 │
+└─────────────────────────────────────────────────────────────┘
+                              │ fetch
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Node API  (Express 5 + MongoDB)                            │
+│  server/index.js — all routes in one file (903 LOC)         │
+│    /api/syndications, /api/participants, /api/originators   │
+│    /api/x402/* (mock USDC payment flow on Base)             │
+│    /api/agents/* (proxy to Python service)                  │
+└─────────────────────────────────────────────────────────────┘
+                              │ fetch (AGENTS_SERVICE_URL)
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Python agents  (FastAPI + LangGraph)                       │
+│  agents/server.py                                           │
+│    OriginatorAgent — structures deals                       │
+│    ParticipantAgent — evaluates and bids                    │
+│    NegotiationAgent — multi-round Dutch auction             │
+│    SettlementAgent — allocation + docs                      │
+│    PaymentAgent — x402 fee flow                             │
+│  SIMULATION_MODE skips real Anthropic/Gemini calls          │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+                       MongoDB (syndimatch)
+```
 
-### Phase 2: Enterprise (Q2 2026)
-- [ ] Production LLM integration (Claude/Gemini)
-- [ ] KYC/AML workflow automation
-- [ ] Document parsing (credit agreements, term sheets)
-- [ ] SOC 2 Type II compliance
+### Roles
 
-### Phase 3: Scale (Q4 2026)
-- [ ] Multi-bank pilot program
-- [ ] Secondary trading module
-- [ ] CLO integration
-- [ ] Real-time pricing analytics
+The role dropdown (top right) swaps the active view and feature set. Selector values come from `index.html:38-58`.
+
+| Role | Value | Default view |
+|------|-------|--------------|
+| Platform Admin | `platform` | Command Center: live pipeline, agents, simulation controls |
+| Originator (8 banks) | `originator:OA-001` … `OA-008` | Originator Dashboard: create deals, fee collection |
+| Participant (8 institutions) | `participant:PA-001` … `PA-103` | Participant Dashboard: available deals, bid mgmt, portfolio |
+
+### Demo flow
+
+1. Open `http://localhost:3001` and click **Enter Platform** on the landing page.
+2. Select an originator (e.g. `[Originator] JPMorgan Chase`). Click **Originate**.
+3. Fill the form (or use **Randomize**) and click **Create & Announce**. The deal lands in MongoDB and appears in **Active Syndications** below.
+4. Switch the role to a participant (e.g. `[Participant] Apollo Global`). Browse **Available Deals**.
+5. Switch back to **Platform Admin** to see the simulation engine ticking through the pipeline.
 
 ---
 
-## 📞 Contact
+## Project layout
 
-**SyndiMatch, Inc.**
-
-For partnership inquiries: [founders@syndimatch.io]
+```
+.
+├── index.html                 # SPA entry, loads 31 JS files via <script>
+├── js/
+│   ├── app.js                 # Bootstrap, view router, init order
+│   ├── api-client.js          # HTTP client (timeout, retry, cache, dedup)
+│   ├── api.js                 # Legacy wrapper around api-client (to be merged)
+│   ├── app-state.js           # Pub/sub store
+│   ├── router.js              # Hash + History API routing
+│   ├── role-router.js         # Role-based view switching
+│   ├── data.js                # SyndiData (mock + simulated state)
+│   ├── simulation-engine.js   # Time-stepped market simulation (842 LOC)
+│   ├── auto-bidder.js         # Client-side bid generator
+│   ├── auto-generator.js      # Client-side syndication generator
+│   ├── market-conditions.js   # Volatility / spread regime model
+│   ├── agent-orchestration.js # Frontend agent state model
+│   ├── components/            # 18 components: dashboards, pipeline, payments, etc.
+│   └── services/              # Orphaned: market-data-provider.js, metrics-service.js
+├── styles/                    # main, components, originator, participant, landing, form-enhanced
+├── server/
+│   ├── index.js               # Express app, all routes (903 LOC)
+│   ├── db.js                  # Mongo connection
+│   ├── seed.js                # Legacy seed (smaller dataset, partial coverage)
+│   ├── agents-seed.js         # Data-only module (no entrypoint)
+│   └── check_*.js, count_*.js, compare_*.js, list_collections.js
+│                              # One-off debug scripts (move to scripts/ in phase 2)
+├── agents/
+│   ├── server.py              # FastAPI app
+│   ├── config.py              # Env + feature flags, SIMULATION_MODE toggle
+│   ├── db.py                  # PyMongo connection
+│   ├── orchestrator.py        # LangGraph workflow definition
+│   ├── originator_agent.py    # Deal creation logic
+│   ├── participant_agent.py   # Bidding logic
+│   ├── negotiation_agent.py   # Dutch auction
+│   ├── settlement_agent.py    # Allocation + docs
+│   ├── payment_agent.py       # x402 fee + escrow flow
+│   ├── x402_client.py         # Coinbase CDP client (mock-aware)
+│   ├── event_bus.py           # In-process event dispatch
+│   ├── seed_all.py            # Canonical seeder (run this one)
+│   ├── start.sh               # Local + Cloud Run entrypoint
+│   └── requirements.txt
+├── scripts/
+│   ├── seed-db.sh             # Wrapper around agents/seed_all.py
+│   ├── smoke-node.sh          # curl /api/health + /api/ready
+│   └── smoke-agents.sh
+├── .env.example               # Defaults to localhost; copy to .env
+├── PITCH_DECK.md              # Investor narrative
+├── PROJECT_DESCRIPTION.md     # Long-form product description
+└── package.json
+```
 
 ---
 
-## 📄 License
+## Configuration
 
-ISC License - see `package.json`
+All env vars are read from `.env` (and `.env.example` ships a complete dev default).
+
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `MONGODB_URI` | `mongodb://localhost:27017/syndimatch` | Local Mongo. For Atlas: `mongodb+srv://…` |
+| `DATABASE_NAME` | `syndimatch` | Pin both Node and Python to the same DB |
+| `ENVIRONMENT` | `development` | `development` enables verbose logging + shorter auction rounds |
+| `PORT` | `3001` | Node API port |
+| `AGENTS_SERVICE_URL` | `http://localhost:8000` | Node → Python proxy target |
+| `ANTHROPIC_API_KEY` | unset | Leave unset to run in `SIMULATION_MODE` |
+| `GEMINI_API_KEY` | unset | Optional, used for AI-generated reports |
+| `CDP_API_KEY_NAME` / `CDP_API_KEY_PRIVATE_KEY` | unset | Coinbase CDP, for real x402 (mock works without) |
+| `ENABLE_X402_PAYMENTS` | `false` | Toggle real x402; mock endpoints always work |
 
 ---
 
-<p align="center">
-  <em>Built for the future of institutional lending</em>
-</p>
+## API reference
+
+Mounted on `:3001/api` (Node). Selected endpoints — full list in `server/index.js`.
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/health` | GET | Liveness probe |
+| `/ready` | GET | Pings MongoDB |
+| `/all-data` | GET | Aggregate dashboard payload (DB + agents service merged) |
+| `/syndications` | GET, POST | List or create syndications |
+| `/syndications/:id` | GET | Single syndication |
+| `/syndications/run` | POST | Trigger Python agent workflow (proxy) |
+| `/participants` | GET | Participant institutions (15 seeded) |
+| `/originators` | GET | Originator banks (8 seeded) |
+| `/bids?syndId=…` | GET | Bids for a syndication |
+| `/agents` | GET | All agents grouped by type |
+| `/agents/{participants,originators,bid,allocate}` | GET, POST | Proxy to Python agents |
+| `/payments`, `/payments/summary/:syndId` | GET | Completed payments and roll-ups |
+| `/x402/join-syndication` | POST | Initiates HTTP 402 commitment-fee flow |
+| `/x402/pay` | POST | Settles a pending x402 payment (mock) |
+| `/x402/transactions` | GET | Completed mock USDC payments |
+| `/syndication-events` | GET | Orchestrator event stream (Mongo-backed) |
+
+Python agents service on `:8000` exposes `/api/health`, `/api/all-data`, `/api/syndication/run`, `/api/agents/bid`, `/api/agents/allocate`, `/api/x402/*`, and a WebSocket on `/ws`.
+
+---
+
+## Deployment
+
+- **Cloud Run**: `Dockerfile` (Node) and `agents/Dockerfile` build the two services separately. See [DEPLOYMENT.md](DEPLOYMENT.md) and [agents/CLOUDRUN_DEPLOYMENT.md](agents/CLOUDRUN_DEPLOYMENT.md). Recent gotchas in [QUICK_FIX.md](QUICK_FIX.md).
+- **Firebase Hosting**: `firebase.json` ships `index.html` + `js/` + `styles/`. `npm run deploy`. Static-only — points the frontend at a separately-hosted Node API.
+- **Local Docker**: root `Dockerfile` runs the Node API; pair with a Mongo container for an isolated demo.
+
+Deploy docs are scattered across several files today; consolidation is queued for the refactor branch.
+
+---
+
+## Roadmap
+
+The codebase is mid-refactor on `refactor/main`. Phases planned:
+
+1. **Phase 1 — Baseline (done)**: local boot reproducible, demo verified.
+2. **Phase 2 — Dead code + doc consolidation**: remove orphaned `js/services/`, `js/components/{originator,participant}-view.js`, move `server/check_*.js` into `server/scripts/`, fold 10 deployment docs into this README + a single DEPLOY.md.
+3. **Phase 3 — Backend modularize**: split `server/index.js` (903 LOC) into route modules; collapse `js/api.js` into `js/api-client.js`; fix the `/api/analytics/platform` 404 and `/api/agents/bid` 502 rate.
+4. **Phase 4 — Vite + ESM frontend**: replace 31 `<script>` globals with ES modules; break up the 40–52 KB dashboard components; remove the dual mock/sim/API data-source confusion.
+
+Beyond that:
+
+- Real Anthropic / Gemini integration (currently SIMULATION_MODE)
+- Real x402 / Coinbase CDP (currently mock)
+- KYC/AML workflow, document parsing
+- Multi-bank pilot, secondary trading, CLO integration
+
+---
+
+## License
+
+ISC — see `package.json`.
