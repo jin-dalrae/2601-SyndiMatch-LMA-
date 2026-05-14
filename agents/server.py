@@ -447,25 +447,28 @@ async def agent_bid(request: Dict[str, Any]):
         result = {"decision": decision.decision, "reasoning": decision.reasoning, "agent": agent_id}
         if decision.decision == "bid":
             bid = agent.submit_bid(state, decision)
-            # Convert ObjectId to string for JSON serialization
+
+            # Defensive serialization: bid fields can come back as either
+            # datetime (LLM happy path) or str (fallback path where state
+            # already carried iso-formatted strings). Only call isoformat()
+            # on datetime instances.
+            def _iso(v):
+                return v.isoformat() if hasattr(v, "isoformat") else v
+
             if "_id" in bid:
                 bid["_id"] = str(bid["_id"])
             if "submitted_at" in bid:
-                bid["submitted_at"] = bid["submitted_at"].isoformat()
+                bid["submitted_at"] = _iso(bid["submitted_at"])
             if "valid_until" in bid:
-                bid["valid_until"] = bid["valid_until"].isoformat()
+                bid["valid_until"] = _iso(bid["valid_until"])
             if "modification_history" in bid:
                 for h in bid["modification_history"]:
                     if "modified_at" in h:
-                        h["modified_at"] = h["modified_at"].isoformat()
-            
+                        h["modified_at"] = _iso(h["modified_at"])
+
             result["bid"] = bid
-            # Broadcast update
-            await manager.broadcast({
-                "type": "bid_placed",
-                "data": bid
-            })
-            
+            await manager.broadcast({"type": "bid_placed", "data": bid})
+
         return result
         
     except Exception as e:
