@@ -373,10 +373,12 @@ const LandingPage = {
                                 <a href="/participant" class="footer-link">Participant</a>
                                 <a href="/analytics" class="footer-link">Analytics</a>
                                 <a href="#why" class="footer-link">About</a>
+                                <a href="/terms.html" class="footer-link">Terms</a>
+                                <a href="/privacy.html" class="footer-link">Privacy</a>
                             </div>
                         </div>
                         <div class="footer-copy">
-                            &copy; 2025 SyndiMatch. AI-Powered Loan Syndication Platform.<br>
+                            &copy; 2026 Cadinal LLC. SyndiMatch — AI-powered loan syndication, closed beta.<br>
                             Demo prototype — not for production use.
                         </div>
                     </footer>
