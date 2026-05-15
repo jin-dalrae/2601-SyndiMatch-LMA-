@@ -249,6 +249,22 @@ const APIClient = {
         }
     },
 
+    async patch(endpoint, data) {
+        if (this.useMockData) return null;
+        try {
+            const result = await this._fetchWithRetry(endpoint, {
+                method: 'PATCH',
+                body: JSON.stringify(data),
+                headers: { 'Content-Type': 'application/json' },
+                timeout: 10000,
+                retries: 1
+            });
+            return result?.error ? null : result;
+        } catch (error) {
+            return null;
+        }
+    },
+
     // High-level fetchers — fall back to SyndiData mock when API is down
     async getSyndications() {
         const data = await this.get('/syndications');

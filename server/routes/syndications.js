@@ -84,6 +84,30 @@ router.post('/syndications', async (req, res) => {
     }
 });
 
+// Persist a lifecycle transition (client-driven progression).
+// Whitelisted fields only — this is not a general document patch.
+router.patch('/syndications/:id', async (req, res) => {
+    try {
+        const db = getDB();
+        const allowed = ['status', 'phase', 'subscription', 'round'];
+        const patch = { updatedAt: new Date() };
+        for (const k of allowed) {
+            if (req.body[k] !== undefined) patch[k] = req.body[k];
+        }
+        const result = await db.collection('syndication_original').updateOne(
+            { _id: req.params.id },
+            { $set: patch }
+        );
+        if (result.matchedCount === 0) {
+            return res.status(404).json({ error: 'Not Found', message: 'Syndication not found' });
+        }
+        res.json({ ok: true, id: req.params.id, ...patch });
+    } catch (error) {
+        console.error(`❌ Failed to patch syndication ${req.params.id}:`, error);
+        res.status(500).json({ error: 'Internal Server Error', message: 'Failed to update syndication' });
+    }
+});
+
 // Trigger a Python agent workflow for a syndication
 router.post('/syndications/run', async (req, res) => {
     try {

@@ -41,6 +41,10 @@ const AutoGenerator = {
         // Listen for bid events to progress syndications
         window.addEventListener('bidPlaced', (e) => this.onBidPlaced(e.detail));
 
+        // Adopt externally-created syndications (originator form, seed, sim)
+        // into the lifecycle so they progress through the pipeline too.
+        window.addEventListener('newSyndication', (e) => this.adoptExternalDeal(e.detail));
+
         console.log(`✅ Auto-Generator Ready (Originators: ${this.originators.length})`);
     },
 
@@ -76,23 +80,147 @@ const AutoGenerator = {
      * Daily Tick Handler - Process lifecycles and generate new deals
      */
     onDayChange(data) {
-        // 1. Process existing deal phases
-        this.processDealLifecycles(data.date);
+        // Deal generation only — progression is handled per-tick in onTimeTick.
+        // Gated: generation stays off unless explicitly enabled, but the
+        // lifecycle driver still runs (init is unconditional).
+        if (this.enabled) this.checkForNewDeals(data.date);
+    },
 
-        // 2. Check for new deal generation
-        this.checkForNewDeals(data.date);
+    // Wall-clock dwell per back-half stage (real seconds, demo pace).
+    // Independent of sim speed so a created deal visibly progresses even
+    // when the simulation clock is paused at 0 days/s.
+    BACKHALF_DWELL_MS: 8000,
+    EARLY_TIME_FALLBACK_MS: 12000,
+
+    // Stage clock keyed by syndication id. SyndiData polling REPLACES deal
+    // objects every few seconds, so per-object timestamps reset forever and
+    // nothing ever crosses a dwell threshold. Keying by id makes the clock
+    // survive object replacement. { [id]: { status, since } }
+    stageClock: {},
+
+    STAGE_ORDER: ['open', 'negotiating', 'closing', 'settlement', 'funding', 'completed'],
+
+    _stageRank(s) {
+        const i = this.STAGE_ORDER.indexOf(s);
+        return i === -1 ? 0 : i;
     },
 
     /**
-     * Time Tick Handler - Check for stage progression more frequently
+     * Resolve the stable clock for a deal, reconciling against the (possibly
+     * refreshed) object. If a stale API refresh regressed the status behind
+     * what we've already progressed to, re-assert the client state instead
+     * of letting it bounce backward.
      */
-    onTimeTick(data) {
-        // Check for stage progression every tick (based on subscription)
-        this.activeSyndications.forEach(deal => {
+    _clockFor(deal) {
+        const c = this.stageClock[deal.id];
+        if (!c) {
+            this.stageClock[deal.id] = { status: deal.status, since: Date.now() };
+            return this.stageClock[deal.id];
+        }
+        if (deal.status !== c.status) {
+            if (this._stageRank(deal.status) < this._stageRank(c.status)) {
+                // Stale refresh dragged it back — re-assert our progression.
+                deal.status = c.status;
+            } else {
+                // Genuine forward move (e.g. agent advanced it) — accept.
+                c.status = deal.status;
+                c.since = Date.now();
+            }
+        }
+        return c;
+    },
+
+    /**
+     * Time Tick Handler — single source of progression truth.
+     * Iterates the canonical SyndiData list so user-created, seeded, and
+     * generated deals are all driven through the same state machine.
+     */
+    onTimeTick() {
+        const deals = (window.SyndiData && SyndiData.allSyndications)
+            ? SyndiData.allSyndications
+            : this.activeSyndications;
+
+        deals.forEach(deal => {
+            if (!deal || !deal.status) return;
             if (deal.status === 'open' || deal.status === 'negotiating') {
                 this.checkStageProgression(deal);
+            } else if (deal.status === 'closing' || deal.status === 'settlement' || deal.status === 'funding') {
+                this.advanceBackHalf(deal);
             }
         });
+    },
+
+    /**
+     * Adopt an externally-created syndication into the lifecycle.
+     * The originator form, the seed loader, and the sim all dispatch
+     * `newSyndication`; without this they'd sit at "open" forever because
+     * the old progression only iterated this.activeSyndications.
+     */
+    adoptExternalDeal(deal) {
+        if (!deal || !deal.id) return;
+        if (!deal.status) deal.status = 'open';
+        if (deal.subscription == null) deal.subscription = 0;
+        if (!this.stageClock[deal.id]) {
+            this.stageClock[deal.id] = { status: deal.status, since: Date.now() };
+        }
+        if (!this.activeSyndications.some(d => d.id === deal.id)) {
+            this.activeSyndications.push(deal);
+        }
+        console.log(`🪪 Adopted ${deal.id} into pipeline lifecycle`);
+    },
+
+    /**
+     * Apply a stage transition + propagate to SyndiData and the UI.
+     */
+    _transition(deal, newStatus, newPhase) {
+        const old = deal.status;
+        deal.status = newStatus;
+        deal.phase = newPhase;
+        if (newStatus === 'completed') {
+            deal.subscription = Math.max(deal.subscription || 0, 100);
+        }
+        // Advance the stable clock.
+        this.stageClock[deal.id] = { status: newStatus, since: Date.now() };
+        if (window.SyndiData) {
+            SyndiData.updateSyndication(deal.id, {
+                status: newStatus,
+                phase: newPhase,
+                subscription: deal.subscription
+            });
+        }
+        // Persist so the next /api/syndications poll doesn't regress it.
+        if (window.API && typeof API.patch === 'function') {
+            API.patch(`/syndications/${deal.id}`, {
+                status: newStatus,
+                phase: newPhase,
+                subscription: deal.subscription
+            });
+        }
+        console.log(`📈 ${deal.borrower || deal.id}: ${old} → ${newStatus} (${Math.round(deal.subscription || 0)}% subscribed)`);
+        window.dispatchEvent(new CustomEvent('syndicationUpdated', {
+            detail: { id: deal.id, statusChange: { from: old, to: newStatus }, ...deal }
+        }));
+        if (newStatus === 'completed') {
+            window.dispatchEvent(new CustomEvent('syndicationCompleted', { detail: deal }));
+        }
+        if (window.PipelineComponent) PipelineComponent.render();
+    },
+
+    /**
+     * Back-half: closing → settlement → funding → completed.
+     * Gated on a real-time dwell so it always advances during a demo.
+     */
+    advanceBackHalf(deal) {
+        const clock = this._clockFor(deal);
+        if (Date.now() - clock.since < this.BACKHALF_DWELL_MS) return;
+
+        if (deal.status === 'closing') {
+            this._transition(deal, 'settlement', 'documentation');
+        } else if (deal.status === 'settlement') {
+            this._transition(deal, 'funding', 'payment');
+        } else if (deal.status === 'funding') {
+            this._transition(deal, 'completed', 'completed');
+        }
     },
 
     /**
@@ -117,46 +245,20 @@ const AutoGenerator = {
     },
 
     /**
-     * Check if a deal should progress to next stage
+     * Front-half: open → negotiating → closing.
+     * Primarily subscription-driven (the auto-bidder builds the book),
+     * with a real-time fallback so a deal nobody bids on still advances
+     * during a demo instead of stalling at "open" forever.
      */
     checkStageProgression(deal) {
-        let shouldProgress = false;
-        let newStatus = deal.status;
-        let newPhase = deal.phase;
+        const clock = this._clockFor(deal);
+        const inStageMs = Date.now() - clock.since;
+        const sub = deal.subscription || 0;
 
-        if (deal.status === 'open' && deal.subscription >= 50) {
-            newStatus = 'negotiating';
-            newPhase = 'pricing';
-            shouldProgress = true;
-        } else if (deal.status === 'negotiating' && deal.subscription >= 100) {
-            newStatus = 'closing';
-            newPhase = 'allocation';
-            shouldProgress = true;
-        }
-
-        if (shouldProgress) {
-            const oldStatus = deal.status;
-            deal.status = newStatus;
-            deal.phase = newPhase;
-
-            console.log(`📈 ${deal.borrower}: ${oldStatus} → ${newStatus} (${deal.subscription.toFixed(0)}% subscribed)`);
-
-            // Update SyndiData
-            if (window.SyndiData) {
-                SyndiData.updateSyndication(deal.id, {
-                    status: newStatus,
-                    phase: newPhase,
-                    subscription: deal.subscription
-                });
-            }
-
-            // Emit stage change event
-            window.dispatchEvent(new CustomEvent('syndicationUpdated', {
-                detail: { id: deal.id, statusChange: { from: oldStatus, to: newStatus }, ...deal }
-            }));
-
-            // Refresh UI
-            if (window.PipelineComponent) PipelineComponent.render();
+        if (deal.status === 'open' && (sub >= 40 || inStageMs > this.EARLY_TIME_FALLBACK_MS)) {
+            this._transition(deal, 'negotiating', 'pricing');
+        } else if (deal.status === 'negotiating' && (sub >= 100 || inStageMs > this.EARLY_TIME_FALLBACK_MS)) {
+            this._transition(deal, 'closing', 'allocation');
         }
     },
 
@@ -253,62 +355,6 @@ const AutoGenerator = {
     },
 
     /**
-     * Process deal lifecycle transitions based on time
-     */
-    processDealLifecycles(currentDate) {
-        const now = currentDate.getTime();
-
-        this.activeSyndications.forEach(deal => {
-            if (deal.status === 'completed' || deal.status === 'closed') return;
-
-            const closeTime = new Date(deal.closingDate).getTime();
-
-            // Auto-close deals past their closing date
-            if (now >= closeTime && deal.status !== 'completed') {
-                if (deal.subscription >= 100) {
-                    this.completeDeal(deal);
-                } else if (deal.subscription >= 50) {
-                    // Partial close - still complete but with notes
-                    deal.notes = `Closed at ${deal.subscription.toFixed(0)}% subscription`;
-                    this.completeDeal(deal);
-                } else {
-                    // Failed to meet minimum - cancel
-                    this.cancelDeal(deal);
-                }
-            }
-
-            // Progress deals that are ready for next stage
-            if (deal.status === 'closing') {
-                // Move to settlement after 1 day in closing
-                const closingStart = new Date(deal.closingStartDate || now).getTime();
-                if (now - closingStart > 24 * 3600000) {
-                    deal.status = 'settlement';
-                    deal.phase = 'documentation';
-                    SyndiData.updateSyndication(deal.id, { status: 'settlement', phase: 'documentation' });
-                }
-            }
-
-            if (deal.status === 'settlement') {
-                // Move to funding after 1 day in settlement
-                const settlementStart = new Date(deal.settlementStartDate || now).getTime();
-                if (now - settlementStart > 24 * 3600000) {
-                    deal.status = 'funding';
-                    deal.phase = 'payment';
-                    SyndiData.updateSyndication(deal.id, { status: 'funding', phase: 'payment' });
-                }
-            }
-
-            if (deal.status === 'funding') {
-                // Complete after 1 day in funding
-                const fundingStart = new Date(deal.fundingStartDate || now).getTime();
-                if (now - fundingStart > 24 * 3600000) {
-                    this.completeDeal(deal);
-                }
-            }
-        });
-    },
-
-    /**
      * Complete a deal
      */
     completeDeal(deal) {
@@ -399,9 +445,10 @@ const AutoGenerator = {
 
 window.AutoGenerator = AutoGenerator;
 
-// Init on load
+// Init on load. init() always runs so the pipeline lifecycle driver
+// (onTimeTick → checkStageProgression / advanceBackHalf) is active for
+// user-created, seeded, and sim-created deals. Random deal *generation*
+// stays gated behind AutoGenerator.enabled inside onDayChange.
 document.addEventListener('DOMContentLoaded', () => {
-    if (AutoGenerator.enabled) {
-        AutoGenerator.init();
-    }
+    AutoGenerator.init();
 });
