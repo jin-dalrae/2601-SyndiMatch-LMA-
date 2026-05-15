@@ -92,14 +92,11 @@ const SyndiData = {
     updateFromLive(json) {
         // Map backend format to frontend format
         if (json.syndications) {
-            const sessionStartIso = window.SimulationEngine?.state?.sessionStartIso || null;
-            const filtered = (json.syndications || []).filter((s) => {
-                if (!sessionStartIso) return true;
-                const created = s.created_at || s.createdAt || s.createdAtIso;
-                if (!created) return true;
-                return new Date(created) >= new Date(sessionStartIso);
-            });
-            this.syndications = filtered.map(s => ({
+            // Show whatever the API returns (already newest-first and
+            // capped server-side). The old code only kept deals created
+            // after the browser session started, which left the pipeline
+            // empty on every cold load — nothing visible, no progress.
+            this.syndications = (json.syndications || []).map(s => ({
                 id: s._id || s.syndication_id,
                 borrower: s.loan_details?.borrower_name || s.borrower || 'Unknown',
                 industry: s.loan_details?.industry || s.industry || 'Unknown',
