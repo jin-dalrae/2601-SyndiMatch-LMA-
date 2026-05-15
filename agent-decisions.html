@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Decision Log — SyndiMatch</title>
+    <meta name="description" content="Every AI agent decision under the SyndiMatch beta will be logged here. Transparency by default." />
+    <meta name="robots" content="noindex" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&family=Roboto:wght@500;600;700&display=swap" />
+    <link rel="stylesheet" href="styles/legal.css" />
+    <style>
+        /* page-specific accent */
+        .decisions-hero {
+            margin: 12px 0 48px;
+            padding: 28px 30px;
+            background: white;
+            border: 1px solid var(--legal-border);
+            border-radius: 14px;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 30px;
+            align-items: center;
+        }
+        .decisions-hero h1 {
+            font-family: 'Roboto', system-ui, sans-serif;
+            font-size: 1.9rem;
+            font-weight: 700;
+            margin: 0 0 8px;
+            letter-spacing: -0.02em;
+            line-height: 1.2;
+        }
+        .decisions-hero p {
+            color: var(--legal-muted);
+            margin: 0;
+            max-width: 56ch;
+        }
+        .decisions-status {
+            background: var(--legal-primary-soft);
+            border: 1px solid #dbeafe;
+            color: var(--legal-primary);
+            padding: 14px 18px;
+            border-radius: 10px;
+            text-align: center;
+            min-width: 160px;
+        }
+        .decisions-status-label {
+            font-family: 'Roboto', system-ui, sans-serif;
+            font-size: 0.7rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            font-weight: 700;
+            margin-bottom: 4px;
+            opacity: 0.7;
+        }
+        .decisions-status-value {
+            font-family: 'Roboto', system-ui, sans-serif;
+            font-size: 1.4rem;
+            font-weight: 700;
+        }
+        @media (max-width: 720px) {
+            .decisions-hero { grid-template-columns: 1fr; }
+            .decisions-status { min-width: 0; }
+        }
+
+        .log-table {
+            background: white;
+            border: 1px solid var(--legal-border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .log-header, .log-row {
+            display: grid;
+            grid-template-columns: 130px 100px 1fr 90px;
+            gap: 16px;
+            padding: 14px 20px;
+            font-size: 0.9rem;
+            align-items: center;
+        }
+        .log-header {
+            background: #f8fafc;
+            color: var(--legal-faint);
+            font-family: 'Roboto', system-ui, sans-serif;
+            font-size: 0.7rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            font-weight: 600;
+            border-bottom: 1px solid var(--legal-border);
+        }
+        .log-row {
+            border-bottom: 1px solid var(--legal-border);
+            color: var(--legal-text);
+        }
+        .log-row:last-child { border-bottom: none; }
+        .log-id {
+            font-family: 'Roboto', monospace, system-ui;
+            font-size: 0.85rem;
+            color: var(--legal-muted);
+            letter-spacing: 0.02em;
+        }
+        .log-agent {
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        .log-conf {
+            font-family: 'Roboto', system-ui;
+            font-size: 0.82rem;
+            color: var(--legal-success);
+            font-weight: 600;
+            text-align: right;
+        }
+        .log-skeleton {
+            background: linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
+            background-size: 200% 100%;
+            animation: shimmer 1.8s ease-in-out infinite;
+            border-radius: 4px;
+            height: 12px;
+            width: 70%;
+        }
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        .commit-promise {
+            margin-top: 48px;
+            background: white;
+            border: 1px solid var(--legal-border);
+            border-left: 3px solid var(--legal-primary);
+            border-radius: 10px;
+            padding: 22px 24px;
+        }
+        .commit-promise h3 {
+            font-family: 'Roboto', system-ui, sans-serif;
+            margin: 0 0 12px;
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--legal-text);
+        }
+        .commit-promise ul {
+            margin: 0;
+            padding-left: 22px;
+            color: var(--legal-muted);
+            font-size: 0.93rem;
+        }
+        .commit-promise li { margin-bottom: 6px; }
+        .commit-promise strong { color: var(--legal-text); }
+    </style>
+</head>
+
+<body>
+    <div class="draft-stamp" aria-hidden="true">DRAFT</div>
+
+    <div class="legal-wrap">
+        <nav class="legal-nav">
+            <a href="/" class="legal-brand">
+                <span class="legal-brand-mark">S</span>
+                SyndiMatch
+            </a>
+            <div class="legal-nav-right">
+                <a href="/">Home</a>
+                <a href="/terms.html">Terms</a>
+                <a href="/privacy.html">Privacy</a>
+            </div>
+        </nav>
+
+        <div class="decisions-hero">
+            <div>
+                <h1>AI Decision Log</h1>
+                <p>Every decision an AI agent makes on the SyndiMatch Platform &mdash; what it decided, why, and on whose behalf &mdash; is logged. Authorized Users can audit the trail. Transparency by default; not a feature to opt into.</p>
+            </div>
+            <div class="decisions-status">
+                <div class="decisions-status-label">Status</div>
+                <div class="decisions-status-value">Building</div>
+            </div>
+        </div>
+
+        <div class="legal-review-status">
+            <span class="icon">i</span>
+            <span>The live log viewer ships with the production release. During the closed beta, decision records live in the database as <code>syndication_events</code> documents and can be retrieved through the platform&rsquo;s admin view or by request to <a href="mailto:help@oncadinal.com">help@oncadinal.com</a>.</span>
+        </div>
+
+        <h2 style="font-family:'Roboto',system-ui,sans-serif;font-size:1.1rem;font-weight:700;margin:0 0 14px;letter-spacing:0.02em;">Recent decisions <span style="color:var(--legal-faint);font-weight:500;">&middot; preview</span></h2>
+
+        <div class="log-table">
+            <div class="log-header">
+                <span>Log ID</span>
+                <span>Agent</span>
+                <span>Decision</span>
+                <span style="text-align:right;">Confidence</span>
+            </div>
+
+            <div class="log-row">
+                <span class="log-id">D-2026-05-14-0041</span>
+                <span class="log-agent">Participant</span>
+                <span>Apollo Global bid 350 bps on SYND-2025-001</span>
+                <span class="log-conf">94%</span>
+            </div>
+            <div class="log-row">
+                <span class="log-id">D-2026-05-14-0040</span>
+                <span class="log-agent">Negotiation</span>
+                <span>Closed round 3 of TechFlow auction at 425 bps</span>
+                <span class="log-conf">91%</span>
+            </div>
+            <div class="log-row">
+                <span class="log-id">D-2026-05-14-0039</span>
+                <span class="log-agent">Settlement</span>
+                <span>Allocated $475M to 12 participants pro-rata</span>
+                <span class="log-conf">99%</span>
+            </div>
+            <div class="log-row">
+                <span class="log-id">D-2026-05-14-0038</span>
+                <span class="log-agent">Originator</span>
+                <span>Drafted term sheet for Meridian Healthcare</span>
+                <span class="log-conf">88%</span>
+            </div>
+            <div class="log-row">
+                <span class="log-id">D-2026-05-14-0037</span>
+                <span class="log-agent">Payment</span>
+                <span>Mock-settled commitment fee $2.5M via x402</span>
+                <span class="log-conf">100%</span>
+            </div>
+            <div class="log-row" aria-hidden="true">
+                <span class="log-skeleton"></span>
+                <span class="log-skeleton" style="width:50%;"></span>
+                <span class="log-skeleton" style="width:80%;"></span>
+                <span class="log-skeleton" style="width:60%;margin-left:auto;"></span>
+            </div>
+            <div class="log-row" aria-hidden="true">
+                <span class="log-skeleton"></span>
+                <span class="log-skeleton" style="width:50%;"></span>
+                <span class="log-skeleton" style="width:80%;"></span>
+                <span class="log-skeleton" style="width:60%;margin-left:auto;"></span>
+            </div>
+        </div>
+
+        <div class="commit-promise">
+            <h3>What we commit to log</h3>
+            <ul>
+                <li><strong>Every agent decision</strong> &mdash; the prompt, the model version, the inputs, and the structured output.</li>
+                <li><strong>Why it decided that way</strong> &mdash; the chain of reasoning produced by the model, recorded verbatim.</li>
+                <li><strong>On whose behalf</strong> &mdash; the institution, the agent role, and the human Authorized User who initiated the workflow.</li>
+                <li><strong>Reversibility</strong> &mdash; whether the action was committed to MongoDB, broadcast to participants, or kept as a draft.</li>
+            </ul>
+        </div>
+
+        <div class="legal-footer">
+            <div class="legal-footer-row">
+                <a href="/">Home</a>
+                <a href="/terms.html">Terms</a>
+                <a href="/privacy.html">Privacy</a>
+                <a href="#">Back to top</a>
+            </div>
+            <div class="legal-footer-copy">&copy; 2026 Cadinal LLC. SyndiMatch is a closed institutional beta.</div>
+        </div>
+    </div>
+</body>
+
+</html>

@@ -10,37 +10,51 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&family=Roboto:wght@500;700&display=swap" />
+        href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&family=Roboto:wght@500;600;700&display=swap" />
     <link rel="stylesheet" href="styles/legal.css" />
 </head>
 
 <body>
 <!--
-    TEMPLATE NOTICE: This document is a development-stage draft. Names,
-    jurisdiction, and substantive clauses must be reviewed by qualified legal
-    counsel and a privacy specialist (CCPA/CPRA, GDPR if applicable, GLBA if
-    handling financial PII) before commercial use. Placeholder fields:
-    [CONTACT_EMAIL], [SUPPORT_ADDRESS]. Effective date below should be updated
-    at launch.
+    TEMPLATE NOTICE: Pre-launch draft. Must be reviewed by a privacy
+    specialist (CCPA/CPRA at minimum, GDPR/GLBA if applicable) before
+    commercial use. Placeholder: [SUPPORT_ADDRESS]. Contact email set to
+    help@oncadinal.com.
 -->
+
+    <div class="draft-stamp" aria-hidden="true">DRAFT</div>
+
     <div class="legal-wrap">
         <nav class="legal-nav">
-            <a href="/" class="legal-brand">SyndiMatch</a>
-            <div>
+            <a href="/" class="legal-brand">
+                <span class="legal-brand-mark">S</span>
+                SyndiMatch
+            </a>
+            <div class="legal-nav-right">
                 <a href="/">Home</a>
-                <a href="/terms.html" style="margin-left:20px;">Terms of Service</a>
+                <a href="/terms.html">Terms</a>
             </div>
         </nav>
 
-        <div class="legal-template-notice">
-            <strong>Draft / template.</strong> This document has not been reviewed by counsel or by a privacy specialist. Before publishing, validate California CCPA/CPRA disclosures, confirm sub-processor list against your actual vendor stack, and obtain a legal review.
+        <h1 class="legal-title">Privacy Policy</h1>
+
+        <div class="legal-meta-row">
+            <span class="legal-pill pill-effective">
+                <span class="pill-dot"></span>
+                Effective <time datetime="2026-05-14">14 May 2026</time>
+            </span>
+            <span class="legal-pill pill-draft">Draft · v0.1</span>
+            <span class="legal-pill pill-entity">Cadinal LLC · California</span>
         </div>
 
-        <h1 class="legal-title">Privacy Policy</h1>
-        <p class="legal-meta">
-            <strong>Effective date:</strong> May 14, 2026 &nbsp;•&nbsp;
-            <strong>Operator:</strong> Cadinal LLC, a California limited liability company.
+        <p class="legal-subtitle">
+            How we handle institutional account data, deal records, and the natural-person information of your colleagues. We do not sell personal information.
         </p>
+
+        <div class="legal-review-status">
+            <span class="icon">!</span>
+            <span><strong>Pre-launch draft.</strong> This policy has not been reviewed by a privacy specialist. CCPA/CPRA disclosures and the sub-processor list must be validated against the live vendor stack before any external use.</span>
+        </div>
 
         <div class="legal-toc">
             <h2>Contents</h2>
@@ -56,7 +70,7 @@
                 <li><a href="#security">Security</a></li>
                 <li><a href="#transfers">International Transfers</a></li>
                 <li><a href="#rights">Your Privacy Rights</a></li>
-                <li><a href="#ccpa">California-Specific Disclosures (CCPA/CPRA)</a></li>
+                <li><a href="#ccpa">California-Specific Disclosures</a></li>
                 <li><a href="#children">Children</a></li>
                 <li><a href="#changes">Changes to This Policy</a></li>
                 <li><a href="#contact">Contact Us</a></li>
@@ -64,7 +78,7 @@
         </div>
 
         <section class="legal-section" id="scope">
-            <h2>1. Scope</h2>
+            <h2><span class="section-num">01</span>Scope</h2>
             <p>
                 This Privacy Policy describes how Cadinal LLC (&ldquo;<strong>Company</strong>,&rdquo; &ldquo;<strong>we</strong>,&rdquo; &ldquo;<strong>us</strong>&rdquo;) collects, uses, shares, and safeguards information in connection with the SyndiMatch platform (the &ldquo;<strong>Platform</strong>&rdquo;), including the website, the application, and the APIs. It applies to information of <strong>institutional users</strong> and the <strong>natural-person representatives</strong> of those institutions (employees, contractors, and beneficial owners we are required to identify).
             </p>
@@ -73,48 +87,62 @@
             </p>
         </section>
 
-        <section class="legal-section" id="data">
-            <h2>2. Information We Collect</h2>
+        <!-- 2. What we collect — annotated -->
+        <section class="legal-section has-note" id="data">
+            <div class="section-body">
+                <h2><span class="section-num">02</span>Information We Collect</h2>
 
-            <h3>2.1 Account &amp; identity</h3>
-            <ul>
-                <li>Institution name, legal entity type, and primary address;</li>
-                <li>Name, business email address, role/title, and business phone number of each Authorized User;</li>
-                <li>Authentication credentials, API keys, and access tokens issued for the Platform.</li>
-            </ul>
+                <h3>2.1 Account &amp; identity</h3>
+                <ul>
+                    <li>Institution name, legal entity type, and primary address;</li>
+                    <li>Name, business email address, role/title, and business phone number of each Authorized User;</li>
+                    <li>Authentication credentials, API keys, and access tokens issued for the Platform.</li>
+                </ul>
 
-            <h3>2.2 Usage &amp; technical</h3>
-            <ul>
-                <li>Pages and views accessed, features used, sessions duration, button clicks, and other product-analytics events;</li>
-                <li>HTTP request metadata: IP address, user-agent, timestamp, referrer, and response code;</li>
-                <li>Server and application logs generated by the Platform&rsquo;s Node and Python services, including error stack traces.</li>
-            </ul>
+                <h3>2.2 Usage &amp; technical</h3>
+                <ul>
+                    <li>Pages and views accessed, features used, session duration, button clicks, and other product-analytics events;</li>
+                    <li>HTTP request metadata: IP address, user-agent, timestamp, referrer, and response code;</li>
+                    <li>Server and application logs generated by the Platform&rsquo;s Node and Python services, including error stack traces.</li>
+                </ul>
 
-            <h3>2.3 Submitted deal data</h3>
-            <ul>
-                <li>Syndication, bid, allocation, and payment records that you create or import through the Platform;</li>
-                <li>Free-text fields you submit for AI-agent evaluation (deal descriptions, borrower descriptions, internal memos).</li>
-            </ul>
+                <h3>2.3 Submitted deal data</h3>
+                <ul>
+                    <li>Syndication, bid, allocation, and payment records that you create or import through the Platform;</li>
+                    <li>Free-text fields you submit for AI-agent evaluation (deal descriptions, borrower descriptions, internal memos).</li>
+                </ul>
 
-            <h3>2.4 Communications</h3>
-            <ul>
-                <li>Email correspondence, support requests, and feedback you send us;</li>
-                <li>Records of meetings, demos, or onboarding sessions, when conducted with your consent.</li>
-            </ul>
+                <h3>2.4 Communications</h3>
+                <ul>
+                    <li>Email correspondence, support requests, and feedback you send us;</li>
+                    <li>Records of meetings, demos, or onboarding sessions, when conducted with your consent.</li>
+                </ul>
+            </div>
+            <aside class="agent-note" aria-label="Compliance Agent note">
+                <header class="agent-note-header">
+                    <span class="agent-dot" aria-hidden="true"></span>
+                    <span class="agent-label">Compliance Agent</span>
+                </header>
+                <p class="agent-note-body">
+                    Four buckets: who you are (account info), what you do (clicks and request logs), what you upload (deal records and free-text fields), and what you tell us directly (emails, support tickets).
+                </p>
+                <footer class="agent-note-meta">
+                    <span class="meta-pip">log PR-002-DC</span>
+                    <span class="meta-pip">confidence 95%</span>
+                </footer>
+            </aside>
         </section>
 
         <section class="legal-section" id="sources">
-            <h2>3. Sources of Information</h2>
+            <h2><span class="section-num">03</span>Sources of Information</h2>
             <p>
                 We collect information directly from you and your Authorized Users; automatically through your use of the Platform; and, where applicable, from sub-processors and analytics providers that operate on our behalf.
             </p>
         </section>
 
         <section class="legal-section" id="use">
-            <h2>4. How We Use Information</h2>
-            <p>
-                We use information to:
-            </p>
+            <h2><span class="section-num">04</span>How We Use Information</h2>
+            <p>We use information to:</p>
             <ul>
                 <li>Provide, maintain, and improve the Platform, including authentication, account administration, and customer support;</li>
                 <li>Operate AI agent workflows on data you submit (see Section 5);</li>
@@ -128,72 +156,116 @@
             </p>
         </section>
 
-        <section class="legal-section" id="ai">
-            <h2>5. AI Processing</h2>
-            <p>
-                The Platform uses generative artificial-intelligence models supplied by third parties (currently Anthropic and Google) to power agent workflows, draft documents, and summarize activity. When you submit free-text fields or deal data for evaluation, that content may be transmitted to the relevant model provider for processing.
-            </p>
-            <p>
-                We configure our integrations to avoid model providers training on your data where the provider offers such a control. However, model providers retain logs for limited periods for safety, abuse prevention, and compliance purposes under their own terms. You should review the providers&rsquo; published policies before submitting sensitive data:
-            </p>
-            <ul>
-                <li>Anthropic API: <a href="https://www.anthropic.com/legal/commercial-terms" target="_blank" rel="noreferrer">Commercial Terms</a> and Privacy Policy.</li>
-                <li>Google AI: <a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer">Google Privacy Policy</a> and AI-specific terms.</li>
-            </ul>
-            <p>
-                Do <strong>not</strong> submit material non-public information about issuers or counterparties through the Platform&rsquo;s free-text fields during the beta.
-            </p>
+        <!-- 5. AI processing — the central privacy note -->
+        <section class="legal-section has-note" id="ai">
+            <div class="section-body">
+                <h2><span class="section-num">05</span>AI Processing</h2>
+                <p>
+                    The Platform uses generative artificial-intelligence models supplied by third parties (currently Anthropic and Google) to power agent workflows, draft documents, and summarize activity. When you submit free-text fields or deal data for evaluation, that content may be transmitted to the relevant model provider for processing.
+                </p>
+                <p>
+                    We configure our integrations to avoid model providers training on your data where the provider offers such a control. However, model providers retain logs for limited periods for safety, abuse prevention, and compliance purposes under their own terms. You should review the providers&rsquo; published policies before submitting sensitive data:
+                </p>
+                <ul>
+                    <li>Anthropic API: <a href="https://www.anthropic.com/legal/commercial-terms" target="_blank" rel="noreferrer">Commercial Terms</a> and Privacy Policy.</li>
+                    <li>Google AI: <a href="https://policies.google.com/privacy" target="_blank" rel="noreferrer">Google Privacy Policy</a> and AI-specific terms.</li>
+                </ul>
+                <p>
+                    Do <strong>not</strong> submit material non-public information about issuers or counterparties through the Platform&rsquo;s free-text fields during the beta.
+                </p>
+            </div>
+            <aside class="agent-note" aria-label="Compliance Agent note">
+                <header class="agent-note-header">
+                    <span class="agent-dot" aria-hidden="true"></span>
+                    <span class="agent-label">Compliance Agent</span>
+                </header>
+                <p class="agent-note-body">
+                    When you type into a free-text field, it goes to Anthropic or Google for inference. We turn off training on customer data where we can. <strong>Do not paste MNPI into our text inputs during the beta.</strong>
+                </p>
+                <footer class="agent-note-meta">
+                    <span class="meta-pip">log PR-005-AI</span>
+                    <span class="meta-pip">confidence 96%</span>
+                </footer>
+            </aside>
         </section>
 
-        <section class="legal-section" id="sharing">
-            <h2>6. Sharing &amp; Sub-Processors</h2>
-            <p>
-                We share information only as described below.
-            </p>
-            <ul>
-                <li>
-                    <strong>Sub-processors.</strong> We use third-party services to host and operate the Platform. Each operates under contractual confidentiality and security obligations.
-                    <ul>
-                        <li>MongoDB Atlas &mdash; database hosting (currently U.S. regions).</li>
-                        <li>Google Cloud Platform &mdash; compute and storage for the Node API and Python agent service.</li>
-                        <li>Anthropic &mdash; large-language-model API for agent reasoning.</li>
-                        <li>Google AI (Gemini) &mdash; language-model API for summarization and reporting.</li>
-                        <li>Coinbase Developer Platform &mdash; future real x402 payment processing (not active during the closed beta).</li>
-                        <li>Firebase Hosting &mdash; static frontend distribution.</li>
-                    </ul>
-                </li>
-                <li><strong>Professional advisors.</strong> Lawyers, accountants, and auditors engaged in connection with our business.</li>
-                <li><strong>Successors.</strong> A party that acquires or succeeds to our business in connection with a merger, acquisition, financing, or sale of assets, subject to standard confidentiality protections.</li>
-                <li><strong>Legal compliance.</strong> Government authorities, regulators, and courts when we are required to do so by law, subpoena, or court order, or to protect the safety, rights, or property of Cadinal LLC or any third party.</li>
-                <li><strong>With your direction.</strong> Any other party at your written direction or with your explicit consent.</li>
-            </ul>
-            <p>
-                We do not sell or share personal information for advertising purposes.
-            </p>
+        <!-- 6. Sub-processors — annotated -->
+        <section class="legal-section has-note" id="sharing">
+            <div class="section-body">
+                <h2><span class="section-num">06</span>Sharing &amp; Sub-Processors</h2>
+                <p>We share information only as described below.</p>
+                <ul>
+                    <li>
+                        <strong>Sub-processors.</strong> We use third-party services to host and operate the Platform. Each operates under contractual confidentiality and security obligations.
+                        <ul>
+                            <li>MongoDB Atlas &mdash; database hosting (currently U.S. regions).</li>
+                            <li>Google Cloud Platform &mdash; compute and storage for the Node API and Python agent service.</li>
+                            <li>Anthropic &mdash; large-language-model API for agent reasoning.</li>
+                            <li>Google AI (Gemini) &mdash; language-model API for summarization and reporting.</li>
+                            <li>Coinbase Developer Platform &mdash; future real x402 payment processing (not active during the closed beta).</li>
+                            <li>Firebase Hosting &mdash; static frontend distribution.</li>
+                        </ul>
+                    </li>
+                    <li><strong>Professional advisors.</strong> Lawyers, accountants, and auditors engaged in connection with our business.</li>
+                    <li><strong>Successors.</strong> A party that acquires or succeeds to our business in connection with a merger, acquisition, financing, or sale of assets, subject to standard confidentiality protections.</li>
+                    <li><strong>Legal compliance.</strong> Government authorities, regulators, and courts when we are required to do so by law, subpoena, or court order, or to protect the safety, rights, or property of Cadinal LLC or any third party.</li>
+                    <li><strong>With your direction.</strong> Any other party at your written direction or with your explicit consent.</li>
+                </ul>
+                <p>We do not sell or share personal information for advertising purposes.</p>
+            </div>
+            <aside class="agent-note" aria-label="Compliance Agent note">
+                <header class="agent-note-header">
+                    <span class="agent-dot" aria-hidden="true"></span>
+                    <span class="agent-label">Compliance Agent</span>
+                </header>
+                <p class="agent-note-body">
+                    Six vendors: MongoDB Atlas, Google Cloud, Anthropic, Google AI, Coinbase, Firebase. Each is contracted under confidentiality. Nothing is sold to advertisers.
+                </p>
+                <footer class="agent-note-meta">
+                    <span class="meta-pip">log PR-006-SP</span>
+                    <span class="meta-pip">confidence 98%</span>
+                </footer>
+            </aside>
         </section>
 
         <section class="legal-section" id="cookies">
-            <h2>7. Cookies &amp; Local Storage</h2>
+            <h2><span class="section-num">07</span>Cookies &amp; Local Storage</h2>
             <p>
                 The Platform uses browser <strong>localStorage</strong> to persist a small number of session settings (for example, a demo-mode toggle and the most recently selected role). We do not use third-party advertising cookies. Standard server logs may include cookies set by hosting providers for load-balancing and security purposes.
             </p>
         </section>
 
-        <section class="legal-section" id="retention">
-            <h2>8. Data Retention</h2>
-            <p>
-                We retain information for as long as your Institution&rsquo;s account is active and for a reasonable period thereafter to satisfy legal, audit, and dispute-resolution obligations. Default retention windows during the beta are:
-            </p>
-            <ul>
-                <li><strong>Account &amp; identity:</strong> until account deletion, then up to 24 months for accounting and legal compliance.</li>
-                <li><strong>Usage &amp; technical logs:</strong> up to 90 days, except where retained longer for security investigation.</li>
-                <li><strong>Submitted deal data:</strong> until you delete it through the Platform or request deletion, subject to operational backups (typically purged within 30 days).</li>
-                <li><strong>Communications:</strong> up to 24 months from the last interaction.</li>
-            </ul>
+        <!-- 8. Retention — annotated -->
+        <section class="legal-section has-note" id="retention">
+            <div class="section-body">
+                <h2><span class="section-num">08</span>Data Retention</h2>
+                <p>
+                    We retain information for as long as your Institution&rsquo;s account is active and for a reasonable period thereafter to satisfy legal, audit, and dispute-resolution obligations. Default retention windows during the beta are:
+                </p>
+                <ul>
+                    <li><strong>Account &amp; identity:</strong> until account deletion, then up to 24 months for accounting and legal compliance.</li>
+                    <li><strong>Usage &amp; technical logs:</strong> up to 90 days, except where retained longer for security investigation.</li>
+                    <li><strong>Submitted deal data:</strong> until you delete it through the Platform or request deletion, subject to operational backups (typically purged within 30 days).</li>
+                    <li><strong>Communications:</strong> up to 24 months from the last interaction.</li>
+                </ul>
+            </div>
+            <aside class="agent-note" aria-label="Compliance Agent note">
+                <header class="agent-note-header">
+                    <span class="agent-dot" aria-hidden="true"></span>
+                    <span class="agent-label">Compliance Agent</span>
+                </header>
+                <p class="agent-note-body">
+                    Active accounts kept indefinitely. After deletion: technical logs 90 days, deal data ~30 days in backups, account &amp; comms 24 months for audit and legal.
+                </p>
+                <footer class="agent-note-meta">
+                    <span class="meta-pip">log PR-008-RT</span>
+                    <span class="meta-pip">confidence 92%</span>
+                </footer>
+            </aside>
         </section>
 
         <section class="legal-section" id="security">
-            <h2>9. Security</h2>
+            <h2><span class="section-num">09</span>Security</h2>
             <p>
                 We implement administrative, technical, and physical safeguards designed to protect information from unauthorized access, disclosure, alteration, and destruction. These include transport encryption (HTTPS), authentication and access controls, audit logging, dependency monitoring, principle-of-least-privilege for production access, and routine review of sub-processor security posture.
             </p>
@@ -203,17 +275,15 @@
         </section>
 
         <section class="legal-section" id="transfers">
-            <h2>10. International Transfers</h2>
+            <h2><span class="section-num">10</span>International Transfers</h2>
             <p>
                 Our infrastructure is operated primarily in the United States. If you access the Platform from a jurisdiction with different data-protection laws, you understand that your information will be processed in the United States and other countries where our sub-processors operate.
             </p>
         </section>
 
         <section class="legal-section" id="rights">
-            <h2>11. Your Privacy Rights</h2>
-            <p>
-                Subject to applicable law, you and your Authorized Users may have rights to:
-            </p>
+            <h2><span class="section-num">11</span>Your Privacy Rights</h2>
+            <p>Subject to applicable law, you and your Authorized Users may have rights to:</p>
             <ul>
                 <li>Access the personal information we hold about you;</li>
                 <li>Request correction of inaccurate or incomplete information;</li>
@@ -227,57 +297,74 @@
             </p>
         </section>
 
-        <section class="legal-section" id="ccpa">
-            <h2>12. California-Specific Disclosures (CCPA/CPRA)</h2>
-            <p>
-                If you are a California resident, the California Consumer Privacy Act (as amended by the California Privacy Rights Act) provides additional rights. The categories of personal information we have collected in the past twelve (12) months map to the CCPA categories as follows:
-            </p>
-            <ul>
-                <li><strong>Identifiers</strong> (Cal. Civ. Code §1798.140(v)(1)(A)): name, email, business address, IP address.</li>
-                <li><strong>Internet or other electronic-network activity information</strong> (subsection (G)): pages visited, features used, request logs.</li>
-                <li><strong>Professional or employment-related information</strong> (subsection (I)): job title, employer.</li>
-                <li><strong>Inferences</strong> (subsection (K)): we do not draw inferences for the purpose of building consumer profiles.</li>
-            </ul>
-            <p>
-                <strong>Sources, purposes, and recipients</strong> of each category are described in Sections 2, 3, 4, and 6 above. <strong>We do not sell personal information</strong> within the meaning of the CCPA, and <strong>we do not share personal information for cross-context behavioral advertising</strong>.
-            </p>
-            <p>
-                California residents may exercise the rights described in Section 11. You may also designate an authorized agent to make a request on your behalf. We will not discriminate against you for exercising any of these rights.
-            </p>
+        <!-- 12. CCPA — annotated -->
+        <section class="legal-section has-note" id="ccpa">
+            <div class="section-body">
+                <h2><span class="section-num">12</span>California-Specific Disclosures (CCPA/CPRA)</h2>
+                <p>
+                    If you are a California resident, the California Consumer Privacy Act (as amended by the California Privacy Rights Act) provides additional rights. The categories of personal information we have collected in the past twelve (12) months map to the CCPA categories as follows:
+                </p>
+                <ul>
+                    <li><strong>Identifiers</strong> (Cal. Civ. Code §1798.140(v)(1)(A)): name, email, business address, IP address.</li>
+                    <li><strong>Internet or other electronic-network activity information</strong> (subsection (G)): pages visited, features used, request logs.</li>
+                    <li><strong>Professional or employment-related information</strong> (subsection (I)): job title, employer.</li>
+                    <li><strong>Inferences</strong> (subsection (K)): we do not draw inferences for the purpose of building consumer profiles.</li>
+                </ul>
+                <p>
+                    <strong>Sources, purposes, and recipients</strong> of each category are described in Sections 2, 3, 4, and 6 above. <strong>We do not sell personal information</strong> within the meaning of the CCPA, and <strong>we do not share personal information for cross-context behavioral advertising</strong>.
+                </p>
+                <p>
+                    California residents may exercise the rights described in Section 11. You may also designate an authorized agent to make a request on your behalf. We will not discriminate against you for exercising any of these rights.
+                </p>
+            </div>
+            <aside class="agent-note" aria-label="Compliance Agent note">
+                <header class="agent-note-header">
+                    <span class="agent-dot" aria-hidden="true"></span>
+                    <span class="agent-label">Compliance Agent</span>
+                </header>
+                <p class="agent-note-body">
+                    California residents: access, correction, deletion, portability rights. We do not sell or share for advertising. Use an authorized agent if you'd like — we'll verify your identity before responding.
+                </p>
+                <footer class="agent-note-meta">
+                    <span class="meta-pip">log PR-012-CA</span>
+                    <span class="meta-pip">confidence 99%</span>
+                </footer>
+            </aside>
         </section>
 
         <section class="legal-section" id="children">
-            <h2>13. Children</h2>
+            <h2><span class="section-num">13</span>Children</h2>
             <p>
                 The Platform is intended for institutional use. We do not knowingly collect personal information from anyone under 18. If you believe we have collected information from a minor, please contact us and we will take steps to delete it.
             </p>
         </section>
 
         <section class="legal-section" id="changes">
-            <h2>14. Changes to This Policy</h2>
+            <h2><span class="section-num">14</span>Changes to This Policy</h2>
             <p>
                 We may update this Privacy Policy from time to time. We will indicate the effective date at the top of the page. For material changes, we will provide notice to Authorized Users at least fourteen (14) days before the change takes effect by email or through the Platform.
             </p>
         </section>
 
         <section class="legal-section" id="contact">
-            <h2>15. Contact Us</h2>
-            <p>
-                For privacy questions, requests, or complaints:
-            </p>
+            <h2><span class="section-num">15</span>Contact Us</h2>
+            <p>For privacy questions, requests, or complaints:</p>
             <p>
                 <strong>Cadinal LLC</strong><br />
                 Attn: Privacy &mdash; SyndiMatch<br />
                 [SUPPORT_ADDRESS]<br />
-                Email: [CONTACT_EMAIL]
+                Email: <a href="mailto:help@oncadinal.com">help@oncadinal.com</a>
             </p>
         </section>
 
         <div class="legal-footer">
-            <a href="/">Home</a> &middot;
-            <a href="/terms.html">Terms of Service</a> &middot;
-            <a href="#">Back to top</a>
-            <div style="margin-top:12px;">&copy; 2026 Cadinal LLC. All rights reserved.</div>
+            <div class="legal-footer-row">
+                <a href="/">Home</a>
+                <a href="/terms.html">Terms of Service</a>
+                <a href="/agent-decisions.html" class="legal-footer-decisions">AI decision log</a>
+                <a href="#">Back to top</a>
+            </div>
+            <div class="legal-footer-copy">&copy; 2026 Cadinal LLC. SyndiMatch is a closed institutional beta. All rights reserved.</div>
         </div>
     </div>
 </body>

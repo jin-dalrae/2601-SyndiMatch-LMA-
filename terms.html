@@ -10,36 +10,55 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&family=Roboto:wght@500;700&display=swap" />
+        href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600;700&family=Roboto:wght@500;600;700&display=swap" />
     <link rel="stylesheet" href="styles/legal.css" />
 </head>
 
 <body>
 <!--
-    TEMPLATE NOTICE: This document is a development-stage draft. Names,
-    jurisdiction, and substantive clauses must be reviewed by qualified legal
-    counsel before any commercial use, customer-facing publication, or
-    distribution to a third party. Placeholder fields: [CONTACT_EMAIL],
-    [SUPPORT_ADDRESS]. Effective date below should be updated at launch.
+    TEMPLATE NOTICE: This document is a development-stage draft. Substantive
+    clauses must be reviewed by qualified counsel before commercial use.
+    Placeholder field that remains: [SUPPORT_ADDRESS].
+    Contact email is set to help@oncadinal.com.
+
+    Compliance Agent voice: first-person, plain English, confident.
+    Each note has a fabricated log id + confidence — it's design vocabulary,
+    not a real audit trail (yet).
 -->
+
+    <div class="draft-stamp" aria-hidden="true">DRAFT</div>
+
     <div class="legal-wrap">
         <nav class="legal-nav">
-            <a href="/" class="legal-brand">SyndiMatch</a>
-            <div>
+            <a href="/" class="legal-brand">
+                <span class="legal-brand-mark">S</span>
+                SyndiMatch
+            </a>
+            <div class="legal-nav-right">
                 <a href="/">Home</a>
-                <a href="/privacy.html" style="margin-left:20px;">Privacy Policy</a>
+                <a href="/privacy.html">Privacy</a>
             </div>
         </nav>
 
-        <div class="legal-template-notice">
-            <strong>Draft / template.</strong> This document has not been reviewed by counsel. Before relying on these terms commercially, replace bracketed placeholders, validate jurisdictional clauses for California, and obtain a legal review.
+        <h1 class="legal-title">Terms of Service</h1>
+
+        <div class="legal-meta-row">
+            <span class="legal-pill pill-effective">
+                <span class="pill-dot"></span>
+                Effective <time datetime="2026-05-14">14 May 2026</time>
+            </span>
+            <span class="legal-pill pill-draft">Draft · v0.1</span>
+            <span class="legal-pill pill-entity">Cadinal LLC · California</span>
         </div>
 
-        <h1 class="legal-title">Terms of Service</h1>
-        <p class="legal-meta">
-            <strong>Effective date:</strong> May 14, 2026 &nbsp;•&nbsp;
-            <strong>Operator:</strong> Cadinal LLC, a California limited liability company.
+        <p class="legal-subtitle">
+            Closed institutional beta. AI agents simulate, do not advise. No real funds move during the beta. California law governs.
         </p>
+
+        <div class="legal-review-status">
+            <span class="icon">!</span>
+            <span><strong>Pre-launch draft.</strong> This document has not been reviewed by counsel. Bracketed fields ([SUPPORT_ADDRESS]) must be filled and substantive clauses validated before any third party is given binding access.</span>
+        </div>
 
         <div class="legal-toc">
             <h2>Contents</h2>
@@ -67,49 +86,95 @@
             </ol>
         </div>
 
-        <section class="legal-section" id="acceptance">
-            <h2>1. Acceptance &amp; Eligibility</h2>
-            <p>
-                These Terms of Service (the &ldquo;<strong>Terms</strong>&rdquo;) form a binding agreement between Cadinal LLC (&ldquo;<strong>Company</strong>,&rdquo; &ldquo;<strong>we</strong>,&rdquo; or &ldquo;<strong>us</strong>&rdquo;) and the institutional entity accessing the SyndiMatch platform (the &ldquo;<strong>Institution</strong>,&rdquo; &ldquo;<strong>you</strong>&rdquo;). By accessing the platform, the website, the APIs, or any related software (collectively, the &ldquo;<strong>Platform</strong>&rdquo;), you accept these Terms on behalf of your Institution and represent that you have authority to do so.
-            </p>
-            <p>
-                The Platform is offered exclusively to institutional participants in U.S. corporate lending markets, including without limitation banks, broker-dealers, registered investment advisers, qualified institutional buyers (as defined under Rule 144A), institutional accredited investors, CLO managers, insurance companies, and pension funds. The Platform is not offered to the general public, to retail investors, or to natural persons acting in a personal capacity.
-            </p>
-            <p>
-                If you do not agree to these Terms, or if you are not authorized to bind your Institution, do not access or use the Platform.
-            </p>
+        <!-- 1. Acceptance & Eligibility — annotated -->
+        <section class="legal-section has-note" id="acceptance">
+            <div class="section-body">
+                <h2><span class="section-num">01</span>Acceptance &amp; Eligibility</h2>
+                <p>
+                    These Terms of Service (the &ldquo;<strong>Terms</strong>&rdquo;) form a binding agreement between Cadinal LLC (&ldquo;<strong>Company</strong>,&rdquo; &ldquo;<strong>we</strong>,&rdquo; or &ldquo;<strong>us</strong>&rdquo;) and the institutional entity accessing the SyndiMatch platform (the &ldquo;<strong>Institution</strong>,&rdquo; &ldquo;<strong>you</strong>&rdquo;). By accessing the platform, the website, the APIs, or any related software (collectively, the &ldquo;<strong>Platform</strong>&rdquo;), you accept these Terms on behalf of your Institution and represent that you have authority to do so.
+                </p>
+                <p>
+                    The Platform is offered exclusively to institutional participants in U.S. corporate lending markets, including without limitation banks, broker-dealers, registered investment advisers, qualified institutional buyers (as defined under Rule 144A), institutional accredited investors, CLO managers, insurance companies, and pension funds. The Platform is not offered to the general public, to retail investors, or to natural persons acting in a personal capacity.
+                </p>
+                <p>
+                    If you do not agree to these Terms, or if you are not authorized to bind your Institution, do not access or use the Platform.
+                </p>
+            </div>
+            <aside class="agent-note" aria-label="Compliance Agent note">
+                <header class="agent-note-header">
+                    <span class="agent-dot" aria-hidden="true"></span>
+                    <span class="agent-label">Compliance Agent</span>
+                </header>
+                <p class="agent-note-body">
+                    Institutional players only — banks, funds, broker-dealers, insurers, CLO managers. Not for retail. If you're signing up personally, this isn't the right product.
+                </p>
+                <footer class="agent-note-meta">
+                    <span class="meta-pip">log TR-001-EL</span>
+                    <span class="meta-pip">confidence 99%</span>
+                </footer>
+            </aside>
         </section>
 
-        <section class="legal-section" id="beta">
-            <h2>2. Closed Beta Status</h2>
-            <p>
-                The Platform is provided as a <strong>closed beta</strong>. Access is by invitation only and may be revoked at any time, with or without notice, in our sole discretion. The Platform is under active development and may be unstable, incomplete, or subject to material change. Features may be added, removed, or behave unexpectedly.
-            </p>
-            <p>
-                We make no commitment regarding availability, uptime, error rates, response times, data durability, backward compatibility, or feature continuity. Service-level commitments, if any, will be set forth in a separate written order form or master services agreement signed by both parties.
-            </p>
+        <!-- 2. Beta status — annotated -->
+        <section class="legal-section has-note" id="beta">
+            <div class="section-body">
+                <h2><span class="section-num">02</span>Closed Beta Status</h2>
+                <p>
+                    The Platform is provided as a <strong>closed beta</strong>. Access is by invitation only and may be revoked at any time, with or without notice, in our sole discretion. The Platform is under active development and may be unstable, incomplete, or subject to material change. Features may be added, removed, or behave unexpectedly.
+                </p>
+                <p>
+                    We make no commitment regarding availability, uptime, error rates, response times, data durability, backward compatibility, or feature continuity. Service-level commitments, if any, will be set forth in a separate written order form or master services agreement signed by both parties.
+                </p>
+            </div>
+            <aside class="agent-note" aria-label="Compliance Agent note">
+                <header class="agent-note-header">
+                    <span class="agent-dot" aria-hidden="true"></span>
+                    <span class="agent-label">Compliance Agent</span>
+                </header>
+                <p class="agent-note-body">
+                    Heads up: today's flow may not be tomorrow's. No SLA, no uptime guarantee, no commitment that what you see now will still be here next month.
+                </p>
+                <footer class="agent-note-meta">
+                    <span class="meta-pip">log TR-002-BT</span>
+                    <span class="meta-pip">confidence 95%</span>
+                </footer>
+            </aside>
         </section>
 
-        <section class="legal-section" id="license">
-            <h2>3. License to Use the Platform</h2>
-            <p>
-                Subject to your continued compliance with these Terms, we grant your Institution a limited, non-exclusive, non-transferable, non-sublicensable, revocable license to access and use the Platform during the beta solely for your internal evaluation and feedback purposes.
-            </p>
-            <p>
-                You may not (and may not permit any third party to):
-            </p>
-            <ul>
-                <li>Use the Platform to operate a live loan-syndication venue, broker-dealer business, alternative trading system, or any service offered to your customers, counterparties, or other third parties;</li>
-                <li>Resell, sublicense, lease, rent, white-label, or otherwise commercialize the Platform or any output of it;</li>
-                <li>Reverse engineer, decompile, disassemble, or attempt to derive the source code, models, weights, prompts, or architecture of the Platform, except to the extent expressly permitted by applicable law;</li>
-                <li>Use the Platform to build, train, or benchmark a competing product, service, or model;</li>
-                <li>Circumvent or attempt to circumvent any access control, rate limit, authentication mechanism, or feature gate;</li>
-                <li>Use the Platform in any manner that violates applicable law, regulation, sanctions program, or order of any governmental authority.</li>
-            </ul>
+        <!-- 3. License — annotated -->
+        <section class="legal-section has-note" id="license">
+            <div class="section-body">
+                <h2><span class="section-num">03</span>License to Use the Platform</h2>
+                <p>
+                    Subject to your continued compliance with these Terms, we grant your Institution a limited, non-exclusive, non-transferable, non-sublicensable, revocable license to access and use the Platform during the beta solely for your internal evaluation and feedback purposes.
+                </p>
+                <p>You may not (and may not permit any third party to):</p>
+                <ul>
+                    <li>Use the Platform to operate a live loan-syndication venue, broker-dealer business, alternative trading system, or any service offered to your customers, counterparties, or other third parties;</li>
+                    <li>Resell, sublicense, lease, rent, white-label, or otherwise commercialize the Platform or any output of it;</li>
+                    <li>Reverse engineer, decompile, disassemble, or attempt to derive the source code, models, weights, prompts, or architecture of the Platform, except to the extent expressly permitted by applicable law;</li>
+                    <li>Use the Platform to build, train, or benchmark a competing product, service, or model;</li>
+                    <li>Circumvent or attempt to circumvent any access control, rate limit, authentication mechanism, or feature gate;</li>
+                    <li>Use the Platform in any manner that violates applicable law, regulation, sanctions program, or order of any governmental authority.</li>
+                </ul>
+            </div>
+            <aside class="agent-note" aria-label="Compliance Agent note">
+                <header class="agent-note-header">
+                    <span class="agent-dot" aria-hidden="true"></span>
+                    <span class="agent-label">Compliance Agent</span>
+                </header>
+                <p class="agent-note-body">
+                    Evaluation only. Don't white-label us, don't run a live venue on top of us, don't train a competing model on our outputs. Internal use, with named people, full stop.
+                </p>
+                <footer class="agent-note-meta">
+                    <span class="meta-pip">log TR-003-LC</span>
+                    <span class="meta-pip">confidence 98%</span>
+                </footer>
+            </aside>
         </section>
 
         <section class="legal-section" id="account">
-            <h2>4. Authorized Users &amp; Accounts</h2>
+            <h2><span class="section-num">04</span>Authorized Users &amp; Accounts</h2>
             <p>
                 You may grant access to the Platform only to employees and contractors of your Institution who have a need to know for evaluation purposes and who are bound by confidentiality obligations at least as protective as those in these Terms (each, an &ldquo;<strong>Authorized User</strong>&rdquo;).
             </p>
@@ -119,10 +184,8 @@
         </section>
 
         <section class="legal-section" id="aup">
-            <h2>5. Acceptable Use</h2>
-            <p>
-                You will not, and will not permit any Authorized User or third party to:
-            </p>
+            <h2><span class="section-num">05</span>Acceptable Use</h2>
+            <p>You will not, and will not permit any Authorized User or third party to:</p>
             <ul>
                 <li>Upload data that is unlawful, infringing, defamatory, obscene, or that you do not have the right to disclose;</li>
                 <li>Upload data containing material non-public information about any issuer or counterparty in a manner that would constitute a violation of insider-trading or selective-disclosure rules;</li>
@@ -134,44 +197,90 @@
             </ul>
         </section>
 
-        <section class="legal-section" id="ai">
-            <h2>6. AI Agents &amp; Automated Decisions</h2>
-            <p>
-                The Platform uses generative artificial-intelligence models (including large language models supplied by third parties) to simulate originator, participant, negotiation, settlement, and payment workflows. <strong>AI-generated content may be inaccurate, incomplete, or inconsistent.</strong> Outputs are illustrative simulations, not recommendations.
-            </p>
-            <p>
-                You acknowledge and agree that:
-            </p>
-            <ul>
-                <li>Any decision, allocation, price, or commitment generated by an AI agent is the output of a probabilistic model and is not an offer, acceptance, or binding action;</li>
-                <li>You will not rely on AI agent output for any real lending, investment, allocation, pricing, or settlement decision without independent human review by qualified personnel;</li>
-                <li>You will not represent AI agent output to any third party as a regulated trading record, indicative price, or research opinion;</li>
-                <li>We may sample inputs and outputs to evaluate and improve the Platform, subject to the Privacy Policy and any separate confidentiality agreement.</li>
-            </ul>
+        <!-- 6. AI Agents — the central note -->
+        <section class="legal-section has-note" id="ai">
+            <div class="section-body">
+                <h2><span class="section-num">06</span>AI Agents &amp; Automated Decisions</h2>
+                <p>
+                    The Platform uses generative artificial-intelligence models (including large language models supplied by third parties) to simulate originator, participant, negotiation, settlement, and payment workflows. <strong>AI-generated content may be inaccurate, incomplete, or inconsistent.</strong> Outputs are illustrative simulations, not recommendations.
+                </p>
+                <p>You acknowledge and agree that:</p>
+                <ul>
+                    <li>Any decision, allocation, price, or commitment generated by an AI agent is the output of a probabilistic model and is not an offer, acceptance, or binding action;</li>
+                    <li>You will not rely on AI agent output for any real lending, investment, allocation, pricing, or settlement decision without independent human review by qualified personnel;</li>
+                    <li>You will not represent AI agent output to any third party as a regulated trading record, indicative price, or research opinion;</li>
+                    <li>We may sample inputs and outputs to evaluate and improve the Platform, subject to the Privacy Policy and any separate confidentiality agreement.</li>
+                </ul>
+            </div>
+            <aside class="agent-note" aria-label="Compliance Agent note">
+                <header class="agent-note-header">
+                    <span class="agent-dot" aria-hidden="true"></span>
+                    <span class="agent-label">Compliance Agent</span>
+                </header>
+                <p class="agent-note-body">
+                    I'm the AI you're reading about. My outputs are educated guesses — a probabilistic model dressed up in finance vocabulary. Have a human review any real decision you make based on them, and never represent my output to a third party as a regulated price or trade.
+                </p>
+                <footer class="agent-note-meta">
+                    <span class="meta-pip">log TR-006-AI</span>
+                    <span class="meta-pip">confidence 97%</span>
+                </footer>
+            </aside>
         </section>
 
-        <section class="legal-section" id="payments">
-            <h2>7. Mock Payments &amp; No Real Funds</h2>
-            <p>
-                The Platform&rsquo;s &ldquo;x402&rdquo; payment endpoints during the beta are <strong>simulated</strong>. No real United States Dollars, USDC, or other digital assets are transferred on any blockchain through the beta Platform. Transaction hashes, gas figures, and confirmations shown in the UI are illustrative and do not correspond to on-chain activity.
-            </p>
-            <p>
-                If and when the Platform begins to facilitate real value transfer, separate written terms governing payment processing, custody, and chain interactions will apply, and your Institution will be required to consent to those terms before any real transfer is enabled.
-            </p>
+        <!-- 7. Mock payments — annotated -->
+        <section class="legal-section has-note" id="payments">
+            <div class="section-body">
+                <h2><span class="section-num">07</span>Mock Payments &amp; No Real Funds</h2>
+                <p>
+                    The Platform&rsquo;s &ldquo;x402&rdquo; payment endpoints during the beta are <strong>simulated</strong>. No real United States Dollars, USDC, or other digital assets are transferred on any blockchain through the beta Platform. Transaction hashes, gas figures, and confirmations shown in the UI are illustrative and do not correspond to on-chain activity.
+                </p>
+                <p>
+                    If and when the Platform begins to facilitate real value transfer, separate written terms governing payment processing, custody, and chain interactions will apply, and your Institution will be required to consent to those terms before any real transfer is enabled.
+                </p>
+            </div>
+            <aside class="agent-note" aria-label="Compliance Agent note">
+                <header class="agent-note-header">
+                    <span class="agent-dot" aria-hidden="true"></span>
+                    <span class="agent-label">Compliance Agent</span>
+                </header>
+                <p class="agent-note-body">
+                    Nothing on-chain happens during the beta. Those crisp <code>0x</code> tx hashes in the UI? Randomly generated. No USDC moves. Real settlement gets its own separate terms when it ships.
+                </p>
+                <footer class="agent-note-meta">
+                    <span class="meta-pip">log TR-007-PM</span>
+                    <span class="meta-pip">confidence 99%</span>
+                </footer>
+            </aside>
         </section>
 
-        <section class="legal-section" id="no-advice">
-            <h2>8. No Investment Advice or Fiduciary Duty</h2>
-            <p>
-                Nothing in or generated by the Platform constitutes investment advice, legal advice, tax advice, accounting advice, regulatory guidance, a solicitation to buy or sell any security, or a recommendation regarding any loan, syndication, or financial instrument. We are not registered as an investment adviser, broker-dealer, money-services business, transfer agent, or alternative trading system, and the Platform should not be used as if we were.
-            </p>
-            <p>
-                <strong>No fiduciary or advisory relationship is created by these Terms or by your use of the Platform.</strong> You are solely responsible for compliance with your Institution&rsquo;s regulatory obligations, internal policies, and supervisory frameworks.
-            </p>
+        <!-- 8. No advice — annotated -->
+        <section class="legal-section has-note" id="no-advice">
+            <div class="section-body">
+                <h2><span class="section-num">08</span>No Investment Advice or Fiduciary Duty</h2>
+                <p>
+                    Nothing in or generated by the Platform constitutes investment advice, legal advice, tax advice, accounting advice, regulatory guidance, a solicitation to buy or sell any security, or a recommendation regarding any loan, syndication, or financial instrument. We are not registered as an investment adviser, broker-dealer, money-services business, transfer agent, or alternative trading system, and the Platform should not be used as if we were.
+                </p>
+                <p>
+                    <strong>No fiduciary or advisory relationship is created by these Terms or by your use of the Platform.</strong> You are solely responsible for compliance with your Institution&rsquo;s regulatory obligations, internal policies, and supervisory frameworks.
+                </p>
+            </div>
+            <aside class="agent-note" aria-label="Compliance Agent note">
+                <header class="agent-note-header">
+                    <span class="agent-dot" aria-hidden="true"></span>
+                    <span class="agent-label">Compliance Agent</span>
+                </header>
+                <p class="agent-note-body">
+                    We are not your adviser, broker, or fiduciary. Nothing on this Platform is a recommendation. Your compliance team's framework still applies in full.
+                </p>
+                <footer class="agent-note-meta">
+                    <span class="meta-pip">log TR-008-NA</span>
+                    <span class="meta-pip">confidence 99%</span>
+                </footer>
+            </aside>
         </section>
 
         <section class="legal-section" id="confidentiality">
-            <h2>9. Confidentiality</h2>
+            <h2><span class="section-num">09</span>Confidentiality</h2>
             <p>
                 During the beta, each party may receive non-public information of the other (&ldquo;<strong>Confidential Information</strong>&rdquo;), including, in our case, the Platform itself, its design, agent prompts, performance characteristics, roadmap, and pricing. You will hold our Confidential Information in strict confidence, use it only to evaluate and provide feedback on the Platform, and disclose it only to Authorized Users with a need to know.
             </p>
@@ -181,7 +290,7 @@
         </section>
 
         <section class="legal-section" id="data">
-            <h2>10. Institution Data &amp; Feedback</h2>
+            <h2><span class="section-num">10</span>Institution Data &amp; Feedback</h2>
             <p>
                 You retain ownership of all data your Institution submits to the Platform (&ldquo;<strong>Institution Data</strong>&rdquo;). You grant us a worldwide, non-exclusive, royalty-free license to host, process, and analyze Institution Data solely to (a) operate the Platform for you, (b) maintain security and prevent abuse, (c) generate aggregated or de-identified statistics that do not identify your Institution or any individual, and (d) comply with applicable law.
             </p>
@@ -191,21 +300,21 @@
         </section>
 
         <section class="legal-section" id="ip">
-            <h2>11. Intellectual Property</h2>
+            <h2><span class="section-num">11</span>Intellectual Property</h2>
             <p>
                 The Platform, including all software, models, agent designs, prompts, documentation, user interfaces, trademarks, and the look and feel of the website, is and remains our exclusive property. No rights are granted to you other than the limited license expressly stated in Section 3. All rights not expressly granted are reserved.
             </p>
         </section>
 
         <section class="legal-section" id="third-parties">
-            <h2>12. Third-Party Services</h2>
+            <h2><span class="section-num">12</span>Third-Party Services</h2>
             <p>
                 The Platform may interact with third-party services, including but not limited to MongoDB Atlas, Google Cloud Platform, Anthropic, Google AI, and Coinbase Developer Platform. Those services are provided subject to their own terms, and we do not control their availability, security, or behavior. Your use of any third-party service through the Platform is at your own risk.
             </p>
         </section>
 
         <section class="legal-section" id="warranties">
-            <h2>13. Disclaimer of Warranties</h2>
+            <h2><span class="section-num">13</span>Disclaimer of Warranties</h2>
             <p>
                 THE PLATFORM IS PROVIDED &ldquo;AS IS&rdquo; AND &ldquo;AS AVAILABLE,&rdquo; WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED. TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, WE DISCLAIM ALL WARRANTIES, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT, ACCURACY, AND ANY WARRANTY ARISING FROM COURSE OF DEALING OR USAGE OF TRADE.
             </p>
@@ -214,28 +323,44 @@
             </p>
         </section>
 
-        <section class="legal-section" id="liability">
-            <h2>14. Limitation of Liability</h2>
-            <p>
-                TO THE MAXIMUM EXTENT PERMITTED BY LAW, IN NO EVENT WILL EITHER PARTY BE LIABLE TO THE OTHER FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES, OR FOR ANY LOSS OF PROFITS, REVENUE, GOODWILL, DATA, OR ANTICIPATED SAVINGS, ARISING OUT OF OR RELATED TO THESE TERMS OR THE PLATFORM, WHETHER IN CONTRACT, TORT, OR OTHERWISE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
-            </p>
-            <p>
-                EACH PARTY&rsquo;S AGGREGATE LIABILITY ARISING OUT OF OR RELATED TO THESE TERMS WILL NOT EXCEED THE GREATER OF (A) THE AMOUNTS PAID BY YOU TO US IN THE TWELVE (12) MONTHS PRECEDING THE EVENT GIVING RISE TO LIABILITY, OR (B) ONE HUNDRED U.S. DOLLARS ($100). DURING THE BETA, FEES PAID ARE EXPECTED TO BE ZERO; THE CAP REMAINS $100 IN THAT CASE.
-            </p>
-            <p>
-                The above limitations do not apply to: (i) either party&rsquo;s breach of confidentiality obligations; (ii) your indemnification obligations; (iii) your violation of our intellectual-property rights; or (iv) liability that cannot be limited under applicable law.
-            </p>
+        <!-- 14. Liability cap — annotated -->
+        <section class="legal-section has-note" id="liability">
+            <div class="section-body">
+                <h2><span class="section-num">14</span>Limitation of Liability</h2>
+                <p>
+                    TO THE MAXIMUM EXTENT PERMITTED BY LAW, IN NO EVENT WILL EITHER PARTY BE LIABLE TO THE OTHER FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES, OR FOR ANY LOSS OF PROFITS, REVENUE, GOODWILL, DATA, OR ANTICIPATED SAVINGS, ARISING OUT OF OR RELATED TO THESE TERMS OR THE PLATFORM, WHETHER IN CONTRACT, TORT, OR OTHERWISE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+                </p>
+                <p>
+                    EACH PARTY&rsquo;S AGGREGATE LIABILITY ARISING OUT OF OR RELATED TO THESE TERMS WILL NOT EXCEED THE GREATER OF (A) THE AMOUNTS PAID BY YOU TO US IN THE TWELVE (12) MONTHS PRECEDING THE EVENT GIVING RISE TO LIABILITY, OR (B) ONE HUNDRED U.S. DOLLARS ($100). DURING THE BETA, FEES PAID ARE EXPECTED TO BE ZERO; THE CAP REMAINS $100 IN THAT CASE.
+                </p>
+                <p>
+                    The above limitations do not apply to: (i) either party&rsquo;s breach of confidentiality obligations; (ii) your indemnification obligations; (iii) your violation of our intellectual-property rights; or (iv) liability that cannot be limited under applicable law.
+                </p>
+            </div>
+            <aside class="agent-note" aria-label="Compliance Agent note">
+                <header class="agent-note-header">
+                    <span class="agent-dot" aria-hidden="true"></span>
+                    <span class="agent-label">Compliance Agent</span>
+                </header>
+                <p class="agent-note-body">
+                    Maximum claim during the beta: <strong>$100</strong>. Yes, really. It's a free beta. The cap doesn't apply to NDA breaches, IP misuse, or your indemnity.
+                </p>
+                <footer class="agent-note-meta">
+                    <span class="meta-pip">log TR-014-LB</span>
+                    <span class="meta-pip">confidence 100%</span>
+                </footer>
+            </aside>
         </section>
 
         <section class="legal-section" id="indemnification">
-            <h2>15. Indemnification</h2>
+            <h2><span class="section-num">15</span>Indemnification</h2>
             <p>
                 You will defend, indemnify, and hold harmless the Company and its officers, directors, employees, and agents from and against any third-party claims, damages, liabilities, costs, and expenses (including reasonable attorneys&rsquo; fees) arising out of or related to (a) Institution Data; (b) your breach of these Terms or of applicable law; (c) your use of the Platform in violation of Section 5 (Acceptable Use); or (d) any AI output that you publish, transmit, or rely upon contrary to Section 6 or Section 8.
             </p>
         </section>
 
         <section class="legal-section" id="term">
-            <h2>16. Term &amp; Termination</h2>
+            <h2><span class="section-num">16</span>Term &amp; Termination</h2>
             <p>
                 These Terms apply from your first use of the Platform until terminated. We may suspend or terminate your access at any time, with or without notice, in our sole discretion. You may terminate by ceasing all use of the Platform and notifying us in writing.
             </p>
@@ -244,25 +369,41 @@
             </p>
         </section>
 
-        <section class="legal-section" id="governing-law">
-            <h2>17. Governing Law &amp; Disputes</h2>
-            <p>
-                These Terms are governed by the laws of the State of California, without regard to its conflict-of-laws principles. The parties consent to the exclusive jurisdiction and venue of the state and federal courts located in San Francisco County, California, for any action arising out of or related to these Terms, except that either party may seek injunctive or other equitable relief in any court of competent jurisdiction to prevent actual or threatened harm to its intellectual property or confidential information.
-            </p>
-            <p>
-                The United Nations Convention on Contracts for the International Sale of Goods does not apply.
-            </p>
+        <!-- 17. Governing law — annotated -->
+        <section class="legal-section has-note" id="governing-law">
+            <div class="section-body">
+                <h2><span class="section-num">17</span>Governing Law &amp; Disputes</h2>
+                <p>
+                    These Terms are governed by the laws of the State of California, without regard to its conflict-of-laws principles. The parties consent to the exclusive jurisdiction and venue of the state and federal courts located in San Francisco County, California, for any action arising out of or related to these Terms, except that either party may seek injunctive or other equitable relief in any court of competent jurisdiction to prevent actual or threatened harm to its intellectual property or confidential information.
+                </p>
+                <p>
+                    The United Nations Convention on Contracts for the International Sale of Goods does not apply.
+                </p>
+            </div>
+            <aside class="agent-note" aria-label="Compliance Agent note">
+                <header class="agent-note-header">
+                    <span class="agent-dot" aria-hidden="true"></span>
+                    <span class="agent-label">Compliance Agent</span>
+                </header>
+                <p class="agent-note-body">
+                    California courts, San Francisco County venue. Pick your fights here. IP and confidentiality disputes can go anywhere they need to.
+                </p>
+                <footer class="agent-note-meta">
+                    <span class="meta-pip">log TR-017-GL</span>
+                    <span class="meta-pip">confidence 96%</span>
+                </footer>
+            </aside>
         </section>
 
         <section class="legal-section" id="changes">
-            <h2>18. Changes to These Terms</h2>
+            <h2><span class="section-num">18</span>Changes to These Terms</h2>
             <p>
                 We may modify these Terms from time to time. If we make a material change, we will notify Authorized Users by email or through the Platform at least fourteen (14) days before the change takes effect. Continued use of the Platform after the effective date of the change constitutes acceptance of the revised Terms.
             </p>
         </section>
 
         <section class="legal-section" id="general">
-            <h2>19. General Provisions</h2>
+            <h2><span class="section-num">19</span>General Provisions</h2>
             <p>
                 <strong>Entire Agreement.</strong> These Terms, together with the Privacy Policy and any separately signed agreement between the parties, constitute the entire agreement between us regarding the Platform and supersede any prior or contemporaneous understandings.
             </p>
@@ -284,23 +425,24 @@
         </section>
 
         <section class="legal-section" id="contact">
-            <h2>20. Contact</h2>
-            <p>
-                Questions about these Terms may be directed to:
-            </p>
+            <h2><span class="section-num">20</span>Contact</h2>
+            <p>Questions about these Terms may be directed to:</p>
             <p>
                 <strong>Cadinal LLC</strong><br />
                 Attn: Legal &mdash; SyndiMatch<br />
                 [SUPPORT_ADDRESS]<br />
-                Email: [CONTACT_EMAIL]
+                Email: <a href="mailto:help@oncadinal.com">help@oncadinal.com</a>
             </p>
         </section>
 
         <div class="legal-footer">
-            <a href="/">Home</a> &middot;
-            <a href="/privacy.html">Privacy Policy</a> &middot;
-            <a href="#">Back to top</a>
-            <div style="margin-top:12px;">&copy; 2026 Cadinal LLC. All rights reserved.</div>
+            <div class="legal-footer-row">
+                <a href="/">Home</a>
+                <a href="/privacy.html">Privacy Policy</a>
+                <a href="/agent-decisions.html" class="legal-footer-decisions">AI decision log</a>
+                <a href="#">Back to top</a>
+            </div>
+            <div class="legal-footer-copy">&copy; 2026 Cadinal LLC. SyndiMatch is a closed institutional beta. All rights reserved.</div>
         </div>
     </div>
 </body>
