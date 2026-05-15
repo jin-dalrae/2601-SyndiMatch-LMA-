@@ -1,251 +1,194 @@
 # SyndiMatch
 
-AI-native loan syndication platform. Three-role demo (Platform Admin, Originator, Participant) over a Node API and a Python LangGraph agent service backed by MongoDB. Includes mock x402 micropayments and a built-in market simulation.
+**Imagine a company needs to borrow a LOT of money. Like, $500 million. SyndiMatch is a tool that helps a bunch of banks team up to lend that money together — and it uses AI helper robots to do the slow, boring parts in minutes instead of weeks.**
 
-Business case lives in [PITCH_DECK.md](PITCH_DECK.md) and [PROJECT_DESCRIPTION.md](PROJECT_DESCRIPTION.md). This README covers what the code does and how to run it.
-
----
-
-## Status
-
-What works on `refactor/main` @ `f005f5c`, verified by clicking through a fresh local boot:
-
-- Landing page → Platform Admin overview with seeded syndications in the pipeline
-- Originator dashboard: create-and-announce form POSTs to `/api/syndications`, persists to MongoDB, UI updates
-- Participant dashboard: 10 available deals (mix of seeded + client-side simulated), quick-bid buttons
-- Python agents service boots in `SIMULATION_MODE` (no Anthropic / Gemini keys required)
-
-Known issues, not blocking the demo:
-
-- `GET /api/analytics/platform` returns 404; polled every 10s
-- `POST /api/agents/bid` is flaky (~40% 502 rate via Node→Python proxy)
-- Metrics bar (`47 Active Participants / $550M / 94.2% Success`) is hardcoded HTML
-- `/api/all-data` merge logic duplicates syndications (matches on `_id` vs `id` inconsistently)
-- Frontend mixes real API data with client-side `SimulationEngine` data, two sources of truth
-
-A refactor branch is in flight to address these — see [Roadmap](#roadmap).
+This README explains what that actually means, in plain words. If you want the business pitch, see [PITCH_DECK.md](PITCH_DECK.md). If you want to deploy it to the internet, see [DEPLOY.md](DEPLOY.md).
 
 ---
 
-## Quick start (local dev)
+## First, what is a "syndicated loan"?
 
-Prereqs: Node 18+, Python 3.10+, `mongod` (e.g. `brew install mongodb-community`).
+Let's start with a story.
+
+A big company — say, a airline — wants to borrow **$500 million** to buy new planes. They go to a bank and ask for the money.
+
+Here's the problem: that's a *huge* amount. If the bank lends all $500 million and the airline can't pay it back, the bank is in serious trouble. That's way too much risk for one bank to take alone.
+
+So the banks do something smart. Instead of one bank lending all $500 million, **lots of banks each lend a slice**:
+
+- Bank A lends $100 million
+- Bank B lends $80 million
+- Pension fund C lends $75 million
+- ...and so on, until the whole $500 million is covered.
+
+Now if something goes wrong, no single lender loses everything. The risk is shared. This "team of lenders splitting one big loan" is called a **syndicated loan**. The whole process of putting that team together is **syndication**.
+
+> Think of it like a $500 class trip that's too expensive for one family. So 20 families each chip in a different amount until the trip is fully paid for. One family organizes it and collects everyone's share.
+
+The family that organizes it has a name in finance: the **lead arranger** (or **originator**). The families who chip in are the **participants**.
+
+---
+
+## Why does this need fixing?
+
+Organizing a syndicated loan today is *painfully slow*. It works mostly through:
+
+- Phone calls
+- Emails
+- Spreadsheets sent back and forth
+- Lawyers checking documents by hand
+
+A single deal can take **4 to 6 weeks** just to get organized. During those weeks, money sits around doing nothing, and everyone's time is wasted on back-and-forth messages. For a $4.7 *trillion* market, that slowness costs a fortune.
+
+It's like if planning that class trip took six weeks of phone tag just to figure out who's paying what.
+
+---
+
+## What SyndiMatch does
+
+SyndiMatch gives every player a smart **AI assistant** (we call them "agents") that does the slow back-and-forth for them, automatically, in minutes.
+
+There are **five kinds of agents**, each with one job. Here's the whole process as a relay race:
+
+| # | Agent | What it does (in plain words) |
+|---|-------|-------------------------------|
+| 1 | **Originator** | The organizer. Sets up the deal: who's borrowing, how much, and the interest rate. Like the family that plans the class trip. |
+| 2 | **Participant** | Each lender's personal robot. It looks at the deal and decides "is this a good deal for us? how much should we chip in?" — based on rules its bank gave it. |
+| 3 | **Negotiation** | The auctioneer. Runs a fair bidding round so everyone agrees on the interest rate and who lends how much. |
+| 4 | **Settlement** | The paperwork checker. Confirms the final amounts and makes sure the documents are correct. |
+| 5 | **Payment** | The money mover. Handles sending the funds when everything is agreed and signed. |
+
+Because robots don't need to sleep or play phone tag, what used to take **weeks now takes hours**. And every decision an agent makes is written down in a log, so humans can always check *why* the robot did what it did.
+
+---
+
+## The life of a deal (the "pipeline")
+
+Every deal moves through stages, like levels in a game. In SyndiMatch you can watch this happen live:
+
+```
+OPEN  →  NEGOTIATING  →  CLOSING  →  SETTLEMENT  →  FUNDING  →  COMPLETED
+```
+
+1. **Open** — The deal is announced. "Who wants in?"
+2. **Negotiating** — Lenders' robots place bids. The price gets worked out.
+3. **Closing** — Enough lenders are in. The deal is locked.
+4. **Settlement** — Final amounts confirmed, documents checked.
+5. **Funding** — The money is moved.
+6. **Completed** — Done. The company has its loan.
+
+In this demo, a brand-new deal walks through all six stages on its own in under a minute so you can watch the whole thing happen.
+
+---
+
+## Is this real money?
+
+**No.** This is a **demo** — a working model, like a flight simulator for a video game pilot. It looks and behaves like the real thing, but:
+
+- No real dollars or cryptocurrency move anywhere.
+- The "payments" are pretend (we call this the *mock x402* system).
+- The companies and banks in the demo are made up.
+
+It's built to *show how the real thing would work*, not to actually move money. (There's a friendly "DRAFT / demo" stamp on the legal pages to make this clear.)
+
+---
+
+## The three people who use it
+
+When you open SyndiMatch, you pick who you want to be (top-right dropdown):
+
+| You play as... | You see... |
+|----------------|------------|
+| **Platform Admin** | The control room. Every deal, every agent, all at once. |
+| **Originator** (a bank) | The "create a deal" desk. You fill a form and announce a new loan. |
+| **Participant** (an investor) | The "should I invest?" desk. You browse deals and let your robot bid. |
+
+No sign-up or password needed for the demo.
+
+---
+
+## How to run it on your own computer
+
+You need three things installed first: **Node.js** (version 18 or newer), **Python** (3.10 or newer), and **MongoDB** (a database).
+
+Then, in a terminal, run these one at a time:
 
 ```bash
-# 1. MongoDB
+# 1. Start the database
 brew services start mongodb-community
 
-# 2. Node deps + Python venv
+# 2. Install the helper code
 npm install
 python3 -m venv .venv
 .venv/bin/pip install -r agents/requirements.txt
 
-# 3. Env (defaults point at localhost; no API keys required for the demo)
+# 3. Copy the settings file (the defaults already work)
 cp .env.example .env
 
-# 4. Seed the database (canonical seeder — populates both collection name patterns)
+# 4. Fill the database with pretend deals and banks
 .venv/bin/python agents/seed_all.py
 
-# 5. Start the Node API on :3001
+# 5. Start the main website (keep this running)
 npm run dev
 
-# 6. In a second shell, start the Python agents service on :8000
+# 6. Open a SECOND terminal and start the AI agents
 .venv/bin/python -m uvicorn agents.server:app --host 0.0.0.0 --port 8000
 
-# 7. Open http://localhost:3001
+# 7. Open your web browser to:
+#    http://localhost:3001
 ```
 
-Smoke tests once everything is up:
+That's it. Click **"Try the demo"**, pick a role, and watch the agents work.
 
-```bash
-./scripts/smoke-node.sh     # checks Node /api/health + /api/ready
-./scripts/smoke-agents.sh   # checks Python /api/health + /api/ready
-```
-
-### Notes
-
-- `agents/seed_all.py` is the canonical seeder. It writes to both legacy (`participant_agents`, `originator_agents`, `syndications`) and current (`participants`, `originator`, `syndication_original`) collection names. Running `server/seed.js` alone is **not** enough — the Node API reads from the current-name collections, which only the Python seed populates.
-- Node always uses DB name `syndimatch` (hardcoded in `server/db.js`). The Python config defaults to `syndimatch_dev` when `ENVIRONMENT=development`, so `.env.example` pins `DATABASE_NAME=syndimatch` to keep both services on the same DB.
-- The agents service uses package-relative imports (`from .orchestrator`). Run it as `uvicorn agents.server:app` from the repo root, not `uvicorn server:app` from inside `agents/`. The included `agents/start.sh` detects context and picks the right form.
-- No LLM keys are required to demo. `agents/config.py` sets `SIMULATION_MODE = True` whenever `ANTHROPIC_API_KEY` is unset, which short-circuits all real LLM calls to deterministic stubs.
+> You do **not** need any paid AI keys to run the demo. When no key is set, the agents run in "simulation mode" — they make sensible pretend decisions instead of calling a real AI. Everything still works.
 
 ---
 
-## Architecture
+## What's under the hood (for the curious)
+
+SyndiMatch is three programs working together, like three departments of a company passing notes:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Browser (vanilla JS, 31 globals loaded via <script> tags)  │
-│  index.html + js/ + styles/                                 │
-└─────────────────────────────────────────────────────────────┘
-                              │ fetch
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  Node API  (Express 5 + MongoDB)                            │
-│  server/index.js — all routes in one file (903 LOC)         │
-│    /api/syndications, /api/participants, /api/originators   │
-│    /api/x402/* (mock USDC payment flow on Base)             │
-│    /api/agents/* (proxy to Python service)                  │
-└─────────────────────────────────────────────────────────────┘
-                              │ fetch (AGENTS_SERVICE_URL)
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  Python agents  (FastAPI + LangGraph)                       │
-│  agents/server.py                                           │
-│    OriginatorAgent — structures deals                       │
-│    ParticipantAgent — evaluates and bids                    │
-│    NegotiationAgent — multi-round Dutch auction             │
-│    SettlementAgent — allocation + docs                      │
-│    PaymentAgent — x402 fee flow                             │
-│  SIMULATION_MODE skips real Anthropic/Gemini calls          │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-                       MongoDB (syndimatch)
+   Your web browser  (the buttons and screens you click)
+            │
+            ▼
+   Node.js server     (the front desk — handles requests, talks to the database)
+            │
+            ▼
+   Python AI agents    (the "brains" — the five robot helpers)
+            │
+            ▼
+   MongoDB              (the filing cabinet — remembers every deal)
 ```
 
-### Roles
+- The **browser** part is plain HTML, CSS, and JavaScript.
+- The **server** is Node.js with Express, storing everything in MongoDB.
+- The **agents** are Python, built with a tool called LangGraph that lets AI take turns making decisions.
 
-The role dropdown (top right) swaps the active view and feature set. Selector values come from `index.html:38-58`.
-
-| Role | Value | Default view |
-|------|-------|--------------|
-| Platform Admin | `platform` | Command Center: live pipeline, agents, simulation controls |
-| Originator (8 banks) | `originator:OA-001` … `OA-008` | Originator Dashboard: create deals, fee collection |
-| Participant (8 institutions) | `participant:PA-001` … `PA-103` | Participant Dashboard: available deals, bid mgmt, portfolio |
-
-### Demo flow
-
-1. Open `http://localhost:3001` and click **Enter Platform** on the landing page.
-2. Select an originator (e.g. `[Originator] JPMorgan Chase`). Click **Originate**.
-3. Fill the form (or use **Randomize**) and click **Create & Announce**. The deal lands in MongoDB and appears in **Active Syndications** below.
-4. Switch the role to a participant (e.g. `[Participant] Apollo Global`). Browse **Available Deals**.
-5. Switch back to **Platform Admin** to see the simulation engine ticking through the pipeline.
+More detail for developers lives in the comments inside the code and in [DEPLOY.md](DEPLOY.md).
 
 ---
 
-## Project layout
+## A few honest notes
 
-```
-.
-├── index.html                 # SPA entry, loads 31 JS files via <script>
-├── js/
-│   ├── app.js                 # Bootstrap, view router, init order
-│   ├── api-client.js          # HTTP client (timeout, retry, cache, dedup)
-│   ├── api.js                 # Legacy wrapper around api-client (to be merged)
-│   ├── app-state.js           # Pub/sub store
-│   ├── router.js              # Hash + History API routing
-│   ├── role-router.js         # Role-based view switching
-│   ├── data.js                # SyndiData (mock + simulated state)
-│   ├── simulation-engine.js   # Time-stepped market simulation (842 LOC)
-│   ├── auto-bidder.js         # Client-side bid generator
-│   ├── auto-generator.js      # Client-side syndication generator
-│   ├── market-conditions.js   # Volatility / spread regime model
-│   ├── agent-orchestration.js # Frontend agent state model
-│   └── components/            # 16 components: dashboards, pipeline, payments, etc.
-├── styles/                    # main, components, originator, participant, landing, form-enhanced
-├── server/
-│   ├── index.js               # Express app, all routes (903 LOC)
-│   ├── db.js                  # Mongo connection
-│   ├── seed.js                # Legacy seed (smaller dataset, partial coverage)
-│   └── scripts/               # Ad-hoc Mongo inspection scripts (see scripts/README.md)
-├── agents/
-│   ├── server.py              # FastAPI app
-│   ├── config.py              # Env + feature flags, SIMULATION_MODE toggle
-│   ├── db.py                  # PyMongo connection
-│   ├── orchestrator.py        # LangGraph workflow definition
-│   ├── originator_agent.py    # Deal creation logic
-│   ├── participant_agent.py   # Bidding logic
-│   ├── negotiation_agent.py   # Dutch auction
-│   ├── settlement_agent.py    # Allocation + docs
-│   ├── payment_agent.py       # x402 fee + escrow flow
-│   ├── x402_client.py         # Coinbase CDP client (mock-aware)
-│   ├── event_bus.py           # In-process event dispatch
-│   ├── seed_all.py            # Canonical seeder (run this one)
-│   ├── start.sh               # Local + Cloud Run entrypoint
-│   └── requirements.txt
-├── scripts/
-│   ├── seed-db.sh             # Wrapper around agents/seed_all.py
-│   ├── smoke-node.sh          # curl /api/health + /api/ready
-│   └── smoke-agents.sh
-├── .env.example               # Defaults to localhost; copy to .env
-├── PITCH_DECK.md              # Investor narrative
-├── PROJECT_DESCRIPTION.md     # Long-form product description
-└── package.json
-```
+- This is a learning/demo project, **not** a real financial product. Don't use it to make real money decisions.
+- Some numbers on the dashboards are illustrative (made up for the demo).
+- The legal pages (Terms, Privacy) are drafts and would need a real lawyer before any real use.
 
 ---
 
-## Configuration
+## Words grown-ups use, explained simply
 
-All env vars are read from `.env` (and `.env.example` ships a complete dev default).
-
-| Variable | Default | Notes |
-|----------|---------|-------|
-| `MONGODB_URI` | `mongodb://localhost:27017/syndimatch` | Local Mongo. For Atlas: `mongodb+srv://…` |
-| `DATABASE_NAME` | `syndimatch` | Pin both Node and Python to the same DB |
-| `ENVIRONMENT` | `development` | `development` enables verbose logging + shorter auction rounds |
-| `PORT` | `3001` | Node API port |
-| `AGENTS_SERVICE_URL` | `http://localhost:8000` | Node → Python proxy target |
-| `ANTHROPIC_API_KEY` | unset | Leave unset to run in `SIMULATION_MODE` |
-| `GEMINI_API_KEY` | unset | Optional, used for AI-generated reports |
-| `CDP_API_KEY_NAME` / `CDP_API_KEY_PRIVATE_KEY` | unset | Coinbase CDP, for real x402 (mock works without) |
-| `ENABLE_X402_PAYMENTS` | `false` | Toggle real x402; mock endpoints always work |
-
----
-
-## API reference
-
-Mounted on `:3001/api` (Node). Selected endpoints — full list in `server/index.js`.
-
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/health` | GET | Liveness probe |
-| `/ready` | GET | Pings MongoDB |
-| `/all-data` | GET | Aggregate dashboard payload (DB + agents service merged) |
-| `/syndications` | GET, POST | List or create syndications |
-| `/syndications/:id` | GET | Single syndication |
-| `/syndications/run` | POST | Trigger Python agent workflow (proxy) |
-| `/participants` | GET | Participant institutions (15 seeded) |
-| `/originators` | GET | Originator banks (8 seeded) |
-| `/bids?syndId=…` | GET | Bids for a syndication |
-| `/agents` | GET | All agents grouped by type |
-| `/agents/{participants,originators,bid,allocate}` | GET, POST | Proxy to Python agents |
-| `/payments`, `/payments/summary/:syndId` | GET | Completed payments and roll-ups |
-| `/x402/join-syndication` | POST | Initiates HTTP 402 commitment-fee flow |
-| `/x402/pay` | POST | Settles a pending x402 payment (mock) |
-| `/x402/transactions` | GET | Completed mock USDC payments |
-| `/syndication-events` | GET | Orchestrator event stream (Mongo-backed) |
-
-Python agents service on `:8000` exposes `/api/health`, `/api/all-data`, `/api/syndication/run`, `/api/agents/bid`, `/api/agents/allocate`, `/api/x402/*`, and a WebSocket on `/ws`.
-
----
-
-## Deployment
-
-Full deploy guide: [DEPLOY.md](DEPLOY.md).
-
-- **Cloud Run** — two services (Node + Python), each deployed from `--source`, both scaling to zero.
-- **Firebase Hosting** — static frontend only; points at a separately-hosted Node API.
-- **Local Docker** — root `Dockerfile` for Node, `agents/Dockerfile` for Python.
-
----
-
-## Roadmap
-
-The codebase is mid-refactor on `refactor/main`. Phases planned:
-
-1. **Phase 1 — Baseline (done)**: local boot reproducible, demo verified.
-2. **Phase 2 — Dead code + doc consolidation (done)**: removed orphaned `js/services/`, `js/components/{originator,participant}-view.js`, `server/agents-seed.js`; relocated `server/check_*.js` into `server/scripts/`; folded 6 deployment docs into one [DEPLOY.md](DEPLOY.md).
-3. **Phase 3 — Backend modularize**: split `server/index.js` (903 LOC) into route modules; collapse `js/api.js` into `js/api-client.js`; fix the `/api/analytics/platform` 404 and `/api/agents/bid` 502 rate.
-4. **Phase 4 — Vite + ESM frontend**: replace 31 `<script>` globals with ES modules; break up the 40–52 KB dashboard components; remove the dual mock/sim/API data-source confusion.
-
-Beyond that:
-
-- Real Anthropic / Gemini integration (currently SIMULATION_MODE)
-- Real x402 / Coinbase CDP (currently mock)
-- KYC/AML workflow, document parsing
-- Multi-bank pilot, secondary trading, CLO integration
+| Fancy word | What it really means |
+|------------|----------------------|
+| **Syndication** | A group of lenders splitting one big loan so no one takes all the risk. |
+| **Originator / Lead arranger** | The bank that organizes the deal and invites others in. |
+| **Participant** | A lender who chips in part of the loan. |
+| **Spread / bps** | The extra interest the borrower pays. "bps" = basis points; 100 bps = 1%. |
+| **Subscription** | How "full" a deal is. 100% means enough lenders have joined to cover the whole loan. |
+| **Settlement** | Finishing the paperwork and confirming who owes/gets what. |
+| **x402** | A way to send digital payments automatically. Here it's *pretend* (mock). |
+| **Agent** | An AI helper that makes one kind of decision on someone's behalf. |
 
 ---
 
