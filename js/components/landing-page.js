@@ -9,12 +9,12 @@ const LandingPage = {
     feedPool: [
         { agent: 'Negotiation', action: 'Closed round 3 of TechFlow auction at 425 bps',          confidence: 91 },
         { agent: 'Participant', action: 'Apollo Global bid 350 bps on SYND-2025-001',             confidence: 94 },
-        { agent: 'Settlement',  action: 'Allocated $475M to 12 participants pro-rata',            confidence: 99 },
+        { agent: 'Settlement',  action: 'Allocated $475,000K to 12 participants pro-rata',        confidence: 99 },
         { agent: 'Originator',  action: 'Drafted term sheet for Meridian Healthcare',             confidence: 88 },
-        { agent: 'Payment',     action: 'Mock-settled commitment fee $2.5M via x402',             confidence: 100 },
-        { agent: 'Participant', action: 'CalPERS placed bid: $80M at 412 bps',                    confidence: 92 },
+        { agent: 'Payment',     action: 'Mock-settled commitment fee $2,500K via x402',           confidence: 100 },
+        { agent: 'Participant', action: 'CalPERS placed bid: $80,000K at 412 bps',               confidence: 92 },
         { agent: 'Negotiation', action: 'Detected oversubscription: 1.4× on Quantum Logistics',   confidence: 97 },
-        { agent: 'Originator',  action: 'JPMorgan opened SYND-2025-009 — $600M, BB+, Healthcare', confidence: 95 },
+        { agent: 'Originator',  action: 'JPMorgan opened SYND-2025-009 — $600,000K, BB+',         confidence: 95 },
         { agent: 'Settlement',  action: 'Closed Atlas Manufacturing — T+2 settlement',            confidence: 99 },
         { agent: 'Participant', action: 'MUFG declined: outside investment mandate',              confidence: 89 },
         { agent: 'Payment',     action: 'Released escrow on SYND-2025-006 to 8 wallets',          confidence: 96 },
@@ -219,7 +219,7 @@ const LandingPage = {
                          Why agents — replaces sticker badges with cleaner eyebrows
                          ============================================================ -->
                     <section class="landing-why" id="why">
-                        <div class="section-header">
+                        <div class="landing-section-header">
                             <span class="section-eyebrow">— The problem</span>
                             <h2 class="section-title">Syndication today is paperwork at the speed of phone calls.</h2>
                             <p class="section-subtitle">
@@ -251,7 +251,7 @@ const LandingPage = {
                             </div>
                         </div>
 
-                        <div class="section-header" style="margin-top: 5rem;">
+                        <div class="landing-section-header" style="margin-top: 5rem;">
                             <span class="section-eyebrow section-eyebrow-positive">— The fix</span>
                             <h2 class="section-title">AI agents negotiate, allocate, and settle continuously.</h2>
                             <p class="section-subtitle">
@@ -289,7 +289,7 @@ const LandingPage = {
                          to carry the feed vocabulary downward through the page
                          ============================================================ -->
                     <section class="landing-how" id="how">
-                        <div class="section-header">
+                        <div class="landing-section-header">
                             <span class="section-eyebrow">— Process</span>
                             <h2 class="section-title">From announcement to settlement, in hours.</h2>
                             <p class="section-subtitle">
@@ -304,7 +304,7 @@ const LandingPage = {
                                 <p class="step-desc">Lead arranger structures the deal — terms, pricing guidance, target allocation.</p>
                                 <div class="step-log">
                                     <span class="step-log-agent agent-originator">Originator</span>
-                                    <span class="step-log-action">Drafted term sheet for Acme Holdings, $500M</span>
+                                    <span class="step-log-action">Drafted term sheet for Acme Holdings, $500,000K</span>
                                 </div>
                             </div>
                             <div class="workflow-step">
@@ -331,7 +331,7 @@ const LandingPage = {
                                 <p class="step-desc">Allocations finalized, docs generated, atomic settlement via x402.</p>
                                 <div class="step-log">
                                     <span class="step-log-agent agent-settlement">Settlement</span>
-                                    <span class="step-log-action">$475M allocated to 12 participants, T+0</span>
+                                    <span class="step-log-action">$475,000K allocated to 12 participants, T+0</span>
                                 </div>
                             </div>
                         </div>
@@ -342,7 +342,7 @@ const LandingPage = {
                          Cleaner copy, eyebrow instead of sticker badge.
                          ============================================================ -->
                     <section class="landing-dashboards" id="dashboards">
-                        <div class="section-header">
+                        <div class="landing-section-header">
                             <span class="section-eyebrow">— Try it</span>
                             <h2 class="section-title">Three views of the same syndication.</h2>
                             <p class="section-subtitle">
