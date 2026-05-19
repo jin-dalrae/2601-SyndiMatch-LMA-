@@ -61,5 +61,8 @@ if (Config.isDevelopment()) {
     console.log('🔧 Configuration loaded:', Config);
 }
 
-// Make available globally
+// Make available globally (bridge kept while the rest of the app still
+// reads window.Config; safe to drop once every consumer imports it).
 window.Config = Config;
+
+export default Config;
