@@ -107,7 +107,7 @@ const PaymentsComponent = {
             <!-- Syndication Header -->
             <div class="payments-header-card">
                 <div class="payments-header-left">
-                    <div class="payments-header-id">${syndId}</div>
+                    <div class="payments-header-id">Settlement simulation · ${syndId}</div>
                     <div class="payments-header-borrower">${syndication?.borrower || 'Syndication Facility'}</div>
                 </div>
                 <div class="payments-header-right">
@@ -115,6 +115,7 @@ const PaymentsComponent = {
                     <span class="payments-header-industry">${syndication?.industry || 'Commercial'}</span>
                 </div>
             </div>
+            <p class="payments-simulation-disclosure">Simulation only — workflow records and receipts are shown for demonstration; no escrow account or funds are moved.</p>
 
             <!-- Flow Visualization -->
             <div class="payments-flow-container">
@@ -129,7 +130,7 @@ const PaymentsComponent = {
                 </div>
                 <div class="payments-flow-stage">
                     <div class="payments-flow-icon escrow">🔐</div>
-                    <div class="payments-flow-label">Escrow</div>
+                    <div class="payments-flow-label">Simulated escrow ledger</div>
                     <div class="payments-flow-value">$${escrowHeld.toFixed(1)}M</div>
                 </div>
                 <div class="payments-flow-connector">
@@ -138,7 +139,7 @@ const PaymentsComponent = {
                 </div>
                 <div class="payments-flow-stage">
                     <div class="payments-flow-icon originator">🏛️</div>
-                    <div class="payments-flow-label">Originator</div>
+                    <div class="payments-flow-label">Originator receipt</div>
                     <div class="payments-flow-value">$${(totalPaid / 1000000).toFixed(1)}M</div>
                 </div>
             </div>
@@ -146,7 +147,7 @@ const PaymentsComponent = {
             <!-- KPI Cards -->
             <div class="payments-kpi-grid">
                 <div class="payments-kpi-card">
-                    <div class="payments-kpi-label">Total Funded</div>
+                    <div class="payments-kpi-label">Simulated amount</div>
                     <div class="payments-kpi-value">$${(totalPaid / 1000000).toFixed(1)}M</div>
                 </div>
                 <div class="payments-kpi-card">
@@ -322,6 +323,11 @@ const PaymentsComponent = {
             .payments-header-right {
                 text-align: right;
                 font-size: 0.875rem;
+            }
+            .payments-simulation-disclosure {
+                margin: -0.35rem 0 1rem;
+                color: #64748b;
+                font-size: 0.78rem;
             }
             .payments-header-meta {
                 display: block;

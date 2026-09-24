@@ -8,6 +8,7 @@ const Router = {
         '/': 'landing',
         '/landing': 'landing',
         '/overview': 'overview',
+        '/deal-room': 'deal-room',
         '/orchestration': 'orchestration',
         '/payments': 'payments',
         '/analytics': 'analytics',

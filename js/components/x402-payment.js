@@ -44,21 +44,22 @@ const X402Payment = {
         container.innerHTML = `
             <div class="x402-payment-section">
                 <div class="x402-header">
-                    <h4>x402 Payment Gateway</h4>
-                    <span class="x402-badge">Base L2 • USDC</span>
+                    <h4>Settlement simulator</h4>
+                    <span class="x402-badge">Simulation • no funds move</span>
                 </div>
+                <p class="x402-disclosure">This demo creates workflow receipts only. It does not submit or verify a blockchain transfer.</p>
                 ${isParticipant ? `
                 <div class="x402-actions">
                     <button class="btn-x402 btn-join" id="btn-join-syndication" ${!context.participantId ? 'disabled' : ''}>
-                        Join Syndication (0.5% fee)
+                        Simulate commitment fee (0.5%)
                     </button>
                     <button class="btn-x402 btn-trigger-payment" id="btn-trigger-x402" disabled>
-                        Trigger x402 Payment
+                        Generate simulated receipt
                     </button>
                 </div>
                 ` : `
                 <div class="x402-info">
-                    <em>Payment actions are handled by Participant agents automatically.</em>
+                    <em>Participant agents prepare simulated settlement receipts after approval.</em>
                 </div>
                 `}
                 <div class="x402-status" id="x402-status" role="status" aria-live="polite"></div>
@@ -76,20 +77,21 @@ const X402Payment = {
         const triggerBtn = document.getElementById('btn-trigger-x402');
         const context = this._getSyndicationContext();
 
-        statusEl.innerHTML = `<div class="x402-loading">Requesting access...</div>`;
+        statusEl.innerHTML = `<div class="x402-loading">Preparing simulated payment instruction...</div>`;
 
         try {
             const res = await API.post('server', '/x402/join-syndication', {
                 syndId: context.syndId,
-                participantId: context.participantId
+                participantId: context.participantId,
+                commitmentAmount: context.commitmentAmount
             });
-            statusEl.innerHTML = `<div class="x402-success">✅ Access granted!</div>`;
+            statusEl.innerHTML = `<div class="x402-success">✅ Simulated instruction created.</div>`;
         } catch (error) {
             if (error.status === 402 && error.details?.payment) {
                 this.pendingPayment = error.details.payment;
                 statusEl.innerHTML = `
                     <div class="x402-alert">
-                        <strong>HTTP 402: Payment Required</strong>
+                        <strong>Simulated payment instruction</strong>
                         <p>Amount: ${this.pendingPayment.amount} USDC</p>
                     </div>
                 `;
@@ -104,7 +106,7 @@ const X402Payment = {
     async executePayment() {
         if (!this.pendingPayment) return;
         const statusEl = document.getElementById('x402-status');
-        statusEl.innerHTML = `<div class="x402-loading">Processing on Base L2...</div>`;
+        statusEl.innerHTML = `<div class="x402-loading">Generating simulated settlement receipt...</div>`;
 
         try {
             const data = await API.post('server', '/x402/pay', {
@@ -113,7 +115,7 @@ const X402Payment = {
             });
 
             if (data.success) {
-                statusEl.innerHTML = `<div class="x402-success">✅ Payment successful! Tx: ${data.transaction.txHash.slice(0, 10)}...</div>`;
+                statusEl.innerHTML = `<div class="x402-success">✅ Simulation complete. Receipt: ${data.transaction.txHash.slice(0, 10)}...</div>`;
                 this.addReceipt(data);
                 this.pendingPayment = null;
                 document.getElementById('btn-trigger-x402').disabled = true;
@@ -149,6 +151,7 @@ const x402Styles = document.createElement('style');
 x402Styles.textContent = `
     .x402-payment-section { background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.2); padding: 1rem; border-radius: 8px; }
     .x402-badge { background: var(--primary); color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px; }
+    .x402-disclosure { color: var(--text-secondary, #64748b); font-size: 12px; line-height: 1.45; margin: 0.5rem 0 0.75rem; }
     .btn-x402 { padding: 8px 16px; border-radius: 4px; border: none; cursor: pointer; font-size: 12px; }
     .btn-join { background: var(--primary); color: white; }
     .btn-trigger-payment.ready { background: #10B981; color: white; animation: pulse 2s infinite; }

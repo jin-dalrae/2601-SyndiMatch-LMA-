@@ -1,152 +1,134 @@
-# SyndiMatch - AI-Powered Loan Syndication Platform
+# SyndiMatch Credit Desk — Product Requirements Document
 
-## Overview
+## 1. Product summary
 
-SyndiMatch is an intelligent loan syndication platform that automates the entire loan distribution workflow using multi-agent AI orchestration. The platform connects loan originators (banks) with institutional investors through an automated Dutch auction mechanism, streamlining what traditionally takes weeks into a matter of hours.
+SyndiMatch Credit Desk is a high-fidelity prototype of an agentic workflow for institutional loan syndication. It shows how a lead arranger can open a deal, how participant agents evaluate it against explicit mandates, how a book reaches a clearing spread, and how a human approves an allocation before simulated settlement.
 
-## Key Features
+The product demonstrates **constrained financial agents**, not unattended financial decision-making. Agents may recommend, explain, and prepare work. Deterministic policies and a human approval gate control consequential actions.
 
-### 🤖 Multi-Agent AI Orchestration
-- **Originator Agent**: Broadcasts loan opportunities with AI-recommended pricing
-- **Participant Agents**: Autonomous institutional investors that evaluate and bid on opportunities based on risk profiles
-- **Negotiation Agent**: Runs multi-round Dutch auctions to discover optimal market-clearing prices
-- **Settlement Agent**: Manages multi-stage post-auction workflows (documentation, compliance, signatures)
-- **Payment Agent**: Processes payments via blockchain (Coinbase x402 on Base L2)
+### Portfolio positioning
 
-### 🎯 Intelligent Decision Making
-- AI-powered bid evaluation using Anthropic Claude
-- Portfolio fit scoring and risk-adjusted return calculations
-- Realistic timing simulation with staggered bid arrivals
-- Automatic late-bid cutoff when syndication reaches capacity
+> An agentic credit workflow for loan syndication: policy-constrained recommendations, transparent allocation, human approval, and replayable decision evidence.
 
-### 💰 Dutch Auction Mechanism
-- Multi-round price discovery starting from initial spread
-- Automatic spread adjustment based on market response
-- Pro-rata allocation for oversubscribed deals
-- Early close optimization when subscription targets are met
+## 2. Problem
 
-### 🔗 Blockchain Payment Integration
-- Real-time payment processing via Coinbase x402 protocol
-- USDC transfers on Base L2 (gasless transactions)
-- Escrow management for principal funds
-- Automated fee collection (commitment fees, arrangement fees)
-- Transaction tracking and reconciliation
+Loan syndication requires lead arrangers, institutional lenders, operations teams, and legal/compliance teams to coordinate a complex book build. The work is fragmented across email, spreadsheets, bilateral calls, and manually reconciled records. This makes it difficult to answer basic governance questions: who was eligible, why did an institution bid or pass, how was the clearing spread selected, and who approved the final allocation?
 
-### 📊 Real-Time Dashboard
-- Live syndication pipeline with status tracking
-- Real-time bidding activity feed
-- Agent orchestration visualization
-- Payment pipeline and transaction logs
-- Analytics: participant performance, market spread heatmaps, volume trends
-- Role-based views (Platform Admin, Originator, Participant)
+## 3. Target users
 
-### ⚡ Automated Workflow
-- End-to-end automation from loan broadcast to fund distribution
-- Idempotent operations for reliability
-- Event-driven architecture with real-time updates
-- Comprehensive error handling and retry logic
-- Performance metrics and alerting
+| User | Primary job | What they need to trust |
+| --- | --- | --- |
+| Lead arranger | Launch a deal and build a high-quality lender book | Participant coverage, pricing, concentration limits, approval control |
+| Participant / credit investor | Evaluate an opportunity within its mandate | Policy compliance, risk/return rationale, capacity protection |
+| Credit operations / platform admin | Monitor and audit the workflow | State accuracy, exceptions, an attributable event trail |
 
-## Target Users
+## 4. Product principles
 
-### Primary Users
+1. **Policy before prose.** Hard constraints determine eligibility; language models explain recommendations rather than override limits.
+2. **No opaque autonomy.** Every material agent action exposes its input, policy checks, assumptions, outcome, and timestamp.
+3. **Human approval for commitment.** Allocation and settlement cannot be represented as autonomous final actions.
+4. **One canonical deal state.** The browser, API, agents, and audit trail must describe the same syndication.
+5. **Simulation is explicit.** Demo data and simulated payment rails are clearly labeled; no real-money or production claims are implied.
 
-1. **Loan Originators (Banks)**
-   - JPMorgan Chase, Bank of America, Citigroup, Goldman Sachs, Wells Fargo, etc.
-   - Need to distribute large loans efficiently
-   - Want to maximize subscription while minimizing spread
-   - Require transparent, auditable processes
+## 5. Core experience: the Deal Room
 
-2. **Institutional Investors (Participants)**
-   - Pension funds (CalPERS), asset managers (Apollo Global, Ares Management)
-   - Banks (PNC Bank, MUFG Bank), insurance companies (MetLife)
-   - CLOs and credit funds
-   - Need access to quality loan opportunities
-   - Want automated evaluation and bidding based on their risk profiles
+The Deal Room is the portfolio centerpiece. It supports a single polished end-to-end deal rather than a broad collection of loosely connected dashboard views.
 
-3. **Platform Administrators**
-   - Monitor all syndications in real-time
-   - Track platform metrics and performance
-   - Manage alerts and system health
-   - Generate reports and analytics
+### 5.1 Deal intake
 
-### Use Cases
+- A lead arranger creates a loan with borrower, amount, rating, sector, target spread, and target close.
+- The system stores the deal in canonical workflow state and publishes an opening event.
+- The UI marks source data and assumed fields.
 
-- **Corporate Loans**: Leveraged buyouts, acquisition finance, refinancing
-- **Project Finance**: Infrastructure, energy projects
-- **Bridge Loans**: Short-term financing needs
-- **Industry Coverage**: Technology, Healthcare, Energy, Real Estate, Industrial, Financial Services
+### 5.2 Mandate matching and participant evaluation
 
-## Technology Stack
+- Participant agents screen a deal against deterministic constraints: rating floor, sector/geography restrictions, minimum ticket, available capacity, and concentration limits.
+- Eligible participants receive a proposed bid; ineligible participants receive a clear pass reason.
+- Every decision displays policy checks, rationale, inputs, and a confidence/uncertainty note when a model was used.
 
-### Backend
-- **Python 3.11+**
-- **LangGraph**: Workflow orchestration and state management
-- **LangChain**: AI agent framework with Anthropic Claude integration
-- **FastAPI**: REST API server
-- **MongoDB**: Document database for syndications, agents, bids, payments
-- **WebSockets**: Real-time event streaming
+### 5.3 Book build and auction
 
-### Frontend
-- **Vanilla JavaScript**: No framework dependencies
-- **HTML5/CSS3**: Modern, responsive UI
-- **Real-time Updates**: WebSocket simulation for live dashboard
+- The Negotiation Agent records successive auction rounds, subscription, active bids, and clearing-spread logic.
+- A live book view shows current coverage, bid distribution, concentration warnings, and whether a close condition is satisfied.
+- A counterfactual lets the user compare the proposed book with a small spread, capacity, or rating change.
 
-### Blockchain & Payments
-- **Coinbase x402 Protocol**: Payment processing
-- **Base L2**: Ethereum Layer 2 for low-cost transactions
-- **USDC**: Stablecoin for payments
-- **CDP SDK**: Coinbase Developer Platform integration
+### 5.4 Allocation review and approval
 
-### AI/ML
-- **Anthropic Claude**: LLM for agent decision-making
-- **LangChain**: Agent orchestration and prompt management
-- **Rule-based Fallbacks**: When LLM unavailable
+- The system proposes full or pro-rata allocations after policy validation.
+- The lead arranger sees concentration, minimum-allocation, and policy exceptions before approving.
+- Approval (or override) is captured as an auditable event with actor, reason, timestamp, and before/after allocation.
 
-### Infrastructure
-- **MongoDB Atlas** (or local): Database
-- **Environment Variables**: Secure configuration
-- **Idempotency**: MongoDB indexes for reliable operations
+### 5.5 Simulated settlement and decision replay
 
-## Business Value
+- Settlement is clearly labeled **Simulation** and produces traceable workflow receipts, not blockchain or real-money claims.
+- A Decision Replay view answers: what did the agent know, which policy applied, what did it recommend, and what would have changed the result?
 
-### For Originators
-- **Faster Time-to-Market**: Reduce syndication timeline from weeks to hours
-- **Better Pricing**: Dutch auction discovers optimal market-clearing spread
-- **Higher Success Rate**: AI-powered matching increases subscription probability
-- **Reduced Operational Costs**: Automation eliminates manual coordination
+## 6. Functional requirements
 
-### For Participants
-- **Access to Quality Deals**: Real-time notifications of matching opportunities
-- **Automated Evaluation**: AI evaluates deals against portfolio constraints
-- **Transparent Process**: Real-time visibility into auction progress
-- **Efficient Capital Deployment**: Faster decision-making and allocation
+### Required for the renovation
 
-### For the Platform
-- **Scalability**: Handle multiple concurrent syndications
-- **Transparency**: Full audit trail of all decisions and transactions
-- **Efficiency**: Automated workflows reduce manual intervention
-- **Innovation**: First-of-its-kind AI-powered syndication platform
+- Canonical API contract for a syndication, bids, allocations, events, and payments.
+- Explicit `simulation` status in all payment and settlement UI.
+- Decision receipt schema containing `decision_id`, actor/agent, inputs, policy results, rationale, outcome, timestamp, and source state version.
+- A human approval endpoint/state for proposed allocations.
+- Read-only event timeline and Decision Replay for the selected deal.
+- Three deterministic demo scenarios: oversubscribed close, insufficient participation, and an approved human override.
 
-## Competitive Advantages
+### Quality and safety requirements
 
-1. **AI-Powered Matching**: Intelligent agent system that understands risk profiles and market conditions
-2. **Blockchain Payments**: Transparent, auditable payment processing on-chain
-3. **Real-Time Orchestration**: Live updates throughout the entire workflow
-4. **Dutch Auction Innovation**: Optimal price discovery through automated rounds
-5. **End-to-End Automation**: From broadcast to fund distribution without manual steps
+- The UI must never fabricate a live decision, allocation, payment, or confidence score.
+- Workflow APIs must have unambiguous route definitions and return serializable documents.
+- A policy failure must prevent a bid/allocation and create an audit event.
+- Demo mode must work without an LLM key; model-backed output must fall back safely to deterministic rules.
+- Authentication/authorization is out of scope for the local demo but required before any multi-user or production deployment.
 
-## Market Opportunity
+## 7. Non-goals
 
-The global loan syndication market processes trillions of dollars annually. SyndiMatch addresses key pain points:
-- Manual coordination inefficiencies
-- Lack of transparency in pricing
-- Slow time-to-market
-- Limited access for smaller participants
-- Operational overhead
+- Originating or transferring real loans.
+- Custody, escrow, USDC transfers, or an on-chain settlement claim.
+- Replacing legal, compliance, or credit-committee approval.
+- Presenting unverified market-size, time-to-close, or success-rate claims as measured production results.
 
----
+## 8. Architecture direction
 
-**Status**: Production-ready prototype with demo mode and real blockchain integration capabilities
+The Python agent service owns workflow state and writes canonical documents to MongoDB. The Node service is a browser-facing API/BFF and must not introduce a competing data model. The frontend consumes versioned API responses and live domain events; display-only simulation may never overwrite workflow data.
 
+```text
+Deal Room UI → Node API/BFF → FastAPI orchestration → MongoDB canonical state
+                                 ↓
+                      policy checks + agent recommendations
+                                 ↓
+                       event log / Decision Replay
+```
 
+## 9. Delivery plan
+
+### Phase 1 — Integrity foundation
+
+- Remove duplicate workflow routes and shadowed methods.
+- Standardize canonical collection/API behavior.
+- Label simulation consistently and remove production/on-chain claims.
+
+### Phase 2 — Deal Room
+
+- Build a focused deal workspace with intake, book build, allocation review, and event timeline.
+- Replace hard-coded feed, allocation, and payment display values with API-backed records or clearly marked sample data.
+
+### Phase 3 — Governed agency
+
+- Add decision receipts, policy result cards, approval/override events, and Decision Replay.
+- Add scenario fixtures and tests for success, failure, and human intervention.
+
+## 10. Success criteria
+
+A reviewer can run one demo deal and, without reading source code, explain:
+
+1. Which participants were eligible and why.
+2. Why a bid was placed, passed, or excluded.
+3. How the clearing spread and allocation were calculated.
+4. Which decision required human approval.
+5. Which records are simulated versus derived from the workflow.
+
+## 11. Current prototype disclosure
+
+This repository is a local demonstration prototype. Its x402 routes simulate payment behavior and do not execute or verify on-chain transfers. It must be described as a high-fidelity, adapter-ready workflow prototype—not as a production financial platform.

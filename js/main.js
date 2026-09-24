@@ -35,6 +35,7 @@ import './components/originator-dashboard.js';
 import './components/participant-dashboard.js';
 import './components/platform-dashboard.js';
 import './components/landing-page.js';
+import './components/deal-room.js';
 import './components/admin-view.js';
 import './components/agent-ruleset-page.js';
 import './components/process-details-page.js';

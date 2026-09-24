@@ -90,7 +90,8 @@ const App = {
             { name: 'AutoBidder', el: window.AutoBidder },
             { name: 'OriginatorDashboard', el: window.OriginatorDashboard },
             { name: 'ParticipantDashboard', el: window.ParticipantDashboard },
-            { name: 'LandingPage', el: window.LandingPage }
+            { name: 'LandingPage', el: window.LandingPage },
+            { name: 'DealRoom', el: window.DealRoom }
         ];
 
         for (const component of components) {
@@ -183,6 +184,7 @@ const App = {
         const viewEl = document.getElementById(`view-${viewName}`);
         if (viewEl) {
             viewEl.classList.add('active');
+            if (viewName === 'deal-room' && window.DealRoom) DealRoom.render();
         } else if (viewName === 'syndication-detail') {
             this.renderSyndicationDetailView();
         }
@@ -213,6 +215,7 @@ const App = {
         // Clear and rebuild to ensure consistency (especially when coming back from detail)
         navContainer.innerHTML = `
             <button class="nav-tab ${activeView === 'overview' ? 'active' : ''}" data-view="overview">Overview</button>
+            <button class="nav-tab ${activeView === 'deal-room' ? 'active' : ''}" data-view="deal-room">Deal Room</button>
             <button class="nav-tab ${activeView === 'analytics' ? 'active' : ''}" data-view="analytics">Analytics</button>
             <button class="nav-tab ${activeView === 'originate' ? 'active' : ''} originator-only" data-view="originate">Originate</button>
         `;

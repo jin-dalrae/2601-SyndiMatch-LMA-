@@ -32,7 +32,7 @@ app.use('/api', require('./routes/orchestrator'));
 // SPA catch-all — must come after all /api routes.
 // Client-side routes that should serve index.html.
 const clientRoutes = [
-    '/landing', '/overview', '/orchestration', '/payments', '/analytics',
+    '/landing', '/overview', '/deal-room', '/orchestration', '/payments', '/analytics',
     '/transactions', '/settings', '/originate', '/originator', '/participant',
     '/syndications', '/participants'
 ];

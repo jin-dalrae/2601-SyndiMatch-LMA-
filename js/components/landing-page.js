@@ -253,7 +253,7 @@ const LandingPage = {
 
                         <div class="landing-section-header" style="margin-top: 5rem;">
                             <span class="section-eyebrow section-eyebrow-positive">— The fix</span>
-                            <h2 class="section-title">AI agents negotiate, allocate, and settle continuously.</h2>
+                            <h2 class="section-title">AI agents prepare decisions under policy and human control.</h2>
                             <p class="section-subtitle">
                                 Each institution gets its own agent operating against its mandate. Decisions are explicit, logged, and reviewable.
                             </p>
@@ -276,9 +276,9 @@ const LandingPage = {
                             </div>
                             <div class="solution-card">
                                 <div class="solution-icon">⚡</div>
-                                <h3 class="solution-title">Atomic settlement</h3>
+                                <h3 class="solution-title">Traceable settlement simulation</h3>
                                 <p class="solution-desc">
-                                    x402 programmable payments move funds only when every closing condition is met. T+0 settlement, recorded on-chain.
+                                    The demo produces reviewable settlement receipts only after closing conditions and human approval are satisfied. No funds move in this prototype.
                                 </p>
                             </div>
                         </div>
@@ -328,10 +328,10 @@ const LandingPage = {
                             <div class="workflow-step">
                                 <div class="step-number">04</div>
                                 <h3 class="step-title">Settle</h3>
-                                <p class="step-desc">Allocations finalized, docs generated, atomic settlement via x402.</p>
+                                <p class="step-desc">Allocations are reviewed, approved, and recorded in a traceable settlement simulation.</p>
                                 <div class="step-log">
                                     <span class="step-log-agent agent-settlement">Settlement</span>
-                                    <span class="step-log-action">$475,000K allocated to 12 participants, T+0</span>
+                                    <span class="step-log-action">Simulated allocation prepared for 12 participants, pending approval</span>
                                 </div>
                             </div>
                         </div>

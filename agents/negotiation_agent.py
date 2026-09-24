@@ -117,140 +117,6 @@ class NegotiationAgent:
         return config
 
     def calculate_max_rounds(self, state: SyndicationState) -> int:
-        if not self.config:
-            self.config = self._load_or_create_config(state.get("current_time"))
-        return self.config["auction_config"]["max_rounds"]
-
-    def get_round_duration(self, state: SyndicationState) -> int:
-        if not self.config:
-            self.config = self._load_or_create_config(state.get("current_time"))
-        return self.config["auction_config"]["round_duration_minutes"]
-
-    def run_auction_round(self, state: SyndicationState, round_num: int) -> SyndicationState:
-        """Run a single auction round"""
-        # Lazy load config
-        if not self.config:
-            self.config = self._load_or_create_config(state.get("current_time"))
-        
-        # Ensure state contains required keys
-        state.setdefault("rejected_bids", [])
-        state.setdefault("allocations", [])
-        state.setdefault("auction_history", [])
-        
-        state["status"] = "negotiating"
-        state["negotiation_agent_id"] = self.agent_id
-        state["current_round"] = round_num
-        
-        # Collect bids
-        bids = list(db.bids().find({
-            "syndication_id": self.syndication_id,
-            "bid_status": "active",
-            "spread_bid": {"$lte": state["current_spread"]}
-        }))
-        
-        # Calculate stats
-        target = self.config["auction_config"]["target_subscription"]
-        total_committed = sum(b["bid_amount"] for b in bids)
-        subscription_rate = total_committed / target if target > 0 else 0
-        
-        state["total_committed"] = total_committed
-        state["subscription_rate"] = subscription_rate
-        
-        # Initialize negotiation_state if needed (orchestrator uses this)
-        if "negotiation_state" not in state:
-             state["negotiation_state"] = {}
-        state["negotiation_state"]["current_spread"] = state["current_spread"]
-        state["negotiation_state"]["total_committed"] = total_committed
-        state["negotiation_state"]["subscription_rate"] = subscription_rate
-        state["negotiation_state"]["auction_round"] = round_num
-        
-        # Log round
-        round_record = {
-            "round": round_num,
-            "spread": state["current_spread"],
-            "total_committed": total_committed,
-            "subscription_rate": subscription_rate,
-            "bids_count": len(bids),
-            "timestamp": datetime.utcnow().isoformat()
-        }
-        if "auction_history" not in state:
-            state["auction_history"] = []
-        state["auction_history"].append(round_record)
-        
-        # Update DB
-        self._update_syndication(state)
-        self._update_tracking(state, len(bids))
-        
-        logger.info(f"[{self.agent_id}] Round {round_num}: "
-                   f"${total_committed:,} ({subscription_rate*100:.1f}%) @ {state['current_spread']} bps")
-        
-        # Prepare spread for next round (decrement)
-        # But only if not closing? Orchestrator loop controls flow.
-        # We decrement here so next round uses lower spread.
-        spread_decrement = self.config["auction_config"]["spread_decrement"]
-        min_spread = self.config["auction_config"]["minimum_spread"]
-        
-        new_spread = state["current_spread"] - spread_decrement
-        # Don't go below min spread (logic handled in is_auction_failing or next checking)
-        # Just update state for next iteration
-        state["current_spread"] = max(new_spread, min_spread)
-        
-        return state
-
-    def should_close_auction(self, state: SyndicationState) -> bool:
-        """Check if auction should close successfully"""
-        sub_rate = state["negotiation_state"]["subscription_rate"]
-        round_num = state["negotiation_state"]["auction_round"]
-        
-        if sub_rate >= 1.0:
-            return True
-        
-        if sub_rate >= EARLY_CLOSE_THRESHOLD and round_num >= 3:
-            return True
-            
-        # Check min spread reached logic - if we hit min spread and have min subscription
-        min_spread = self.config["auction_config"]["minimum_spread"]
-        current_spread = state["negotiation_state"]["current_spread"]
-        
-        if current_spread <= min_spread and sub_rate >= MIN_SUBSCRIPTION_RATE:
-            return True
-            
-        return False
-
-    def is_auction_failing(self, state: SyndicationState, round_num: int, max_rounds: int) -> bool:
-        """Check if auction is failing"""
-        min_spread = self.config["auction_config"]["minimum_spread"]
-        current_spread = state["negotiation_state"]["current_spread"]
-        sub_rate = state["negotiation_state"]["subscription_rate"]
-        
-        # Hit min spread without enough subscription
-        if current_spread <= min_spread and sub_rate < MIN_SUBSCRIPTION_RATE:
-            return True
-            
-        return False
-
-    def finalize_auction(self, state: SyndicationState) -> SyndicationState:
-        """Finalize auction based on final state"""
-        bids = list(db.bids().find({
-            "syndication_id": self.syndication_id,
-            "bid_status": "active"
-        }))
-        
-        sub_rate = state["negotiation_state"]["subscription_rate"]
-        
-        if sub_rate >= MIN_SUBSCRIPTION_RATE:
-            if sub_rate >= 1.0:
-                reason = "fully_subscribed"
-            elif sub_rate >= EARLY_CLOSE_THRESHOLD:
-                reason = "early_close"
-            else:
-                reason = "max_rounds_reached" # or min spread reached
-                
-            return self._close_auction(state, bids, reason)
-        else:
-            return self._fail_auction(state, "insufficient_subscription")
-    
-    def calculate_max_rounds(self, state: SyndicationState) -> int:
         """Calculate maximum rounds based on syndication parameters"""
         if not self.config:
             self.config = self._load_or_create_config(state.get("current_time"))
@@ -263,6 +129,10 @@ class NegotiationAgent:
             return True
         if subscription >= EARLY_CLOSE_THRESHOLD and state.get("current_round", 0) >= 3:
             return True
+        if self.config:
+            minimum_spread = self.config["auction_config"]["minimum_spread"]
+            if state.get("current_spread", 0) <= minimum_spread and subscription >= MIN_SUBSCRIPTION_RATE:
+                return True
         return False
     
     def is_auction_failing(self, state: SyndicationState, current_round: int, max_rounds: int) -> bool:
@@ -284,6 +154,23 @@ class NegotiationAgent:
         if not self.config:
             self.config = self._load_or_create_config(state.get("current_time"))
         return self.config["auction_config"].get("round_duration_minutes", 30)
+
+    def advance_to_next_round(self, state: SyndicationState) -> SyndicationState:
+        """Move to the next permitted spread after recording a full round.
+
+        The caller is responsible for checking close/fail conditions first.
+        Keeping this transition separate ensures that the spread on each
+        recorded auction event is the same spread used to select its bids.
+        """
+        if not self.config:
+            self.config = self._load_or_create_config(state.get("current_time"))
+
+        auction_config = self.config["auction_config"]
+        state["current_spread"] = max(
+            state["current_spread"] - auction_config["spread_decrement"],
+            auction_config["minimum_spread"]
+        )
+        return state
     
     def run_auction_round(self, state: SyndicationState, round_num: int) -> SyndicationState:
         """Execute a single auction round with bid updates"""

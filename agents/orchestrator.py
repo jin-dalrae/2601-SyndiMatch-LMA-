@@ -282,6 +282,12 @@ def negotiation_node(state: SyndicationState) -> SyndicationState:
             state["_auction_failed_emitted"] = True  # Prevent duplicate in failed_node
             return state
         
+        # Advance only after this round has been recorded and has not met a
+        # close/fail condition. That preserves the audit record's clearing
+        # spread for the active bids in the current round.
+        if round_num < max_rounds:
+            state = agent.advance_to_next_round(state)
+
         # Wait between rounds (simulated)
         if round_num < max_rounds:
             round_duration = agent.get_round_duration(state)
@@ -625,7 +631,7 @@ def failed_node(state: SyndicationState) -> SyndicationState:
     
     # Update database
     try:
-        db.get_collection("syndications").update_one(
+        db.syndications().update_one(
             {"_id": state["syndication_id"]},
             {"$set": {"status": "failed", "failure_reason": state.get("failure_reason")}}
         )

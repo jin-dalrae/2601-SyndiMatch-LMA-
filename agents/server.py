@@ -218,22 +218,6 @@ async def reset_orchestrator():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/syndications")
-async def get_syndications():
-    """Get all syndications"""
-    try:
-        syndications = list(db.syndications().find({}).sort("created_at", -1).limit(50))
-        # Standardize ObjectId -> str conversion
-        for s in syndications:
-            if "_id" in s:
-                s["_id"] = str(s["_id"])
-            # Handle potential Dict[str, Any] nested states if needed
-        return syndications
-    except Exception as e:
-        logger.error(f"Get syndications error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.get("/api/syndications/{syndication_id}")
 async def get_syndication(syndication_id: str):
     """Get a specific syndication"""
@@ -252,15 +236,17 @@ async def get_participants():
 
 @app.get("/api/syndications")
 async def get_syndications():
-    """Get all syndications"""
-    syndications = list(db.syndications().find({}))
-    
-    # Enrich with bids
-    for synd in syndications:
-        synd["bids"] = list(db.bids().find({"syndication_id": synd["_id"]}))
-        synd["payments"] = list(db.payments().find({"syndication_id": synd["_id"]}))
-        
-    return syndications
+    """Return recent canonical syndications with their workflow records."""
+    try:
+        syndications = list(db.syndications().find({}).sort("created_at", -1).limit(50))
+        for synd in syndications:
+            syndication_id = synd["_id"]
+            synd["bids"] = list(db.bids().find({"syndication_id": syndication_id}))
+            synd["payments"] = list(db.payment_history().find({"syndication_id": syndication_id}))
+        return serialize_doc(syndications)
+    except Exception as e:
+        logger.error(f"Get syndications error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/agents/originators")
 async def get_originators():
