@@ -12,7 +12,7 @@
     "serve": "npx serve . -p 3456",
     "deploy": "npm run deploy:worker",
     "deploy:worker": "npm run vite:build && wrangler deploy",
-    "deploy:pages": "npm run vite:build && wrangler pages deploy dist --project-name syndimatch-credit-desk --force",
+    "deploy:pages": "npm run vite:build && wrangler deploy --name syndimatch-credit-desk",
     "deploy:preview": "npm run deploy:pages",
     "smoke:node": "./scripts/smoke-node.sh",
     "smoke:agents": "./scripts/smoke-agents.sh",

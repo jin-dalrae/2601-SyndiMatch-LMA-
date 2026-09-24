@@ -1,9 +1,10 @@
 # Deployment
 
-This repo ships two services:
+This repo ships three deployment surfaces:
 
 - **Node API + static frontend** — `server/index.js`, Express on port 3001.
 - **Python agents service** — `agents/server.py`, FastAPI on port 8000.
+- **Cloudflare static frontend** — Vite assets served by Workers static assets (including the latest Cloudflare Pages deployment flow).
 
 Both talk to a shared MongoDB. The Node API proxies `/api/agents/*` and `/api/x402/*` to the Python service via `AGENTS_SERVICE_URL`.
 
@@ -77,17 +78,19 @@ export DATABASE_NAME=syndimatch
 
 The seeder is idempotent — running twice replaces the seed data, doesn't duplicate.
 
-## Firebase Hosting (frontend only)
+## Cloudflare Workers and Pages (frontend only)
 
-`firebase.json` configures static hosting for `index.html` + `js/` + `styles/`. The frontend points at whatever Node API the user has running.
+The repository uses Cloudflare's Vite plugin and static-assets Worker configuration in `wrangler.jsonc`. SPA routes, including `/deal-room`, are handled by the Worker static-assets fallback.
 
 ```bash
-firebase deploy --only hosting
-# preview channel
-firebase hosting:channel:deploy preview
+# Deploy the primary Worker-hosted frontend
+npm run deploy:worker
+
+# Deploy the equivalent Cloudflare Pages/Workers frontend service
+npm run deploy:pages
 ```
 
-To point the deployed frontend at a remote Node API, change the `baseUrl` in `js/api-client.js` (line 7) before building, or set `Config.API_URL` in `js/config.js`.
+These commands deploy the frontend only. The current FastAPI/LangGraph service and MongoDB-backed Node API do not run natively in Cloudflare Workers. Before presenting the interactive workflow publicly, configure a routable API origin and a Worker/Pages Function proxy; the local `AGENTS_SERVICE_URL` is not reachable from Cloudflare.
 
 ## Local Docker
 
