@@ -32,6 +32,7 @@ from .events import (
 )
 from .idempotent_node import idempotent
 from . import db
+from .governance import approval_authorizes_settlement, require_settlement_approval
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -318,6 +319,11 @@ def negotiation_node(state: SyndicationState) -> SyndicationState:
 def settlement_node(state: SyndicationState) -> SyndicationState:
     """Settlement agent manages MULTI-STAGE post-auction workflow"""
     logger.info(f"=== SETTLEMENT NODE: {state['syndication_id']} ===")
+
+    # Defense in depth: graph routing is not the authority. Settlement itself
+    # refuses to run unless the current, fingerprinted allocation is approved.
+    allocation = db.allocations().find_one({"syndication_id": state["syndication_id"]})
+    require_settlement_approval(allocation)
     
     agent = SettlementAgent(state["syndication_id"])
 
@@ -569,7 +575,7 @@ def publish_status_update(state: SyndicationState, event_type: str, data: Dict[s
 
 # === Routing Functions ===
 
-def route_after_negotiation(state: SyndicationState) -> Literal["settlement", "failed"]:
+def route_after_negotiation(state: SyndicationState) -> Literal["settlement", "failed", "awaiting_approval"]:
     """Route based on auction outcome"""
     status = state.get("status", "unknown")
     
@@ -588,7 +594,23 @@ def route_after_negotiation(state: SyndicationState) -> Literal["settlement", "f
         state["failure_reason"] = "insufficient_subscription"
         return "failed"
     
+    allocation = db.allocations().find_one({"syndication_id": state["syndication_id"]})
+    if not approval_authorizes_settlement(allocation):
+        state["status"] = "awaiting_approval"
+        logger.info("Settlement blocked: allocation requires exact human approval")
+        return "awaiting_approval"
+
     return "settlement"
+
+
+def awaiting_approval_node(state: SyndicationState) -> SyndicationState:
+    """Pause the workflow without representing the proposal as committed."""
+    state["status"] = "awaiting_approval"
+    db.syndications().update_one(
+        {"_id": state["syndication_id"]},
+        {"$set": {"status": "awaiting_approval", "updated_at": datetime.utcnow().isoformat()}},
+    )
+    return state
 
 
 def route_after_settlement(state: SyndicationState) -> Literal["payment", "settlement_failed"]:
@@ -681,6 +703,7 @@ def build_syndication_graph() -> StateGraph:
     workflow.add_node("payment", payment_node)
     workflow.add_node("failed", failed_node)
     workflow.add_node("settlement_failed", settlement_failed_node)
+    workflow.add_node("awaiting_approval", awaiting_approval_node)
     
     # Set entry point
     workflow.set_entry_point("originator")
@@ -695,7 +718,8 @@ def build_syndication_graph() -> StateGraph:
         route_after_negotiation,
         {
             "settlement": "settlement",
-            "failed": "failed"
+            "failed": "failed",
+            "awaiting_approval": "awaiting_approval"
         }
     )
     
@@ -712,6 +736,7 @@ def build_syndication_graph() -> StateGraph:
     workflow.add_edge("payment", END)
     workflow.add_edge("failed", END)
     workflow.add_edge("settlement_failed", END)
+    workflow.add_edge("awaiting_approval", END)
     
     return workflow
 

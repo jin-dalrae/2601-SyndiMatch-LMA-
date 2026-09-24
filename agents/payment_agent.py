@@ -371,11 +371,12 @@ class PaymentAgent:
                 to_address=recipient_wallet,
                 amount=amount,
                 currency="USDC",
-                network="base",
+                network="base-sepolia",
                 metadata={
                     "syndication_id": self.syndication_id,
                     "payment_type": payment["payment_type"],
-                    "payment_id": payment_id
+                    "payment_id": payment_id,
+                    "execution_mode": "simulation"
                 }
             )
         except Exception as e:

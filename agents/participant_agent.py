@@ -8,7 +8,7 @@ from typing import Dict, Any, List, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import logging
-import uuid
+import hashlib
 
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -16,6 +16,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from .state import SyndicationState, BidDecision, Bid
 from .config import ANTHROPIC_API_KEY, AGENT_MODEL
 from . import db
+from .governance import validate_bid_amount
 
 logger = logging.getLogger(__name__)
 
@@ -323,7 +324,7 @@ Do not bid more than you have available.
         min_yield = risk.get("min_acceptable_yield", 0)
         
         if estimated_yield >= min_yield:
-            available = max(0, risk.get("available_capacity", 0) - risk.get("reserved_for_bids", 0))
+            available = max(0, risk.get("available_capacity", 0))
             capacity_after_fees = max(0, available - available * 0.02)
             amount = min(
                 risk.get("max_single_ticket", 50000000),
@@ -412,10 +413,55 @@ Do not bid more than you have available.
         if decision.decision != "bid":
             return {"status": "passed", "participant": self.agent_id}
         
-        # Generate unique bid ID using UUID to prevent collisions across rounds
-        bid_id = f"BID-{uuid.uuid4().hex[:12].upper()}"
+        # A deterministic key makes a retry idempotent for this participant,
+        # deal and round instead of reserving capacity twice.
+        idempotency_material = f"{state['syndication_id']}:{self.agent_id}:{state.get('current_round', 1)}"
+        bid_id = f"BID-{hashlib.sha256(idempotency_material.encode()).hexdigest()[:12].upper()}"
         now_str = state.get("current_time")
         now = datetime.fromisoformat(now_str) if now_str else datetime.utcnow()
+
+        existing_bid = db.bids().find_one({"_id": bid_id})
+        if existing_bid:
+            return existing_bid
+
+        # Re-read mandate state immediately before reservation. Model output is
+        # only a proposal; deterministic checks authorize the amount.
+        participant = db.participant_agents().find_one({"_id": self.agent_id}) or self.profile
+        self.profile = participant
+        risk = participant.get("risk_appetite", {})
+        violations = self._check_all_constraints(state) + validate_bid_amount(risk, decision.amount)
+        if violations:
+            logger.warning(f"[{self.agent_id}] Bid blocked by mandate: {violations}")
+            return {
+                "status": "rejected",
+                "participant": self.agent_id,
+                "constraints_violated": violations,
+            }
+
+        reservation_field = f"risk_appetite.bid_reservations.{bid_id}"
+        reserve_result = db.participant_agents().update_one(
+            {
+                "_id": self.agent_id,
+                "risk_appetite.available_capacity": {"$gte": decision.amount},
+                reservation_field: {"$exists": False},
+            },
+            {
+                "$inc": {
+                    "risk_appetite.available_capacity": -decision.amount,
+                    "risk_appetite.reserved_for_bids": decision.amount,
+                },
+                "$set": {reservation_field: decision.amount, "last_bid_at": now},
+            },
+        )
+        if reserve_result.modified_count != 1:
+            refreshed = db.participant_agents().find_one({"_id": self.agent_id}) or {}
+            prior_reservation = refreshed.get("risk_appetite", {}).get("bid_reservations", {}).get(bid_id)
+            if prior_reservation != decision.amount:
+                return {
+                    "status": "rejected",
+                    "participant": self.agent_id,
+                    "constraints_violated": ["atomic_capacity_reservation_failed"],
+                }
         
         bid = {
             "_id": bid_id,
@@ -438,6 +484,14 @@ Do not bid more than you have available.
             "portfolio_fit_score": decision.portfolio_fit_score,
             "risk_adjusted_return": decision.risk_adjusted_return,
             "reasoning": decision.reasoning,
+            "policy_version": "participant-mandate-v1",
+            "policy_results": [
+                {"rule": "eligibility_constraints", "result": "passed"},
+                {"rule": "minimum_ticket", "result": "passed"},
+                {"rule": "maximum_single_ticket", "result": "passed"},
+                {"rule": "available_capacity", "result": "passed"},
+            ],
+            "source_state_version": state.get("updated_at") or state.get("created_at"),
             "modification_history": [{
                 "modified_at": now,
                 "new_amount": decision.amount,
@@ -453,16 +507,11 @@ Do not bid more than you have available.
             logger.error(f"[{self.agent_id}] Failed to submit bid: {e}")
             return {"status": "error", "participant": self.agent_id, "error": str(e)}
         
-        # Update participant stats
+        # Capacity was reserved atomically before the bid was persisted.
         db.participant_agents().update_one(
             {"_id": self.agent_id},
             {
                 "$inc": {"performance_history.bids_submitted_ytd": 1},
-                "$set": {"last_bid_at": now},
-                "$inc": {
-                    "risk_appetite.available_capacity": -decision.amount,
-                    "risk_appetite.reserved_for_bids": decision.amount
-                }
             }
         )
         

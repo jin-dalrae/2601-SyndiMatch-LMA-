@@ -108,6 +108,9 @@ Deal Room UI → Node API/BFF → FastAPI orchestration → MongoDB canonical st
 - Remove duplicate workflow routes and shadowed methods.
 - Standardize canonical collection/API behavior.
 - Label simulation consistently and remove production/on-chain claims.
+- Bind allocation approval to a versioned proposal fingerprint.
+- Make settlement enforce approval at both routing and execution boundaries.
+- Validate proposed bid amounts and reserve capacity atomically.
 
 ### Phase 2 — Deal Room
 
@@ -131,4 +134,30 @@ A reviewer can run one demo deal and, without reading source code, explain:
 
 ## 11. Current prototype disclosure
 
-This repository is a local demonstration prototype. Its x402 routes simulate payment behavior and do not execute or verify on-chain transfers. It must be described as a high-fidelity, adapter-ready workflow prototype—not as a production financial platform.
+This repository is a local demonstration prototype. Its payment adapter is locked to simulation mode regardless of configured credentials, and its x402 routes do not execute or verify on-chain transfers. It must be described as a high-fidelity workflow prototype—not as a production financial platform.
+
+## 12. Implementation status
+
+Implemented in the governed vertical slice:
+
+- Allocation proposals receive monotonically increasing versions and a stable
+  SHA-256 fingerprint over decision-bearing fields.
+- Approval, override, and rejection requests must reference the current version
+  and fingerprint. Rejected, stale, edited, and unapproved allocations cannot
+  authorize settlement.
+- Settlement checks approval itself in addition to the workflow router.
+- Model-proposed bid amounts are checked against minimum ticket, maximum single
+  ticket, and current available capacity immediately before persistence.
+- Capacity reservation is a conditional atomic update keyed by a deterministic
+  bid identifier, preventing concurrent requests from overdrawing capacity.
+- Missing policy evidence is represented as `unknown`, never inferred as passed.
+- Browser-side random subscription changes have been removed.
+
+Still required before the workflow is presented as end-to-end complete:
+
+- Authenticated approver identities and role authorization.
+- A durable post-approval continuation command with crash/retry verification.
+- Transactional reconciliation between capacity reservations and bid records.
+- Correct residual redistribution and full auction/adverse-scenario coverage.
+- Deployment of the API, workflow service, and database connectivity behind the
+  existing Cloudflare frontend.

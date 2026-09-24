@@ -161,8 +161,9 @@ const App = {
             window.SimulationEngine.start();
         }
 
-        // Auto Refresh loop for mock updates
-        setInterval(() => this.simulateUpdate(), 5000);
+        // Financial metrics are derived from workflow records. The previous
+        // random subscription updater was removed because it could make a
+        // simulated number look like authoritative deal state.
     },
 
     /**

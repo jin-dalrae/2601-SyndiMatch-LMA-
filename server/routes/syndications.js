@@ -1,5 +1,6 @@
 const express = require('express');
 const { getDB } = require('../db');
+const { allocationFingerprint, validateApprovalRequest } = require('../lib/allocation-governance');
 const { callAgentsService } = require('../lib/agents-proxy');
 
 const router = express.Router();
@@ -55,10 +56,13 @@ router.get('/syndications/:id/decision-receipts', async (req, res) => {
                 ? `Bid $${Number(bid.bid_amount).toLocaleString()} at ${bid.spread_bid} bps`
                 : 'Pass',
             rationale: bid.reasoning || 'No rationale was recorded for this workflow event.',
-            policy_results: bid.constraints_violated?.length
-                ? bid.constraints_violated.map(constraint => ({ rule: constraint, result: 'failed' }))
-                : [{ rule: 'Recorded mandate evaluation', result: 'passed' }],
-            source_state_version: syndication.updated_at || syndication.created_at || null,
+            policy_results: Array.isArray(bid.policy_results) && bid.policy_results.length
+                ? bid.policy_results
+                : (bid.constraints_violated?.length
+                    ? bid.constraints_violated.map(constraint => ({ rule: constraint, result: 'failed' }))
+                    : [{ rule: 'Mandate evaluation evidence', result: 'unknown' }]),
+            policy_version: bid.policy_version || null,
+            source_state_version: bid.source_state_version || null,
             recorded_at: bid.submitted_at || bid.created_at || null
         }));
 
@@ -73,15 +77,38 @@ router.get('/syndications/:id/decision-receipts', async (req, res) => {
     }
 });
 
-// A local-demo approval gate. It records the human action separately from the
-// allocation proposal, preserving an attributable before/after decision trail.
+router.get('/syndications/:id/allocation-proposal', async (req, res) => {
+    try {
+        const allocation = await getDB().collection('allocations').findOne({ syndication_id: req.params.id });
+        if (!allocation) return res.status(404).json({ error: 'Not Found', message: 'Allocation proposal not found' });
+        const currentFingerprint = allocationFingerprint(allocation);
+        if (allocation.allocation_fingerprint !== currentFingerprint) {
+            return res.status(409).json({ error: 'Conflict', message: 'Allocation integrity check failed' });
+        }
+        res.json({
+            allocationId: allocation._id,
+            allocationVersion: allocation.allocation_version,
+            allocationFingerprint: currentFingerprint,
+            allocationStatus: allocation.allocation_status,
+            allocations: allocation.allocations || []
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Internal Server Error', message: 'Failed to load allocation proposal' });
+    }
+});
+
+// Approval is bound to the exact allocation version and fingerprint. Any
+// edited or superseded proposal must be reviewed again.
 router.post('/syndications/:id/allocation-approval', async (req, res) => {
-    const { approver, decision, reason = '' } = req.body || {};
+    const { approver, decision, reason = '', allocationVersion, allocationFingerprint: requestedFingerprint } = req.body || {};
     if (!approver || typeof approver !== 'string') {
         return res.status(400).json({ error: 'Bad Request', message: 'approver is required' });
     }
     if (!['approved', 'override', 'rejected'].includes(decision)) {
         return res.status(400).json({ error: 'Bad Request', message: 'decision must be approved, override, or rejected' });
+    }
+    if (typeof reason !== 'string') {
+        return res.status(400).json({ error: 'Bad Request', message: 'reason must be a string' });
     }
     if ((decision === 'override' || decision === 'rejected') && !reason.trim()) {
         return res.status(400).json({ error: 'Bad Request', message: 'A reason is required for an override or rejection' });
@@ -90,39 +117,51 @@ router.post('/syndications/:id/allocation-approval', async (req, res) => {
     try {
         const db = getDB();
         const allocation = await db.collection('allocations').findOne({ syndication_id: req.params.id });
-        if (!allocation) {
-            return res.status(409).json({ error: 'Conflict', message: 'No proposed allocation is ready for approval' });
+        const validation = validateApprovalRequest(allocation, {
+            allocationVersion,
+            allocationFingerprint: requestedFingerprint
+        });
+        if (!validation.ok) {
+            return res.status(validation.status).json({ error: validation.status === 400 ? 'Bad Request' : 'Conflict', message: validation.message });
         }
 
         const approval = {
             syndication_id: req.params.id,
             allocation_id: allocation._id,
+            allocation_version: allocationVersion,
+            allocation_fingerprint: validation.fingerprint,
             approver,
             decision,
             reason: reason.trim() || null,
             previous_status: allocation.allocation_status || 'provisional',
             created_at: new Date()
         };
-        const result = await db.collection('allocation_approvals').insertOne(approval);
-
-        if (decision === 'approved') {
-            await db.collection('allocations').updateOne(
-                { _id: allocation._id },
-                { $set: { allocation_status: 'approved', approved_at: approval.created_at, approved_by: approver } }
-            );
+        const nextStatus = decision === 'rejected' ? 'rejected' : 'approved';
+        const updateResult = await db.collection('allocations').updateOne(
+            {
+                _id: allocation._id,
+                allocation_version: allocationVersion,
+                allocation_fingerprint: validation.fingerprint,
+                allocation_status: { $in: ['pending_approval', 'provisional'] }
+            },
+            { $set: { allocation_status: nextStatus, approval } }
+        );
+        if (updateResult.modifiedCount !== 1) {
+            return res.status(409).json({ error: 'Conflict', message: 'Allocation changed while approval was being recorded' });
         }
+        const result = await db.collection('allocation_approvals').insertOne(approval);
 
         await db.collection('syndication_events').insertOne({
             syndication_id: req.params.id,
             event_type: 'ALLOCATION_APPROVAL_RECORDED',
             timestamp: approval.created_at.toISOString(),
-            data: { approver, decision, reason: approval.reason, allocation_id: allocation._id }
+            data: { approver, decision, reason: approval.reason, allocation_id: allocation._id, allocation_version: allocationVersion, allocation_fingerprint: validation.fingerprint }
         });
 
         res.status(201).json({
             approval_id: result.insertedId,
             ...approval,
-            allocation_status: decision === 'approved' ? 'approved' : approval.previous_status
+            allocation_status: nextStatus
         });
     } catch (error) {
         console.error(`❌ Failed to record allocation approval for ${req.params.id}:`, error);

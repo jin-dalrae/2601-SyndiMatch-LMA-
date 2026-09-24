@@ -1,11 +1,7 @@
-"""
-SyndiMatch - Coinbase x402 Integration
-Payment processing via Coinbase CDP SDK on Base L2
+"""Simulation-only payment adapter for the SyndiMatch portfolio workflow.
 
-Real integration with:
-- Base Sepolia (testnet) or Base Mainnet
-- Gasless USDC transfers
-- CDP Account management
+The historical CDP adapter remains below for reference, but runtime clients
+are forced into simulation mode. No credential can enable a transfer.
 """
 
 import os
@@ -93,14 +89,13 @@ class CoinbaseX402Client:
         self.api_key_private_key = api_key_private_key or CDP_API_KEY_PRIVATE_KEY
         self.network = network or CDP_NETWORK
         
-        self.demo_mode = not CDP_AVAILABLE or not self.api_key_name
+        # Product invariant: this repository is a workflow simulation. The
+        # presence of an SDK or credentials must never change money movement.
+        self.demo_mode = True
         self.client = None
         self.account = None
         
-        if self.demo_mode:
-            logger.warning("x402 Client running in DEMO mode - install cdp-sdk and configure API keys for real transactions")
-        else:
-            self._initialize_cdp()
+        logger.info("x402 adapter locked to SIMULATION mode; no transfer will be submitted")
     
     async def initialize(self):
         """Async initialization of CDP SDK and account"""

@@ -19,7 +19,7 @@ The portfolio centerpiece is the **Deal Room** (`/deal-room`). It presents a sin
 1. **Originate** — a lead arranger defines borrower, amount, rating, sector, spread, and target close.
 2. **Evaluate** — participant agents screen the opportunity against hard mandate constraints such as rating, sector, geography, ticket size, capacity, and concentration.
 3. **Build the book** — eligible participants submit recommendations and the negotiation workflow records auction rounds, coverage, and the current clearing spread.
-4. **Review allocation** — a proposed full or pro-rata allocation is checked before an arranger records approval, override, or rejection.
+4. **Review allocation** — a proposed full or pro-rata allocation receives a version and fingerprint before an arranger records approval, override, or rejection.
 5. **Replay the decision** — decision receipts expose the recorded outcome, rationale, and policy evidence instead of inventing an explanation after the fact.
 6. **Simulate settlement** — the demo produces workflow receipts only. No funds, escrow accounts, USDC, or blockchain transfers move in this repository.
 
@@ -37,7 +37,7 @@ The portfolio centerpiece is the **Deal Room** (`/deal-room`). It presents a sin
 
 - **Policy before prose:** deterministic constraints determine eligibility; a language model may explain a recommendation but cannot override those limits.
 - **No opaque autonomy:** a material action should expose input, policy result, rationale, outcome, and timestamp.
-- **Human approval for commitment:** allocation approval is recorded separately from the proposal it approves.
+- **Human approval for commitment:** approval is bound to the exact allocation version and fingerprint; editing a proposal invalidates approval.
 - **One canonical deal state:** browser views, APIs, agents, and event records should describe the same syndication.
 - **Simulation is explicit:** the UI labels simulated settlement and does not make production or real-money claims.
 
@@ -47,7 +47,10 @@ The portfolio centerpiece is the **Deal Room** (`/deal-room`). It presents a sin
 - Rule-based participant constraints with optional Anthropic-backed reasoning when configured.
 - Multi-round Dutch-auction logic, bid ranking, pro-rata allocation, and workflow events.
 - Decision Replay interface in the Deal Room, sourced from recorded bid/workflow data.
-- A local-demo allocation approval endpoint and attributable approval event.
+- A settlement gate that pauses the workflow until the exact current allocation is approved.
+- Deterministic bid-amount validation and atomic participant-capacity reservation.
+- Versioned allocation approval with stale-proposal and integrity checks.
+- A simulation-locked payment adapter; configured credentials cannot enable transfers.
 - Role-oriented views for platform admins, originators, and participants.
 - Explicit simulated payment receipts; the Node x402 routes do not send or verify on-chain transfers.
 
@@ -114,6 +117,7 @@ This is a local demonstration prototype, not a financial product. It must not be
 ## Validation
 
 ```bash
+npm test
 npm run vite:build
 python3 -m compileall -q agents
 ./scripts/smoke-node.sh
@@ -121,6 +125,22 @@ python3 -m compileall -q agents
 ```
 
 The smoke tests require their respective local services and MongoDB to be running.
+
+The unit suite proves the current control boundary without external services:
+unapproved and rejected allocations cannot settle, edits invalidate approval,
+stale proposal versions are rejected, Python and Node agree on allocation
+fingerprints, and oversized model recommendations fail mandate checks.
+
+## Current limitations
+
+- The Cloudflare deployment currently serves the frontend only; the Node API,
+  Python workflow service, and MongoDB are not deployed there.
+- Approval actors are labels in the local demo, not authenticated identities.
+- The current integrity milestone pauses at approval. A durable, authenticated
+  continuation command and crash-recovery tests remain before this can be
+  described as a complete deployed workflow.
+- Auction clearing, residual redistribution, and concentration-limit behavior
+  still require adversarial test coverage.
 
 ## Repository guide
 

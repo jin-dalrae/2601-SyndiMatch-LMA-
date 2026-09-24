@@ -59,12 +59,19 @@ const DealRoom = {
     async recordApproval(syndicationId) {
         if (!syndicationId || !window.API) return;
         const approver = window.RoleRouter?.currentAgentId || 'platform-admin-demo';
+        const proposal = await API.get('server', `/syndications/${encodeURIComponent(syndicationId)}/allocation-proposal`);
+        if (!proposal?.allocationFingerprint || !Number.isInteger(proposal?.allocationVersion)) {
+            window.App?.showToast('The allocation proposal could not be integrity-checked.', 'error');
+            return;
+        }
         const confirmed = window.confirm('Record approval for the proposed allocation? This action will be added to the demo audit trail.');
         if (!confirmed) return;
 
         const result = await API.post('server', `/syndications/${encodeURIComponent(syndicationId)}/allocation-approval`, {
             approver,
-            decision: 'approved'
+            decision: 'approved',
+            allocationVersion: proposal.allocationVersion,
+            allocationFingerprint: proposal.allocationFingerprint
         });
 
         if (result?.approval_id) {

@@ -17,6 +17,7 @@ from .config import (
     MAX_AUCTION_ROUNDS, MIN_SUBSCRIPTION_RATE, EARLY_CLOSE_THRESHOLD
 )
 from . import db
+from .governance import version_allocation
 
 logger = logging.getLogger(__name__)
 
@@ -521,7 +522,6 @@ class NegotiationAgent:
         allocation_doc = {
             "_id": f"ALLOC-{self.syndication_id}",
             "syndication_id": self.syndication_id,
-            "allocation_status": "provisional",
             "negotiation_agent_id": self.agent_id,
             "allocations": allocations,
             "auction_results": {
@@ -535,6 +535,8 @@ class NegotiationAgent:
             },
             "created_at": datetime.utcnow()
         }
+        previous_allocation = db.allocations().find_one({"_id": allocation_doc["_id"]})
+        allocation_doc = version_allocation(allocation_doc, previous_allocation)
         db.allocations().replace_one(
             {"_id": allocation_doc["_id"]},
             allocation_doc,
