@@ -77,8 +77,12 @@ const App = {
     async initializeComponents() {
         if (window.AppState) AppState.set('loadingMessage', 'Loading components...');
 
-        // Initialize all standard components
-        const components = [
+        const governedWorkspace = AppState?.get('currentView') === 'deal-room';
+        // The governed workspace has a deliberately small startup surface. It
+        // must not wait for, or be visually rewritten by, legacy dashboards.
+        const components = governedWorkspace ? [
+            { name: 'DealRoom', el: window.DealRoom }
+        ] : [
             { name: 'Metrics', el: window.MetricsComponent },
             { name: 'Pipeline', el: window.PipelineComponent },
             { name: 'SyndicationDetail', el: window.SyndicationDetailComponent },
@@ -179,6 +183,11 @@ const App = {
         // Keep legacy dashboard chrome away from the case-study workspace: its
         // aggregate figures are illustrative and are not part of the D1 record.
         const governedWorkspace = viewName === 'deal-room';
+        document.body.classList.toggle('governed-workspace', governedWorkspace);
+        const context = document.getElementById('workspace-context');
+        if (context) context.textContent = viewName === 'platform'
+            ? 'Platform Administration'
+            : (governedWorkspace ? 'Credit Desk' : 'Workspace');
         ['#metrics-bar', '#role-selector', '.demo-toggle', '#alerts-toggle'].forEach((selector) => {
             const element = document.querySelector(selector);
             if (element) element.hidden = governedWorkspace;
@@ -224,9 +233,7 @@ const App = {
 
         // The governed case study intentionally does not link into the legacy
         // dashboard surfaces, which use illustrative data outside canonical D1.
-        navContainer.innerHTML = activeView === 'deal-room' ? `
-            <button class="nav-tab active" data-view="deal-room">Deal Room</button>
-        ` : `
+        navContainer.innerHTML = ['deal-room', 'platform'].includes(activeView) ? '' : `
             <button class="nav-tab ${activeView === 'overview' ? 'active' : ''}" data-view="overview">Overview</button>
             <button class="nav-tab ${activeView === 'deal-room' ? 'active' : ''}" data-view="deal-room">Deal Room</button>
             <button class="nav-tab ${activeView === 'analytics' ? 'active' : ''}" data-view="analytics">Analytics</button>

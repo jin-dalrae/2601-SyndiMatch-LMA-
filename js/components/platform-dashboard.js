@@ -72,14 +72,17 @@ const PlatformDashboard = {
         const view = document.getElementById('view-platform');
         if (!view) return;
 
-        // Hide default header/metrics when in platform dashboard
+        // Keep the shared SyndiMatch shell; only the legacy aggregate strip is hidden.
         this.showPlatformMode();
 
         await this.loadData();
 
         view.innerHTML = `
             <div class="platform-dashboard">
-                ${this.renderHeader()}
+                <div class="platform-page-heading">
+                    <div><span class="platform-eyebrow">Operations workspace</span><h1>Platform administration</h1></div>
+                    <button class="btn-header" onclick="PlatformDashboard.refreshAll()">↻ Refresh records</button>
+                </div>
                 ${this.renderTabs()}
                 <div class="platform-content" id="platform-content">
                     ${this.renderTabContent()}
@@ -95,7 +98,7 @@ const PlatformDashboard = {
     showPlatformMode() {
         const header = document.querySelector('.header');
         const metricsBar = document.getElementById('metrics-bar');
-        if (header) header.style.display = 'none';
+        if (header) header.style.display = '';
         if (metricsBar) metricsBar.style.display = 'none';
     },
 
@@ -649,6 +652,17 @@ const PlatformDashboard = {
                 min-height: 100vh;
                 background: var(--bg-main, #f8fafc);
             }
+
+            .platform-page-heading {
+                display: flex;
+                align-items: flex-end;
+                justify-content: space-between;
+                gap: 1rem;
+                padding: 1.75rem 2rem 1rem;
+            }
+
+            .platform-page-heading h1 { margin: .2rem 0 0; font-size: 1.65rem; }
+            .platform-eyebrow { color: var(--primary); font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 
             /* Header */
             .platform-header {

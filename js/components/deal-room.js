@@ -35,6 +35,29 @@ const DealRoom = {
         }).format(amount >= 1_000_000 ? amount : amount * 1_000_000);
     },
 
+    _humanize(value) {
+        return String(value || 'not recorded').replaceAll('_', ' ').replace(/\b\w/g, letter => letter.toUpperCase());
+    },
+
+    _participantName(participantId, bid) {
+        return bid?.institution_name || window.SyndiData?.participants?.find(item => item.id === participantId)?.name || participantId;
+    },
+
+    _allocationRows(syndication) {
+        const bidsByParticipant = new Map((syndication.bids || []).map(bid => [bid.participant_agent_id, bid]));
+        const allocations = syndication.allocations || [];
+        if (!allocations.length) return '<tr><td colspan="4" class="allocation-empty">No allocation proposal has been recorded.</td></tr>';
+        return allocations.map(allocation => {
+            const bid = bidsByParticipant.get(allocation.participantId);
+            return `<tr>
+                <td><strong>${this._escape(this._participantName(allocation.participantId, bid))}</strong><span>${this._escape(allocation.participantId)}</span></td>
+                <td>${this._formatAmount(bid?.bid_amount)}</td>
+                <td><strong>${this._formatAmount(allocation.finalAllocation)}</strong></td>
+                <td>${this._escape(allocation.finalSpread)} bps</td>
+            </tr>`;
+        }).join('');
+    },
+
     _activeSyndication() {
         const syndications = window.SyndiData?.syndications || [];
         const activeId = window.AppState?.get('activeSyndicationId') || window.AppState?.get('currentSyndicationId');
@@ -172,9 +195,13 @@ const DealRoom = {
         const subscription = Number(syndication.subscription || 0);
         const bids = syndication.bids || [];
         const receiptState = this.receiptState[syndication.id] || { loading: true, loaded: false, receipts: [] };
-        const status = this._escape(syndication.status || 'open');
         const approvalReady = Array.isArray(syndication.allocations) && syndication.allocations.length > 0;
         const approvalPending = approvalReady && (!syndication.allocationStatus || syndication.allocationStatus === 'pending_approval');
+        const allocationApproved = syndication.allocationStatus === 'approved' || syndication.status === 'settled';
+        const settlementComplete = syndication.status === 'settled';
+        const allocatedAmount = (syndication.allocations || []).reduce((sum, row) => sum + Number(row.finalAllocation || 0), 0);
+        const targetAmount = Number(syndication.target || 0) * 1_000_000;
+        const residualAmount = Math.max(0, targetAmount - allocatedAmount);
         if (!receiptState.loaded && !receiptState.loading) this.loadDecisionReceipts(syndication.id);
         if (!this.receiptState[syndication.id]) this.loadDecisionReceipts(syndication.id);
         const receiptCount = receiptState.loaded ? receiptState.receipts.length : bids.length;
@@ -183,35 +210,46 @@ const DealRoom = {
             <section class="deal-room">
                 <header class="deal-room-header">
                     <div>
-                        <span class="deal-room-eyebrow">Deal Room · Review-first workflow</span>
+                        <span class="deal-room-eyebrow">Credit Desk / ${this._escape(syndication.id)}</span>
                         <h1>${this._escape(syndication.borrower || 'Unnamed borrower')}</h1>
-                        <p>${this._escape(syndication.id)} · ${this._escape(syndication.industry || 'Industry not recorded')} · ${this._escape(syndication.rating || 'NR')}</p>
+                        <p>${this._escape(syndication.industry || 'Industry not recorded')} · ${this._escape(syndication.rating || 'NR')} · ${this._humanize(syndication.status)}</p>
                     </div>
-                    <div class="deal-room-statuses">
-                        <span class="deal-room-status">${status}</span>
-                        <span class="deal-room-simulation">Simulation · no funds move</span>
+                    <div class="deal-room-disclosure">
+                        <strong>Controlled simulation</strong>
+                        <span>Canonical D1 records · no funds move</span>
                     </div>
                 </header>
+
+                <div class="workflow-progress" aria-label="Workflow progress">
+                    <div class="credit-workflow-step complete"><i>1</i><span>Book formed<small>${bids.length} recorded bids</small></span></div>
+                    <div class="credit-workflow-step ${approvalReady ? 'complete' : 'current'}"><i>2</i><span>Allocation proposed<small>${approvalReady ? `Version ${this._escape(syndication.allocationVersion)}` : 'Not yet created'}</small></span></div>
+                    <div class="credit-workflow-step ${allocationApproved ? 'complete' : (approvalPending ? 'current' : '')}"><i>3</i><span>Human approval<small>${approvalPending ? 'Action required' : (allocationApproved ? 'Recorded' : 'Gate closed')}</small></span></div>
+                    <div class="credit-workflow-step ${settlementComplete ? 'complete' : (allocationApproved ? 'current' : '')}"><i>4</i><span>Simulated close<small>${settlementComplete ? 'Receipt recorded' : 'No funds move'}</small></span></div>
+                </div>
+
+                <div class="deal-kpis">
+                    <div><span>Syndication target</span><strong>${this._formatAmount(syndication.target)}</strong></div>
+                    <div><span>Recorded demand</span><strong>${this._formatAmount(bids.reduce((sum, bid) => sum + Number(bid.bid_amount || 0), 0))}</strong></div>
+                    <div><span>Book coverage</span><strong>${subscription.toFixed(0)}%</strong></div>
+                    <div><span>Proposed / residual</span><strong>${this._formatAmount(allocatedAmount)} <em>/ ${this._formatAmount(residualAmount)}</em></strong></div>
+                </div>
 
                 <div class="deal-room-grid">
                     <section class="deal-room-card book-card">
                         <div class="deal-room-card-heading">
-                            <div><span>01 · Book build</span><h2>Recorded market state</h2></div>
-                            <span class="record-badge">Workflow data</span>
+                            <div><span>Allocation proposal</span><h2>Recommended lender book</h2></div>
+                            <span class="record-badge">Version ${this._escape(syndication.allocationVersion || '—')}</span>
                         </div>
-                        <div class="book-metrics">
-                            <div><span>Facility</span><strong>${this._formatAmount(syndication.amount)}</strong></div>
-                            <div><span>Clearing / current spread</span><strong>${this._escape(syndication.spread || '—')} bps</strong></div>
-                            <div><span>Recorded decisions</span><strong>${receiptCount}</strong></div>
-                        </div>
-                        <div class="coverage-row"><span>Subscription</span><strong>${subscription.toFixed(0)}%</strong></div>
-                        <div class="coverage-track"><div class="coverage-fill" style="width: ${Math.max(0, Math.min(subscription, 100))}%"></div></div>
-                        <p class="deal-room-note">Coverage and pricing are read from the selected workflow record. They are not live market data.</p>
+                        <div class="allocation-table-wrap"><table class="allocation-table">
+                            <thead><tr><th>Participant</th><th>Bid</th><th>Proposed</th><th>Final spread</th></tr></thead>
+                            <tbody>${this._allocationRows(syndication)}</tbody>
+                        </table></div>
+                        <p class="deal-room-note">The proposal is deterministic, concentration-capped, fingerprinted, and read from canonical workflow state.</p>
                     </section>
 
                     <section class="deal-room-card approval-card">
                         <div class="deal-room-card-heading">
-                            <div><span>02 · Control point</span><h2>Allocation approval</h2></div>
+                            <div><span>Control point</span><h2>Credit committee review</h2></div>
                             <span class="approval-icon">${approvalPending ? 'Ready for review' : this._escape(syndication.allocationStatus || 'Awaiting proposal')}</span>
                         </div>
                         <p>${approvalReady
@@ -228,8 +266,8 @@ const DealRoom = {
 
                 <section class="deal-room-card decision-replay-card">
                     <div class="deal-room-card-heading">
-                        <div><span>03 · Decision Replay</span><h2>Why did the agents act?</h2></div>
-                        <span class="record-badge">Evidence view</span>
+                            <div><span>Decision evidence</span><h2>Why did each participant bid?</h2></div>
+                        <span class="record-badge">${receiptCount} receipts</span>
                     </div>
                     <p class="decision-replay-intro">${this._escape(receiptState.disclosure || 'Each receipt links an outcome to the workflow evidence available at the time. Missing rationale is disclosed rather than inferred.')}</p>
                     <div class="decision-receipt-grid">${this._receiptRows(receiptState.receipts, receiptState.loading)}</div>
@@ -246,14 +284,30 @@ const DealRoom = {
             .deal-room { max-width: 1240px; margin: 0 auto; padding: 2rem; }
             .deal-room-header { display:flex; justify-content:space-between; gap:1.5rem; align-items:flex-start; margin-bottom:1.5rem; }
             .deal-room-eyebrow, .deal-room-card-heading > div > span { color:var(--primary); font-size:.72rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
-            .deal-room-header h1 { margin:.25rem 0; font-size:2rem; }
+            .deal-room-header h1 { margin:.25rem 0; font-size:2rem; letter-spacing:-.025em; }
             .deal-room-header p, .deal-room-note, .decision-replay-intro, .approval-card > p { color:var(--text-secondary); }
-            .deal-room-statuses { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:.5rem; }
-            .deal-room-status, .deal-room-simulation, .record-badge, .approval-icon { border-radius:999px; padding:.32rem .65rem; font-size:.72rem; font-weight:700; }
-            .deal-room-status { background:var(--success-bg); color:#047857; text-transform:capitalize; }
-            .deal-room-simulation { background:var(--warning-bg); color:#92400e; }
+            .deal-room-disclosure { border-left:2px solid #f59e0b; padding:.15rem 0 .15rem .85rem; display:grid; gap:.12rem; text-align:right; }
+            .deal-room-disclosure strong { color:#92400e; font-size:.77rem; text-transform:uppercase; letter-spacing:.055em; }
+            .deal-room-disclosure span { color:var(--text-muted); font-size:.75rem; }
+            .record-badge, .approval-icon { border-radius:999px; padding:.32rem .65rem; font-size:.72rem; font-weight:700; }
             .record-badge { background:#eff6ff; color:var(--primary-dark); }
             .approval-icon { background:#f1f5f9; color:var(--text-secondary); white-space:nowrap; }
+            .workflow-progress { display:grid; grid-template-columns:repeat(4,1fr); margin-bottom:1rem; border:1px solid var(--border-color); border-radius:var(--radius-xl); background:var(--bg-card); overflow:hidden; }
+            .credit-workflow-step { display:flex; align-items:center; gap:.65rem; padding:.85rem 1rem; color:var(--text-muted); position:relative; }
+            .credit-workflow-step + .credit-workflow-step { border-left:1px solid var(--border-light); }
+            .credit-workflow-step i { display:grid; place-items:center; width:1.65rem; height:1.65rem; flex:0 0 auto; border:1px solid #cbd5e1; border-radius:50%; font-size:.7rem; font-style:normal; font-weight:800; }
+            .credit-workflow-step span { display:grid; font-size:.78rem; font-weight:700; }
+            .credit-workflow-step small { font-size:.68rem; font-weight:500; color:var(--text-muted); }
+            .credit-workflow-step.complete i { color:#fff; border-color:#059669; background:#059669; }
+            .credit-workflow-step.complete { color:#065f46; }
+            .credit-workflow-step.current { color:var(--primary-dark); background:#eff6ff; }
+            .credit-workflow-step.current i { color:#fff; border-color:var(--primary); background:var(--primary); }
+            .deal-kpis { display:grid; grid-template-columns:repeat(4,1fr); margin-bottom:1rem; border:1px solid var(--border-color); border-radius:var(--radius-xl); background:var(--bg-card); }
+            .deal-kpis > div { padding:1rem 1.1rem; }
+            .deal-kpis > div + div { border-left:1px solid var(--border-light); }
+            .deal-kpis span { display:block; color:var(--text-muted); font-size:.71rem; font-weight:650; margin-bottom:.2rem; text-transform:uppercase; letter-spacing:.035em; }
+            .deal-kpis strong { font-size:1.15rem; letter-spacing:-.02em; }
+            .deal-kpis em { color:var(--text-muted); font-size:.82rem; font-style:normal; font-weight:600; }
             .deal-room-grid { display:grid; grid-template-columns:1.35fr .9fr; gap:1rem; margin-bottom:1rem; }
             .deal-room-card { background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--radius-xl); padding:1.25rem; box-shadow:var(--shadow-card); }
             .deal-room-card-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; margin-bottom:1rem; }
@@ -263,6 +317,13 @@ const DealRoom = {
             .book-metrics div + div { border-left:1px solid var(--border-light); padding-left:.75rem; }
             .book-metrics span, .coverage-row span { display:block; color:var(--text-muted); font-size:.75rem; margin-bottom:.2rem; }
             .book-metrics strong { color:var(--text-primary); font-size:1rem; }
+            .allocation-table-wrap { overflow-x:auto; }
+            .allocation-table { width:100%; border-collapse:collapse; font-size:.8rem; margin:.2rem 0 .85rem; }
+            .allocation-table th { padding:.55rem .65rem; border-bottom:1px solid var(--border-color); color:var(--text-muted); font-size:.67rem; letter-spacing:.045em; text-align:left; text-transform:uppercase; }
+            .allocation-table td { padding:.72rem .65rem; border-bottom:1px solid var(--border-light); color:var(--text-secondary); }
+            .allocation-table td:first-child span { display:block; color:var(--text-muted); font-size:.67rem; margin-top:.1rem; }
+            .allocation-table td strong { color:var(--text-primary); }
+            .allocation-empty { color:var(--text-muted); text-align:center; padding:1.5rem!important; }
             .coverage-row { display:flex; justify-content:space-between; font-size:.85rem; margin-top:.8rem; }
             .coverage-row span { margin:0; }
             .coverage-track { height:.5rem; border-radius:999px; background:#e2e8f0; overflow:hidden; margin:.45rem 0 .8rem; }
@@ -294,7 +355,9 @@ const DealRoom = {
             .decision-policy span { color:var(--text-muted); }.decision-policy strong { color:#047857; }
             .deal-room-empty-state { min-height:50vh; display:flex; flex-direction:column; justify-content:center; max-width:640px; }.deal-room-empty-state h1 { margin:.5rem 0; }.deal-room-empty-state p { color:var(--text-secondary); margin-bottom:1rem; }.deal-room-button { align-self:flex-start; border:0; border-radius:.5rem; background:var(--primary); color:white; padding:.7rem 1rem; font-weight:700; cursor:pointer; }
             .deal-room-empty { color:var(--text-secondary); font-size:.88rem; padding:1rem 0; }
-            @media (max-width: 760px) { .deal-room { padding:1rem; }.deal-room-header, .deal-room-card-heading { flex-direction:column; }.deal-room-statuses { justify-content:flex-start; }.deal-room-grid { grid-template-columns:1fr; }.book-metrics { grid-template-columns:1fr; }.book-metrics div + div { border-left:0; border-top:1px solid var(--border-light); padding-left:0; } }
+            @media (max-width: 900px) { .workflow-progress, .deal-kpis { grid-template-columns:repeat(2,1fr); }.credit-workflow-step:nth-child(3), .deal-kpis > div:nth-child(3) { border-left:0; border-top:1px solid var(--border-light); } }
+            @media (max-width: 760px) { .deal-room { padding:1rem; }.deal-room-header, .deal-room-card-heading { flex-direction:column; }.deal-room-disclosure { text-align:left; }.deal-room-grid { grid-template-columns:1fr; }.book-metrics { grid-template-columns:1fr; }.book-metrics div + div { border-left:0; border-top:1px solid var(--border-light); padding-left:0; } }
+            @media (max-width: 520px) { .workflow-progress, .deal-kpis { grid-template-columns:1fr; }.credit-workflow-step + .credit-workflow-step, .credit-workflow-step:nth-child(3), .deal-kpis > div + div, .deal-kpis > div:nth-child(3) { border-left:0; border-top:1px solid var(--border-light); } }
         `;
         document.head.appendChild(style);
     }

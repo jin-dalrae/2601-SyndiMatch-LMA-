@@ -185,6 +185,32 @@ async function decisionReceipts(env: Env, syndicationId: string): Promise<Respon
   });
 }
 
+async function participantDirectory(env: Env): Promise<Array<Record<string, unknown>>> {
+  const { results } = await env.DB.prepare("SELECT * FROM participants ORDER BY name").all<ParticipantRow>();
+  return results.map((participant) => ({
+    id: participant.id,
+    _id: participant.id,
+    agent_id: participant.id,
+    name: participant.name,
+    entity: participant.name,
+    type: "participant",
+    risk_appetite: {
+      min_ticket: participant.min_ticket,
+      max_single_ticket: participant.max_ticket,
+      available_capacity: participant.available_capacity,
+    },
+  }));
+}
+
+async function allEvents(request: Request, env: Env): Promise<Response> {
+  const requested = Number(new URL(request.url).searchParams.get("limit") || "50");
+  const limit = Number.isSafeInteger(requested) ? Math.min(200, Math.max(1, requested)) : 50;
+  const { results } = await env.DB.prepare(
+    "SELECT id AS _id, syndication_id, event_type, actor, payload_json, created_at AS timestamp FROM workflow_events ORDER BY created_at DESC LIMIT ?"
+  ).bind(limit).all<{ _id: string; syndication_id: string | null; event_type: string; actor: string | null; payload_json: string; timestamp: string }>();
+  return json(results.map((event) => ({ ...event, data: JSON.parse(event.payload_json) })));
+}
+
 async function proposalResponse(env: Env, syndicationId: string): Promise<Response> {
   const proposal = await env.DB.prepare("SELECT * FROM allocation_proposals WHERE syndication_id = ?")
     .bind(syndicationId).first<ProposalRow>();
@@ -494,6 +520,12 @@ async function routeApi(request: Request, env: Env): Promise<Response> {
   if (method === "GET" && path === "/api/health") return health(env);
   if (method === "GET" && path === "/api/ready") return health(env);
   if (method === "GET" && path === "/api/all-data") return allData(env);
+  if (method === "GET" && path === "/api/participants") return json(await participantDirectory(env));
+  if (method === "GET" && path === "/api/originators") return json([]);
+  if (method === "GET" && path === "/api/agents") {
+    return json({ originator: [], participant: await participantDirectory(env), negotiation: [], settlement: [], payment: [] });
+  }
+  if (method === "GET" && path === "/api/syndication-events") return allEvents(request, env);
   if (method === "POST" && path === "/api/auth/login") return login(request, env);
   if (method === "POST" && path === "/api/auth/logout") return logout(request, env);
   if (method === "GET" && path === "/api/auth/me") {

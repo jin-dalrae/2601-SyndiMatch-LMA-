@@ -101,6 +101,7 @@ const SyndiData = {
                 borrower: s.loan_details?.borrower_name || s.borrower || 'Unknown',
                 industry: s.loan_details?.industry || s.industry || 'Unknown',
                 amount: (s.loan_details?.total_amount || 0) / 1000000,
+                target: (s.loan_details?.syndication_target || 0) / 1000000,
                 rating: s.loan_details?.credit_rating || s.rating || 'NR',
                 originator: s.originator || 'Unknown',
                 spread: s.current_spread || s.pricing?.initial_spread || 0,

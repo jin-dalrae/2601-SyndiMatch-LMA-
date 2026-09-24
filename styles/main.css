@@ -102,6 +102,13 @@ body {
     min-height: 100vh;
 }
 
+body.governed-workspace #metrics-bar,
+body.governed-workspace #role-selector,
+body.governed-workspace .demo-toggle,
+body.governed-workspace #alerts-toggle {
+    display: none !important;
+}
+
 /* Typography Hierarchy */
 h1,
 h2,
@@ -204,6 +211,42 @@ select {
     display: flex;
     align-items: center;
     gap: 2rem;
+}
+
+.app-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.65rem;
+    color: var(--text-primary);
+    text-decoration: none;
+}
+
+.app-brand-mark {
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.55rem;
+    color: #fff;
+    background: linear-gradient(135deg, var(--primary), #4f46e5);
+    font-weight: 800;
+    box-shadow: 0 5px 14px rgba(37, 99, 235, 0.2);
+}
+
+.app-brand-name {
+    font-size: 1.05rem;
+    font-weight: 750;
+    letter-spacing: -0.02em;
+}
+
+.workspace-context {
+    padding-left: 1rem;
+    border-left: 1px solid var(--border-color);
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
 }
 
 .logo {
