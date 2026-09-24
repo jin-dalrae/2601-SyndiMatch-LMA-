@@ -16,8 +16,8 @@ const DealRoom = {
             if (event.detail?.view === 'deal-room') this.render();
         });
         document.addEventListener('click', (event) => {
-            const button = event.target.closest('[data-allocation-approval]');
-            if (button) this.recordApproval(button.dataset.allocationApproval);
+            const button = event.target.closest('[data-allocation-decision]');
+            if (button) this.recordDecision(button.dataset.allocationDecision);
         });
     },
 
@@ -68,18 +68,22 @@ const DealRoom = {
         if (!syndicationId || !window.API || this.receiptState[syndicationId]?.loaded) return;
 
         this.receiptState[syndicationId] = { loading: true, loaded: false, receipts: [] };
-        const response = await API.get('server', `/syndications/${encodeURIComponent(syndicationId)}/decision-receipts`);
+        const [response, events] = await Promise.all([
+            API.get('server', `/syndications/${encodeURIComponent(syndicationId)}/decision-receipts`),
+            API.get('server', `/syndication-events/${encodeURIComponent(syndicationId)}`)
+        ]);
         this.receiptState[syndicationId] = {
             loading: false,
             loaded: true,
             receipts: Array.isArray(response?.receipts) ? response.receipts : [],
+            events: Array.isArray(events) ? events : [],
             disclosure: response?.disclosure || 'Decision receipts are unavailable because no workflow evidence could be loaded.'
         };
 
         if (window.AppState?.get('currentView') === 'deal-room') this.render();
     },
 
-    async recordApproval(syndicationId) {
+    async recordDecision(syndicationId) {
         if (!syndicationId || !window.API) return;
         let session = await API.get('server', '/auth/me');
         if (!session?.actor) {
@@ -92,28 +96,82 @@ const DealRoom = {
             window.App?.showToast('The allocation proposal could not be integrity-checked.', 'error');
             return;
         }
-        const confirmed = window.confirm('Record approval for the proposed allocation? This action will be added to the demo audit trail.');
-        if (!confirmed) return;
+        const review = await this._requestAllocationDecision(proposal);
+        if (!review) return;
 
         const result = await API.post('server', `/syndications/${encodeURIComponent(syndicationId)}/allocation-approval`, {
-            decision: 'approved',
+            decision: review.decision,
+            reason: review.reason,
             allocationVersion: proposal.allocationVersion,
             allocationFingerprint: proposal.allocationFingerprint
         });
 
         if (result?.approvalId || result?.approval_id) {
-            const settlement = await API.post('server', `/syndications/${encodeURIComponent(syndicationId)}/continue`, {});
-            const settled = settlement?.mode === 'simulation' && settlement?.fundsMoved === false;
-            window.App?.showToast(settled
-                ? 'Approved and completed simulation-only settlement.'
-                : 'Allocation approved; settlement remains pending.', settled ? 'success' : 'info');
+            if (review.decision === 'rejected') {
+                window.App?.showToast('Allocation rejected. The reason was recorded in the audit trail.', 'info');
+            } else {
+                const settlement = await API.post('server', `/syndications/${encodeURIComponent(syndicationId)}/continue`, {});
+                const settled = settlement?.mode === 'simulation' && settlement?.fundsMoved === false;
+                window.App?.showToast(settled
+                    ? 'Decision recorded and simulation-only settlement completed.'
+                    : 'Decision recorded; settlement remains pending.', settled ? 'success' : 'info');
+            }
             API.invalidateCache('/all-data');
             API.invalidateCache('/syndications');
+            delete this.receiptState[syndicationId];
             await window.SyndiData?.refresh();
             this.render();
         } else {
             window.App?.showToast('No proposed allocation is ready for approval.', 'error');
         }
+    },
+
+    _requestAllocationDecision(proposal) {
+        return new Promise(resolve => {
+            document.getElementById('allocation-review-dialog')?.remove();
+            const dialog = document.createElement('dialog');
+            dialog.id = 'allocation-review-dialog';
+            dialog.className = 'allocation-review-dialog';
+            const fingerprint = this._escape(proposal.allocationFingerprint || 'Not recorded');
+            dialog.innerHTML = `
+                <form method="dialog" class="allocation-review-form">
+                    <span class="deal-room-eyebrow">Credit committee control</span>
+                    <h2>Record allocation decision</h2>
+                    <p>Bind the decision to this exact proposal. Override and rejection require an attributable rationale.</p>
+                    <dl>
+                        <div><dt>Proposal</dt><dd>Version ${this._escape(proposal.allocationVersion)}</dd></div>
+                        <div><dt>Allocated</dt><dd>${this._formatAmount(proposal.allocatedAmount)}</dd></div>
+                        <div><dt>Residual</dt><dd>${this._formatAmount(proposal.residualAmount)}</dd></div>
+                        <div class="fingerprint-row"><dt>Fingerprint</dt><dd title="${fingerprint}">${fingerprint}</dd></div>
+                    </dl>
+                    <fieldset>
+                        <legend>Decision</legend>
+                        <label><input type="radio" name="decision" value="approved" checked><span><strong>Approve</strong><small>Accept the proposal as calculated</small></span></label>
+                        <label><input type="radio" name="decision" value="override"><span><strong>Approve with exception</strong><small>Accept with a documented committee exception</small></span></label>
+                        <label><input type="radio" name="decision" value="rejected"><span><strong>Reject</strong><small>Return the allocation for revision</small></span></label>
+                    </fieldset>
+                    <label class="decision-reason">Committee rationale<textarea name="reason" rows="3" maxlength="1000" placeholder="Required for exception or rejection"></textarea></label>
+                    <p class="allocation-review-error" role="alert"></p>
+                    <div class="allocation-review-actions"><button type="button" data-cancel>Cancel</button><button type="submit">Record decision</button></div>
+                </form>`;
+            document.body.appendChild(dialog);
+            const finish = value => { dialog.close(); dialog.remove(); resolve(value); };
+            dialog.querySelector('[data-cancel]').addEventListener('click', () => finish(null));
+            dialog.addEventListener('cancel', event => { event.preventDefault(); finish(null); });
+            dialog.querySelector('form').addEventListener('submit', event => {
+                event.preventDefault();
+                const data = new FormData(event.currentTarget);
+                const decision = String(data.get('decision') || '');
+                const reason = String(data.get('reason') || '').trim();
+                if ((decision === 'override' || decision === 'rejected') && !reason) {
+                    dialog.querySelector('.allocation-review-error').textContent = 'A committee rationale is required for this decision.';
+                    dialog.querySelector('textarea').focus();
+                    return;
+                }
+                finish({ decision, reason });
+            });
+            dialog.showModal();
+        });
     },
 
     _requestReviewerLogin() {
@@ -177,6 +235,13 @@ const DealRoom = {
         }).join('');
     },
 
+    _eventRows(events = []) {
+        if (!events.length) return '<p class="workflow-event-empty">No workflow events recorded.</p>';
+        return events.slice(-6).reverse().map(event => `
+            <li><i></i><div><strong>${this._humanize(event.event_type)}</strong><span>${this._escape(event.actor || 'System')} · ${this._escape(new Date(event.created_at || event.timestamp).toLocaleString())}</span></div></li>
+        `).join('');
+    },
+
     render() {
         const container = document.getElementById('view-deal-room');
         if (!container) return;
@@ -194,7 +259,7 @@ const DealRoom = {
 
         const subscription = Number(syndication.subscription || 0);
         const bids = syndication.bids || [];
-        const receiptState = this.receiptState[syndication.id] || { loading: true, loaded: false, receipts: [] };
+        const receiptState = this.receiptState[syndication.id] || { loading: true, loaded: false, receipts: [], events: [] };
         const approvalReady = Array.isArray(syndication.allocations) && syndication.allocations.length > 0;
         const approvalPending = approvalReady && (!syndication.allocationStatus || syndication.allocationStatus === 'pending_approval');
         const allocationApproved = syndication.allocationStatus === 'approved' || syndication.status === 'settled';
@@ -260,7 +325,7 @@ const DealRoom = {
                             <span>✓ Attributable human decision</span>
                             <span>✓ Simulation-only settlement</span>
                         </div>
-                        ${approvalPending ? `<button class="approval-button" data-allocation-approval="${this._escape(syndication.id)}">Approve exact proposal</button>` : ''}
+                        ${approvalPending ? `<button class="approval-button" data-allocation-decision="${this._escape(syndication.id)}">Review exact proposal</button>` : ''}
                     </section>
                 </div>
 
@@ -271,6 +336,7 @@ const DealRoom = {
                     </div>
                     <p class="decision-replay-intro">${this._escape(receiptState.disclosure || 'Each receipt links an outcome to the workflow evidence available at the time. Missing rationale is disclosed rather than inferred.')}</p>
                     <div class="decision-receipt-grid">${this._receiptRows(receiptState.receipts, receiptState.loading)}</div>
+                    <div class="workflow-audit"><div><span class="deal-room-eyebrow">Workflow audit</span><h3>Recorded control events</h3></div><ol>${this._eventRows(receiptState.events)}</ol></div>
                 </section>
             </section>
         `;
@@ -342,6 +408,32 @@ const DealRoom = {
             .reviewer-login-form button { border:0; border-radius:.5rem; padding:.6rem .85rem; cursor:pointer; }
             .reviewer-login-form button[type="submit"] { background:var(--primary); color:#fff; font-weight:700; }
             .reviewer-login-error { color:#b91c1c; min-height:1.2rem; font-size:.8rem; }
+            .allocation-review-dialog { width:min(94vw,38rem); border:0; border-radius:1rem; padding:0; box-shadow:0 24px 70px rgba(15,23,42,.3); }
+            .allocation-review-dialog::backdrop { background:rgba(15,23,42,.58); backdrop-filter:blur(3px); }
+            .allocation-review-form { display:grid; gap:1rem; padding:1.5rem; }
+            .allocation-review-form h2,.allocation-review-form p { margin:0; }
+            .allocation-review-form > p { color:var(--text-secondary); font-size:.84rem; }
+            .allocation-review-form dl { display:grid; grid-template-columns:repeat(3,1fr); margin:0; border:1px solid var(--border-color); border-radius:.7rem; overflow:hidden; }
+            .allocation-review-form dl > div { padding:.65rem .75rem; }
+            .allocation-review-form dl > div + div { border-left:1px solid var(--border-light); }
+            .allocation-review-form .fingerprint-row { grid-column:1/-1; border-left:0; border-top:1px solid var(--border-light); }
+            .allocation-review-form dt { color:var(--text-muted); font-size:.66rem; font-weight:700; letter-spacing:.05em; text-transform:uppercase; }
+            .allocation-review-form dd { margin:.15rem 0 0; font-size:.82rem; font-weight:700; }
+            .allocation-review-form .fingerprint-row dd { overflow:hidden; color:var(--text-secondary); font-family:monospace; font-size:.72rem; text-overflow:ellipsis; white-space:nowrap; }
+            .allocation-review-form fieldset { display:grid; gap:.5rem; border:0; padding:0; }
+            .allocation-review-form legend { margin-bottom:.45rem; font-size:.78rem; font-weight:700; }
+            .allocation-review-form fieldset label { display:flex; align-items:flex-start; gap:.65rem; padding:.7rem .75rem; border:1px solid var(--border-color); border-radius:.65rem; cursor:pointer; }
+            .allocation-review-form fieldset label:has(input:checked) { border-color:var(--primary); background:#eff6ff; }
+            .allocation-review-form fieldset input { margin-top:.2rem; accent-color:var(--primary); }
+            .allocation-review-form fieldset span { display:grid; }
+            .allocation-review-form fieldset strong { font-size:.82rem; }
+            .allocation-review-form fieldset small { color:var(--text-muted); font-size:.72rem; }
+            .decision-reason { display:grid; gap:.4rem; font-size:.78rem; font-weight:700; }
+            .decision-reason textarea { resize:vertical; border:1px solid var(--border-color); border-radius:.6rem; padding:.7rem; font:inherit; }
+            .allocation-review-error { color:#b91c1c!important; min-height:1.2rem; font-size:.78rem!important; }
+            .allocation-review-actions { display:flex; justify-content:flex-end; gap:.6rem; }
+            .allocation-review-actions button { border:0; border-radius:.5rem; padding:.65rem .9rem; cursor:pointer; }
+            .allocation-review-actions button[type="submit"] { color:#fff; background:var(--primary); font-weight:700; }
             .decision-replay-card { margin-top:1rem; }
             .decision-replay-intro { font-size:.85rem; margin:-.25rem 0 1rem; }
             .decision-receipt-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:.75rem; }
@@ -353,10 +445,18 @@ const DealRoom = {
             .decision-rationale { color:var(--text-secondary); font-size:.8rem; line-height:1.45; margin:0 0 .85rem; }
             .decision-policy { border-top:1px solid var(--border-light); padding-top:.65rem; display:flex; flex-direction:column; gap:.12rem; font-size:.72rem; }
             .decision-policy span { color:var(--text-muted); }.decision-policy strong { color:#047857; }
+            .workflow-audit { display:grid; grid-template-columns:14rem 1fr; gap:1rem; margin-top:1.25rem; padding-top:1.1rem; border-top:1px solid var(--border-light); }
+            .workflow-audit h3 { margin:.2rem 0 0; font-size:.95rem; }
+            .workflow-audit ol { display:grid; gap:.65rem; margin:0; padding:0; list-style:none; }
+            .workflow-audit li { display:flex; align-items:flex-start; gap:.65rem; }
+            .workflow-audit li i { width:.48rem; height:.48rem; flex:0 0 auto; margin-top:.3rem; border-radius:50%; background:var(--primary); box-shadow:0 0 0 4px #eff6ff; }
+            .workflow-audit li div { display:grid; }
+            .workflow-audit li strong { font-size:.78rem; }
+            .workflow-audit li span,.workflow-event-empty { color:var(--text-muted); font-size:.7rem; }
             .deal-room-empty-state { min-height:50vh; display:flex; flex-direction:column; justify-content:center; max-width:640px; }.deal-room-empty-state h1 { margin:.5rem 0; }.deal-room-empty-state p { color:var(--text-secondary); margin-bottom:1rem; }.deal-room-button { align-self:flex-start; border:0; border-radius:.5rem; background:var(--primary); color:white; padding:.7rem 1rem; font-weight:700; cursor:pointer; }
             .deal-room-empty { color:var(--text-secondary); font-size:.88rem; padding:1rem 0; }
             @media (max-width: 900px) { .workflow-progress, .deal-kpis { grid-template-columns:repeat(2,1fr); }.credit-workflow-step:nth-child(3), .deal-kpis > div:nth-child(3) { border-left:0; border-top:1px solid var(--border-light); } }
-            @media (max-width: 760px) { .deal-room { padding:1rem; }.deal-room-header, .deal-room-card-heading { flex-direction:column; }.deal-room-disclosure { text-align:left; }.deal-room-grid { grid-template-columns:1fr; }.book-metrics { grid-template-columns:1fr; }.book-metrics div + div { border-left:0; border-top:1px solid var(--border-light); padding-left:0; } }
+            @media (max-width: 760px) { .deal-room { padding:1rem; }.deal-room-header, .deal-room-card-heading { flex-direction:column; }.deal-room-disclosure { text-align:left; }.deal-room-grid { grid-template-columns:1fr; }.book-metrics { grid-template-columns:1fr; }.book-metrics div + div { border-left:0; border-top:1px solid var(--border-light); padding-left:0; }.workflow-audit { grid-template-columns:1fr; } }
             @media (max-width: 520px) { .workflow-progress, .deal-kpis { grid-template-columns:1fr; }.credit-workflow-step + .credit-workflow-step, .credit-workflow-step:nth-child(3), .deal-kpis > div + div, .deal-kpis > div:nth-child(3) { border-left:0; border-top:1px solid var(--border-light); } }
         `;
         document.head.appendChild(style);

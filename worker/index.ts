@@ -153,6 +153,8 @@ async function allData(env: Env): Promise<Response> {
       allocations: proposal ? parseAllocations(proposal.allocations_json) : [],
       allocation_version: proposal?.version ?? null,
       allocation_status: proposal?.status ?? null,
+      allocation_fingerprint: proposal?.fingerprint ?? null,
+      allocation_residual: proposal?.residual_amount ?? null,
       created_at: deal.created_at,
       updated_at: deal.updated_at,
     };

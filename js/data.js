@@ -113,6 +113,8 @@ const SyndiData = {
                 allocations: s.allocations || [],
                 allocationVersion: s.allocation_version || null,
                 allocationStatus: s.allocation_status || null,
+                allocationFingerprint: s.allocation_fingerprint || null,
+                allocationResidual: s.allocation_residual ?? null,
                 isMock: false
             }));
         }
