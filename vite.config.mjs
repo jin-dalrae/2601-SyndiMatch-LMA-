@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite';
+import { cloudflare } from '@cloudflare/vite-plugin';
 
 // Phase 4 — step 1: Vite as the dev server / build tool, coexisting with the
 // existing global <script> tags. No ESM rewrite yet; this just adds the
@@ -8,6 +9,7 @@ import { defineConfig } from 'vite';
 // Build: vite build     → dist/
 // The Express server (server/index.js) still works standalone as before.
 export default defineConfig({
+    plugins: [cloudflare()],
     root: '.',
     appType: 'spa', // History-API routing: serve index.html for unknown paths
     server: {

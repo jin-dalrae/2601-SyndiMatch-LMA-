@@ -5,7 +5,7 @@
  */
 const DealRoom = {
     initialized: false,
-    receiptRequest: null,
+    receiptState: {},
 
     init() {
         if (this.initialized) return;
@@ -41,6 +41,21 @@ const DealRoom = {
         return syndications.find(item => item.id === activeId) || syndications[0] || null;
     },
 
+    async loadDecisionReceipts(syndicationId) {
+        if (!syndicationId || !window.API || this.receiptState[syndicationId]?.loaded) return;
+
+        this.receiptState[syndicationId] = { loading: true, loaded: false, receipts: [] };
+        const response = await API.get('server', `/syndications/${encodeURIComponent(syndicationId)}/decision-receipts`);
+        this.receiptState[syndicationId] = {
+            loading: false,
+            loaded: true,
+            receipts: Array.isArray(response?.receipts) ? response.receipts : [],
+            disclosure: response?.disclosure || 'Decision receipts are unavailable because no workflow evidence could be loaded.'
+        };
+
+        if (window.AppState?.get('currentView') === 'deal-room') this.render();
+    },
+
     async recordApproval(syndicationId) {
         if (!syndicationId || !window.API) return;
         const approver = window.RoleRouter?.currentAgentId || 'platform-admin-demo';
@@ -54,31 +69,37 @@ const DealRoom = {
 
         if (result?.approval_id) {
             window.App?.showToast('Allocation approval recorded in the audit trail.', 'info');
+            API.invalidateCache('/all-data');
+            API.invalidateCache('/syndications');
+            await window.SyndiData?.refresh();
             this.render();
         } else {
             window.App?.showToast('No proposed allocation is ready for approval.', 'error');
         }
     },
 
-    _receiptRows(bids = []) {
-        if (!bids.length) {
+    _receiptRows(receipts = [], loading = false) {
+        if (loading) {
+            return '<div class="deal-room-empty">Loading recorded decision evidence…</div>';
+        }
+        if (!receipts.length) {
             return '<div class="deal-room-empty">No participant decisions have been recorded for this deal.</div>';
         }
-        return bids.slice(0, 8).map((bid, index) => {
-            const amount = bid.bid_amount ?? bid.amount;
-            const spread = bid.spread_bid ?? bid.spread;
-            const status = bid.bid_status || bid.status || 'recorded';
-            const rationale = bid.reasoning || 'No rationale was recorded for this decision.';
+        return receipts.slice(0, 8).map((receipt, index) => {
+            const policyResults = receipt.policy_results || [];
+            const policyLabel = policyResults.length
+                ? policyResults.map(result => `${result.rule}: ${result.result}`).join(' · ')
+                : 'No policy result was recorded.';
             return `
                 <article class="decision-receipt">
                     <div class="decision-receipt-head">
-                        <span class="decision-number">Decision ${index + 1}</span>
-                        <span class="decision-status">${this._escape(status)}</span>
+                        <span class="decision-number">${this._escape(receipt.decision_id || `Decision ${index + 1}`)}</span>
+                        <span class="decision-status">${this._escape(receipt.outcome || 'recorded')}</span>
                     </div>
-                    <h3>${this._escape(bid.institution_name || bid.participant || bid.participant_agent_id || 'Participant agent')}</h3>
-                    <p class="decision-recommendation">${amount ? `Bid ${this._formatAmount(amount)} at ${this._escape(spread)} bps` : 'Pass'}</p>
-                    <p class="decision-rationale">${this._escape(rationale)}</p>
-                    <div class="decision-policy"><span>Policy evidence</span><strong>${bid.constraints_violated?.length ? 'Constraint exception recorded' : 'Mandate evaluation recorded'}</strong></div>
+                    <h3>${this._escape(receipt.actor || receipt.agent_id || 'Participant agent')}</h3>
+                    <p class="decision-recommendation">${this._escape(receipt.recommendation || 'No recommendation was recorded.')}</p>
+                    <p class="decision-rationale">${this._escape(receipt.rationale || 'No rationale was recorded for this decision.')}</p>
+                    <div class="decision-policy"><span>Policy evidence</span><strong>${this._escape(policyLabel)}</strong></div>
                 </article>
             `;
         }).join('');
@@ -101,8 +122,12 @@ const DealRoom = {
 
         const subscription = Number(syndication.subscription || 0);
         const bids = syndication.bids || [];
+        const receiptState = this.receiptState[syndication.id] || { loading: true, loaded: false, receipts: [] };
         const status = this._escape(syndication.status || 'open');
         const approvalReady = Array.isArray(syndication.allocations) && syndication.allocations.length > 0;
+        if (!receiptState.loaded && !receiptState.loading) this.loadDecisionReceipts(syndication.id);
+        if (!this.receiptState[syndication.id]) this.loadDecisionReceipts(syndication.id);
+        const receiptCount = receiptState.loaded ? receiptState.receipts.length : bids.length;
 
         container.innerHTML = `
             <section class="deal-room">
@@ -127,7 +152,7 @@ const DealRoom = {
                         <div class="book-metrics">
                             <div><span>Facility</span><strong>${this._formatAmount(syndication.amount)}</strong></div>
                             <div><span>Clearing / current spread</span><strong>${this._escape(syndication.spread || '—')} bps</strong></div>
-                            <div><span>Recorded bids</span><strong>${bids.length}</strong></div>
+                            <div><span>Recorded decisions</span><strong>${receiptCount}</strong></div>
                         </div>
                         <div class="coverage-row"><span>Subscription</span><strong>${subscription.toFixed(0)}%</strong></div>
                         <div class="coverage-track"><div class="coverage-fill" style="width: ${Math.max(0, Math.min(subscription, 100))}%"></div></div>
@@ -156,8 +181,8 @@ const DealRoom = {
                         <div><span>03 · Decision Replay</span><h2>Why did the agents act?</h2></div>
                         <span class="record-badge">Evidence view</span>
                     </div>
-                    <p class="decision-replay-intro">Each receipt links an outcome to the workflow evidence available at the time. Missing rationale is disclosed rather than inferred.</p>
-                    <div class="decision-receipt-grid">${this._receiptRows(bids)}</div>
+                    <p class="decision-replay-intro">${this._escape(receiptState.disclosure || 'Each receipt links an outcome to the workflow evidence available at the time. Missing rationale is disclosed rather than inferred.')}</p>
+                    <div class="decision-receipt-grid">${this._receiptRows(receiptState.receipts, receiptState.loading)}</div>
                 </section>
             </section>
         `;

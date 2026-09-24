@@ -1,197 +1,137 @@
-# SyndiMatch
+# SyndiMatch Credit Desk
 
-**Imagine a company needs to borrow a LOT of money. Like, $500 million. SyndiMatch is a tool that helps a bunch of banks team up to lend that money together — and it uses AI helper robots to do the slow, boring parts in minutes instead of weeks.**
+**A high-fidelity prototype for an agentic institutional loan-syndication workflow.**
 
-This README explains what that actually means, in plain words. If you want the business pitch, see [PITCH_DECK.md](PITCH_DECK.md). If you want to deploy it to the internet, see [DEPLOY.md](DEPLOY.md).
+SyndiMatch shows how a lead arranger can launch a loan, how participant agents evaluate it against explicit investment mandates, how a book builds through an auction, and how a human approves an allocation before settlement is simulated.
 
----
+> This is a governed-agent workflow, not an autonomous lending system. Agents recommend, explain, and prepare work; deterministic policies and a human approval gate control consequential actions.
 
-## First, what is a "syndicated loan"?
+For the detailed product plan, see [PROJECT_DESCRIPTION.md](PROJECT_DESCRIPTION.md).
 
-Let's start with a story.
+## What is loan syndication?
 
-A big company — say, a airline — wants to borrow **$500 million** to buy new planes. They go to a bank and ask for the money.
+When a company needs a large loan, one bank may arrange it while a group of institutional lenders each take a portion of the exposure. The arranging bank is the **originator**; the institutions funding portions of the loan are **participants**. The process of finding lenders, building the book, agreeing price, assigning allocations, and completing documentation is loan syndication.
 
-Here's the problem: that's a *huge* amount. If the bank lends all $500 million and the airline can't pay it back, the bank is in serious trouble. That's way too much risk for one bank to take alone.
+## The product story
 
-So the banks do something smart. Instead of one bank lending all $500 million, **lots of banks each lend a slice**:
+The portfolio centerpiece is the **Deal Room** (`/deal-room`). It presents a single deal as a review-first workflow:
 
-- Bank A lends $100 million
-- Bank B lends $80 million
-- Pension fund C lends $75 million
-- ...and so on, until the whole $500 million is covered.
+1. **Originate** — a lead arranger defines borrower, amount, rating, sector, spread, and target close.
+2. **Evaluate** — participant agents screen the opportunity against hard mandate constraints such as rating, sector, geography, ticket size, capacity, and concentration.
+3. **Build the book** — eligible participants submit recommendations and the negotiation workflow records auction rounds, coverage, and the current clearing spread.
+4. **Review allocation** — a proposed full or pro-rata allocation is checked before an arranger records approval, override, or rejection.
+5. **Replay the decision** — decision receipts expose the recorded outcome, rationale, and policy evidence instead of inventing an explanation after the fact.
+6. **Simulate settlement** — the demo produces workflow receipts only. No funds, escrow accounts, USDC, or blockchain transfers move in this repository.
 
-Now if something goes wrong, no single lender loses everything. The risk is shared. This "team of lenders splitting one big loan" is called a **syndicated loan**. The whole process of putting that team together is **syndication**.
+## Agent responsibilities
 
-> Think of it like a $500 class trip that's too expensive for one family. So 20 families each chip in a different amount until the trip is fully paid for. One family organizes it and collects everyone's share.
+| Agent | Responsibility | Control boundary |
+| --- | --- | --- |
+| Originator Agent | Creates and broadcasts the deal | Deal terms remain visible in canonical workflow state |
+| Participant Agent | Screens a deal and proposes a bid or pass | Hard mandate constraints take precedence over model output |
+| Negotiation Agent | Records auction rounds and prepares clearing/allocation logic | The book and pricing are persisted as workflow records |
+| Settlement Agent | Prepares documentation and compliance workflow stages | It does not finalize a loan or move funds |
+| Payment Agent | Creates simulated settlement/payment workflow records | Payment rails are simulated and visibly labeled |
 
-The family that organizes it has a name in finance: the **lead arranger** (or **originator**). The families who chip in are the **participants**.
+## Product principles
 
----
+- **Policy before prose:** deterministic constraints determine eligibility; a language model may explain a recommendation but cannot override those limits.
+- **No opaque autonomy:** a material action should expose input, policy result, rationale, outcome, and timestamp.
+- **Human approval for commitment:** allocation approval is recorded separately from the proposal it approves.
+- **One canonical deal state:** browser views, APIs, agents, and event records should describe the same syndication.
+- **Simulation is explicit:** the UI labels simulated settlement and does not make production or real-money claims.
 
-## Why does this need fixing?
+## Current capabilities
 
-Organizing a syndicated loan today is *painfully slow*. It works mostly through:
+- LangGraph-based multi-agent workflow with originator, participant, negotiation, settlement, and payment stages.
+- Rule-based participant constraints with optional Anthropic-backed reasoning when configured.
+- Multi-round Dutch-auction logic, bid ranking, pro-rata allocation, and workflow events.
+- Decision Replay interface in the Deal Room, sourced from recorded bid/workflow data.
+- A local-demo allocation approval endpoint and attributable approval event.
+- Role-oriented views for platform admins, originators, and participants.
+- Explicit simulated payment receipts; the Node x402 routes do not send or verify on-chain transfers.
 
-- Phone calls
-- Emails
-- Spreadsheets sent back and forth
-- Lawyers checking documents by hand
+## Run locally
 
-A single deal can take **4 to 6 weeks** just to get organized. During those weeks, money sits around doing nothing, and everyone's time is wasted on back-and-forth messages. For a $4.7 *trillion* market, that slowness costs a fortune.
-
-It's like if planning that class trip took six weeks of phone tag just to figure out who's paying what.
-
----
-
-## What SyndiMatch does
-
-SyndiMatch gives every player a smart **AI assistant** (we call them "agents") that does the slow back-and-forth for them, automatically, in minutes.
-
-There are **five kinds of agents**, each with one job. Here's the whole process as a relay race:
-
-| # | Agent | What it does (in plain words) |
-|---|-------|-------------------------------|
-| 1 | **Originator** | The organizer. Sets up the deal: who's borrowing, how much, and the interest rate. Like the family that plans the class trip. |
-| 2 | **Participant** | Each lender's personal robot. It looks at the deal and decides "is this a good deal for us? how much should we chip in?" — based on rules its bank gave it. |
-| 3 | **Negotiation** | The auctioneer. Runs a fair bidding round so everyone agrees on the interest rate and who lends how much. |
-| 4 | **Settlement** | The paperwork checker. Confirms the final amounts and makes sure the documents are correct. |
-| 5 | **Payment** | The money mover. Handles sending the funds when everything is agreed and signed. |
-
-Because robots don't need to sleep or play phone tag, what used to take **weeks now takes hours**. And every decision an agent makes is written down in a log, so humans can always check *why* the robot did what it did.
-
----
-
-## The life of a deal (the "pipeline")
-
-Every deal moves through stages, like levels in a game. In SyndiMatch you can watch this happen live:
-
-```
-OPEN  →  NEGOTIATING  →  CLOSING  →  SETTLEMENT  →  FUNDING  →  COMPLETED
-```
-
-1. **Open** — The deal is announced. "Who wants in?"
-2. **Negotiating** — Lenders' robots place bids. The price gets worked out.
-3. **Closing** — Enough lenders are in. The deal is locked.
-4. **Settlement** — Final amounts confirmed, documents checked.
-5. **Funding** — The money is moved.
-6. **Completed** — Done. The company has its loan.
-
-In this demo, a brand-new deal walks through all six stages on its own in under a minute so you can watch the whole thing happen.
-
----
-
-## Is this real money?
-
-**No.** This is a **demo** — a working model, like a flight simulator for a video game pilot. It looks and behaves like the real thing, but:
-
-- No real dollars or cryptocurrency move anywhere.
-- The "payments" are pretend (we call this the *mock x402* system).
-- The companies and banks in the demo are made up.
-
-It's built to *show how the real thing would work*, not to actually move money. (There's a friendly "DRAFT / demo" stamp on the legal pages to make this clear.)
-
----
-
-## The three people who use it
-
-When you open SyndiMatch, you pick who you want to be (top-right dropdown):
-
-| You play as... | You see... |
-|----------------|------------|
-| **Platform Admin** | The control room. Every deal, every agent, all at once. |
-| **Originator** (a bank) | The "create a deal" desk. You fill a form and announce a new loan. |
-| **Participant** (an investor) | The "should I invest?" desk. You browse deals and let your robot bid. |
-
-No sign-up or password needed for the demo.
-
----
-
-## How to run it on your own computer
-
-You need three things installed first: **Node.js** (version 18 or newer), **Python** (3.10 or newer), and **MongoDB** (a database).
-
-Then, in a terminal, run these one at a time:
+Requirements: Node.js 18+, Python 3.10+, and MongoDB.
 
 ```bash
-# 1. Start the database
-brew services start mongodb-community
-
-# 2. Install the helper code
+# Install JavaScript dependencies
 npm install
+
+# Create the Python environment
 python3 -m venv .venv
 .venv/bin/pip install -r agents/requirements.txt
 
-# 3. Copy the settings file (the defaults already work)
+# Configure local environment values
 cp .env.example .env
 
-# 4. Fill the database with pretend deals and banks
+# Seed local demonstration records
 .venv/bin/python agents/seed_all.py
 
-# 5. Start the main website (keep this running)
+# Start the Node API and frontend on port 3001
 npm run dev
+```
 
-# 6. Open a SECOND terminal and start the AI agents
+In a second terminal:
+
+```bash
 .venv/bin/python -m uvicorn agents.server:app --host 0.0.0.0 --port 8000
-
-# 7. Open your web browser to:
-#    http://localhost:3001
 ```
 
-That's it. Click **"Try the demo"**, pick a role, and watch the agents work.
+Open `http://localhost:3001`, then use **Deal Room** in the platform navigation. The frontend production build can be checked with:
 
-> You do **not** need any paid AI keys to run the demo. When no key is set, the agents run in "simulation mode" — they make sensible pretend decisions instead of calling a real AI. Everything still works.
-
----
-
-## What's under the hood (for the curious)
-
-SyndiMatch is three programs working together, like three departments of a company passing notes:
-
-```
-   Your web browser  (the buttons and screens you click)
-            │
-            ▼
-   Node.js server     (the front desk — handles requests, talks to the database)
-            │
-            ▼
-   Python AI agents    (the "brains" — the five robot helpers)
-            │
-            ▼
-   MongoDB              (the filing cabinet — remembers every deal)
+```bash
+npm run vite:build
 ```
 
-- The **browser** part is plain HTML, CSS, and JavaScript.
-- The **server** is Node.js with Express, storing everything in MongoDB.
-- The **agents** are Python, built with a tool called LangGraph that lets AI take turns making decisions.
+## Architecture
 
-More detail for developers lives in the comments inside the code and in [DEPLOY.md](DEPLOY.md).
+```text
+Browser / Deal Room
+        ↓
+Node API and static frontend (port 3001)
+        ↓
+FastAPI agent orchestration (port 8000)
+        ↓
+MongoDB canonical workflow state + event records
+```
 
----
+- **Node/Express** provides the browser-facing API and static frontend.
+- **FastAPI + LangGraph** runs the agent workflow and streams domain events.
+- **MongoDB** stores syndications, bids, allocations, payment records, approvals, and audit/event data.
+- **Vanilla JavaScript + Vite** powers the current frontend.
 
-## A few honest notes
+## Demo disclosure
 
-- This is a learning/demo project, **not** a real financial product. Don't use it to make real money decisions.
-- Some numbers on the dashboards are illustrative (made up for the demo).
-- The legal pages (Terms, Privacy) are drafts and would need a real lawyer before any real use.
+This is a local demonstration prototype, not a financial product. It must not be used to originate loans, make investment decisions, custody assets, or move money.
 
----
+- Demo institutions and figures are illustrative.
+- LLM-backed reasoning is optional; deterministic simulation rules remain available without an AI key.
+- Payment and settlement screens are simulations. Transaction-like identifiers are demo receipts, not blockchain confirmations.
+- Authentication and authorization are out of scope for the local demo and required before any multi-user deployment.
 
-## Words grown-ups use, explained simply
+## Validation
 
-| Fancy word | What it really means |
-|------------|----------------------|
-| **Syndication** | A group of lenders splitting one big loan so no one takes all the risk. |
-| **Originator / Lead arranger** | The bank that organizes the deal and invites others in. |
-| **Participant** | A lender who chips in part of the loan. |
-| **Spread / bps** | The extra interest the borrower pays. "bps" = basis points; 100 bps = 1%. |
-| **Subscription** | How "full" a deal is. 100% means enough lenders have joined to cover the whole loan. |
-| **Settlement** | Finishing the paperwork and confirming who owes/gets what. |
-| **x402** | A way to send digital payments automatically. Here it's *pretend* (mock). |
-| **Agent** | An AI helper that makes one kind of decision on someone's behalf. |
+```bash
+npm run vite:build
+python3 -m compileall -q agents
+./scripts/smoke-node.sh
+./scripts/smoke-agents.sh
+```
 
----
+The smoke tests require their respective local services and MongoDB to be running.
+
+## Repository guide
+
+| Path | Purpose |
+| --- | --- |
+| `js/components/deal-room.js` | Review-first Deal Room UI |
+| `agents/` | LangGraph workflow, participant policies, and FastAPI service |
+| `server/routes/syndications.js` | Browser-facing syndication, decision-receipt, and approval endpoints |
+| `PROJECT_DESCRIPTION.md` | Product requirements and renovation plan |
+| `DEPLOY.md` | Deployment reference; Firebase Hosting is not used by the current workflow |
 
 ## License
 
-ISC — see `package.json`.
+ISC — see [package.json](package.json).

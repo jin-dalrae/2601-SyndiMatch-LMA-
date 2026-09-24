@@ -47,3 +47,9 @@ coverage/
 *.bak
 *.tmp
 .gstack/
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
