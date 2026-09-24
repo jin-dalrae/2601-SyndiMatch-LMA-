@@ -156,8 +156,9 @@ const App = {
      * Start Background Processes
      */
     startBackgroundProcesses() {
-        // Simulation Engine
-        if (window.SimulationEngine) {
+        // The legacy synthetic market loop is opt-in. It must never decorate
+        // the governed Deal Room with activity that is not in canonical D1 state.
+        if (window.Config?.ENABLE_MOCK_DATA && window.SimulationEngine) {
             window.SimulationEngine.start();
         }
 
@@ -174,6 +175,14 @@ const App = {
         this.currentView = viewName;
 
         console.log(`🎬 Switching to view: ${viewName}`);
+
+        // Keep legacy dashboard chrome away from the case-study workspace: its
+        // aggregate figures are illustrative and are not part of the D1 record.
+        const governedWorkspace = viewName === 'deal-room';
+        ['#metrics-bar', '#role-selector', '.demo-toggle', '#alerts-toggle'].forEach((selector) => {
+            const element = document.querySelector(selector);
+            if (element) element.hidden = governedWorkspace;
+        });
 
         // Update Navigation DOM
         this.updateNavigationUI(viewName);
@@ -213,8 +222,11 @@ const App = {
         const navContainer = document.querySelector('.nav-tabs');
         if (!navContainer) return;
 
-        // Clear and rebuild to ensure consistency (especially when coming back from detail)
-        navContainer.innerHTML = `
+        // The governed case study intentionally does not link into the legacy
+        // dashboard surfaces, which use illustrative data outside canonical D1.
+        navContainer.innerHTML = activeView === 'deal-room' ? `
+            <button class="nav-tab active" data-view="deal-room">Deal Room</button>
+        ` : `
             <button class="nav-tab ${activeView === 'overview' ? 'active' : ''}" data-view="overview">Overview</button>
             <button class="nav-tab ${activeView === 'deal-room' ? 'active' : ''}" data-view="deal-room">Deal Room</button>
             <button class="nav-tab ${activeView === 'analytics' ? 'active' : ''}" data-view="analytics">Analytics</button>

@@ -1,11 +1,27 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "2601-syndimatch-lma",
-  "compatibility_date": "2026-09-21",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-09-24",
+  "compatibility_flags": ["nodejs_compat"],
   "observability": {
-    "enabled": true
+    "enabled": true,
+    "logs": { "head_sampling_rate": 1 }
   },
+  "vars": {
+    "REVIEWER_ID": "credit-committee-reviewer",
+    "SESSION_TTL_SECONDS": "28800"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "syndimatch-governed-workflow",
+      "database_id": "6daccc83-569d-40c5-83b1-a6c9d474ff6a"
+    }
+  ],
   "assets": {
-    "not_found_handling": "single-page-application"
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
   }
 }

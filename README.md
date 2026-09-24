@@ -43,48 +43,33 @@ The portfolio centerpiece is the **Deal Room** (`/deal-room`). It presents a sin
 
 ## Current capabilities
 
-- LangGraph-based multi-agent workflow with originator, participant, negotiation, settlement, and payment stages.
-- Rule-based participant constraints with optional Anthropic-backed reasoning when configured.
-- Multi-round Dutch-auction logic, bid ranking, pro-rata allocation, and workflow events.
-- Decision Replay interface in the Deal Room, sourced from recorded bid/workflow data.
-- A settlement gate that pauses the workflow until the exact current allocation is approved.
-- Deterministic bid-amount validation and atomic participant-capacity reservation.
-- Versioned allocation approval with stale-proposal and integrity checks.
-- A simulation-locked payment adapter; configured credentials cannot enable transfers.
-- Role-oriented views for platform admins, originators, and participants.
-- Explicit simulated payment receipts; the Node x402 routes do not send or verify on-chain transfers.
+- One Cloudflare Worker serves the Deal Room and its API, with D1 as the canonical workflow store.
+- Deterministic mandate checks, bid validation, concentration caps, pro-rata allocation, and explicit residuals.
+- Atomic bid/capacity reservation using D1 batches, including idempotent replay and concurrent-capacity protection.
+- Versioned allocation proposals with SHA-256 fingerprints and stale-proposal checks.
+- Authenticated reviewer approval, override, and rejection with a rate-limited login and server-derived actor identity.
+- Durable, idempotent post-approval continuation with simulated settlement receipts and `fundsMoved: false`.
+- Decision Replay sourced from persisted bid evidence and workflow events.
+- The earlier Node/MongoDB and Python/LangGraph implementation remains as research material, not the deployed source of truth.
 
 ## Run locally
 
-Requirements: Node.js 18+, Python 3.10+, and MongoDB.
+Requirements: Node.js 20+ and a Cloudflare account for deployment. Local preview uses Wrangler's local D1 database.
 
 ```bash
-# Install JavaScript dependencies
 npm install
+npx wrangler d1 migrations apply syndimatch-governed-workflow --local
 
-# Create the Python environment
-python3 -m venv .venv
-.venv/bin/pip install -r agents/requirements.txt
-
-# Configure local environment values
-cp .env.example .env
-
-# Seed local demonstration records
-.venv/bin/python agents/seed_all.py
-
-# Start the Node API and frontend on port 3001
-npm run dev
+# Add a SHA-256 password digest; never put the plaintext password here.
+cp .dev.vars.example .dev.vars
+npm run preview
 ```
 
-In a second terminal:
+Open the Wrangler URL, then use **Deal Room** in the platform navigation. Validate the production build with:
 
 ```bash
-.venv/bin/python -m uvicorn agents.server:app --host 0.0.0.0 --port 8000
-```
-
-Open `http://localhost:3001`, then use **Deal Room** in the platform navigation. The frontend production build can be checked with:
-
-```bash
+npm run typecheck
+npm test
 npm run vite:build
 ```
 
@@ -93,64 +78,53 @@ npm run vite:build
 ```text
 Browser / Deal Room
         ↓
-Node API and static frontend (port 3001)
+Cloudflare Worker (static assets + governed API)
         ↓
-FastAPI agent orchestration (port 8000)
-        ↓
-MongoDB canonical workflow state + event records
+Cloudflare D1 canonical workflow state + audit events
 ```
 
-- **Node/Express** provides the browser-facing API and static frontend.
-- **FastAPI + LangGraph** runs the agent workflow and streams domain events.
-- **MongoDB** stores syndications, bids, allocations, payment records, approvals, and audit/event data.
-- **Vanilla JavaScript + Vite** powers the current frontend.
+- **Cloudflare Workers** provides the same-origin API, reviewer session boundary, and static frontend.
+- **D1** stores deals, participants, bids, allocation history, approvals, commands, receipts, and events.
+- **Deterministic TypeScript policy code** calculates the allocation; model output cannot bypass the controls.
+- **Vanilla JavaScript + Vite** powers the frontend.
 
 ## Demo disclosure
 
-This is a local demonstration prototype, not a financial product. It must not be used to originate loans, make investment decisions, custody assets, or move money.
+This is a deployed demonstration prototype, not a financial product. It must not be used to originate loans, make investment decisions, custody assets, or move money.
 
 - Demo institutions and figures are illustrative.
-- LLM-backed reasoning is optional; deterministic simulation rules remain available without an AI key.
+- The deployed recommendation and allocation path is deterministic and does not require an AI key.
 - Payment and settlement screens are simulations. Transaction-like identifiers are demo receipts, not blockchain confirmations.
-- Authentication and authorization are out of scope for the local demo and required before any multi-user deployment.
+- The demo has one authenticated reviewer role. Enterprise SSO, maker-checker separation, and user administration remain out of scope.
 
 ## Validation
 
 ```bash
 npm test
+npm run typecheck
 npm run vite:build
-python3 -m compileall -q agents
-./scripts/smoke-node.sh
-./scripts/smoke-agents.sh
 ```
 
-The smoke tests require their respective local services and MongoDB to be running.
-
-The unit suite proves the current control boundary without external services:
-unapproved and rejected allocations cannot settle, edits invalidate approval,
-stale proposal versions are rejected, Python and Node agree on allocation
-fingerprints, and oversized model recommendations fail mandate checks.
+The unit suite exercises both the deployed TypeScript allocation domain and the earlier governance implementation. It covers deterministic rounding and fingerprints, concentration and minimum-allocation constraints, stale or rejected approvals, and oversized recommendations.
 
 ## Current limitations
 
-- The Cloudflare deployment currently serves the frontend only; the Node API,
-  Python workflow service, and MongoDB are not deployed there.
-- Approval actors are labels in the local demo, not authenticated identities.
-- The current integrity milestone pauses at approval. A durable, authenticated
-  continuation command and crash-recovery tests remain before this can be
-  described as a complete deployed workflow.
-- Auction clearing, residual redistribution, and concentration-limit behavior
-  still require adversarial test coverage.
+- A single demo reviewer credential is used; production deployments need SSO, granular roles, maker-checker separation, credential rotation, and centralized security monitoring.
+- Recommendations use seeded deterministic evidence. A governed model-inference adapter and its evaluations are not deployed.
+- D1 is authoritative for the deployed slice; the legacy Node/MongoDB and Python/LangGraph paths are not synchronized with it.
+- Settlement is intentionally simulation-only. There is no custody, payment rail, document execution, or real loan booking.
+- Scenario comparison, portfolio analytics, and formal disaster-recovery exercises remain future work.
 
 ## Repository guide
 
 | Path | Purpose |
 | --- | --- |
 | `js/components/deal-room.js` | Review-first Deal Room UI |
-| `agents/` | LangGraph workflow, participant policies, and FastAPI service |
-| `server/routes/syndications.js` | Browser-facing syndication, decision-receipt, and approval endpoints |
+| `worker/` | Cloudflare API, authentication, allocation policy, and workflow controls |
+| `migrations/` | Versioned D1 schema and deterministic demo fixtures |
+| `agents/`, `server/` | Earlier LangGraph and Node/MongoDB research implementation |
 | `PROJECT_DESCRIPTION.md` | Product requirements and renovation plan |
-| `DEPLOY.md` | Deployment reference; Firebase Hosting is not used by the current workflow |
+| `DEPLOY.md` | Cloudflare Worker + D1 deployment reference; Firebase Hosting is not used |
 
 ## License
 

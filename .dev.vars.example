@@ -1,0 +1,3 @@
+# SHA-256 digest of a reviewer password (minimum 12 characters).
+# Example: printf '%s' 'your-long-local-password' | shasum -a 256
+REVIEWER_PASSWORD_HASH=replace_with_64_character_sha256_digest

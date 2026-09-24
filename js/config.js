@@ -5,8 +5,8 @@
 
 const Config = {
     // API Endpoints
-    API_URL: window.ENV?.API_URL || 'http://localhost:3001/api',
-    AGENT_URL: window.ENV?.AGENT_URL || 'http://localhost:8000/api',
+    API_URL: window.ENV?.API_URL || '/api',
+    AGENT_URL: window.ENV?.AGENT_URL || '/api',
     WS_URL: window.ENV?.WS_URL || 'ws://localhost:8000/ws',
 
     // Feature Flags

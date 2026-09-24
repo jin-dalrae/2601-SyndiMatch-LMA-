@@ -58,7 +58,12 @@ const DealRoom = {
 
     async recordApproval(syndicationId) {
         if (!syndicationId || !window.API) return;
-        const approver = window.RoleRouter?.currentAgentId || 'platform-admin-demo';
+        let session = await API.get('server', '/auth/me');
+        if (!session?.actor) {
+            const authenticated = await this._requestReviewerLogin();
+            if (!authenticated) return;
+            session = await API.get('server', '/auth/me');
+        }
         const proposal = await API.get('server', `/syndications/${encodeURIComponent(syndicationId)}/allocation-proposal`);
         if (!proposal?.allocationFingerprint || !Number.isInteger(proposal?.allocationVersion)) {
             window.App?.showToast('The allocation proposal could not be integrity-checked.', 'error');
@@ -68,14 +73,17 @@ const DealRoom = {
         if (!confirmed) return;
 
         const result = await API.post('server', `/syndications/${encodeURIComponent(syndicationId)}/allocation-approval`, {
-            approver,
             decision: 'approved',
             allocationVersion: proposal.allocationVersion,
             allocationFingerprint: proposal.allocationFingerprint
         });
 
-        if (result?.approval_id) {
-            window.App?.showToast('Allocation approval recorded in the audit trail.', 'info');
+        if (result?.approvalId || result?.approval_id) {
+            const settlement = await API.post('server', `/syndications/${encodeURIComponent(syndicationId)}/continue`, {});
+            const settled = settlement?.mode === 'simulation' && settlement?.fundsMoved === false;
+            window.App?.showToast(settled
+                ? 'Approved and completed simulation-only settlement.'
+                : 'Allocation approved; settlement remains pending.', settled ? 'success' : 'info');
             API.invalidateCache('/all-data');
             API.invalidateCache('/syndications');
             await window.SyndiData?.refresh();
@@ -83,6 +91,40 @@ const DealRoom = {
         } else {
             window.App?.showToast('No proposed allocation is ready for approval.', 'error');
         }
+    },
+
+    _requestReviewerLogin() {
+        return new Promise(resolve => {
+            document.getElementById('reviewer-login-dialog')?.remove();
+            const dialog = document.createElement('dialog');
+            dialog.id = 'reviewer-login-dialog';
+            dialog.className = 'reviewer-login-dialog';
+            dialog.innerHTML = `
+                <form method="dialog" class="reviewer-login-form">
+                    <span class="deal-room-eyebrow">Controlled action</span>
+                    <h2>Reviewer authentication</h2>
+                    <p>Enter the credit-committee reviewer password. The password is exchanged for a secure HttpOnly session and is not stored by the browser.</p>
+                    <label>Reviewer password<input name="password" type="password" minlength="12" autocomplete="current-password" required></label>
+                    <p class="reviewer-login-error" role="alert"></p>
+                    <div><button value="cancel" type="button" data-cancel>Cancel</button><button value="login" type="submit">Authenticate</button></div>
+                </form>`;
+            document.body.appendChild(dialog);
+            const finish = value => { dialog.close(); dialog.remove(); resolve(value); };
+            dialog.querySelector('[data-cancel]').addEventListener('click', () => finish(false));
+            dialog.addEventListener('cancel', event => { event.preventDefault(); finish(false); });
+            dialog.querySelector('form').addEventListener('submit', async event => {
+                event.preventDefault();
+                const password = new FormData(event.currentTarget).get('password');
+                const submit = event.currentTarget.querySelector('[type="submit"]');
+                submit.disabled = true;
+                const result = await API.post('server', '/auth/login', { password });
+                if (result?.actor) return finish(true);
+                submit.disabled = false;
+                dialog.querySelector('.reviewer-login-error').textContent = 'Authentication failed. Check the reviewer password.';
+            });
+            dialog.showModal();
+            dialog.querySelector('input').focus();
+        });
     },
 
     _receiptRows(receipts = [], loading = false) {
@@ -132,6 +174,7 @@ const DealRoom = {
         const receiptState = this.receiptState[syndication.id] || { loading: true, loaded: false, receipts: [] };
         const status = this._escape(syndication.status || 'open');
         const approvalReady = Array.isArray(syndication.allocations) && syndication.allocations.length > 0;
+        const approvalPending = approvalReady && (!syndication.allocationStatus || syndication.allocationStatus === 'pending_approval');
         if (!receiptState.loaded && !receiptState.loading) this.loadDecisionReceipts(syndication.id);
         if (!this.receiptState[syndication.id]) this.loadDecisionReceipts(syndication.id);
         const receiptCount = receiptState.loaded ? receiptState.receipts.length : bids.length;
@@ -169,7 +212,7 @@ const DealRoom = {
                     <section class="deal-room-card approval-card">
                         <div class="deal-room-card-heading">
                             <div><span>02 · Control point</span><h2>Allocation approval</h2></div>
-                            <span class="approval-icon">${approvalReady ? 'Ready for review' : 'Awaiting proposal'}</span>
+                            <span class="approval-icon">${approvalPending ? 'Ready for review' : this._escape(syndication.allocationStatus || 'Awaiting proposal')}</span>
                         </div>
                         <p>${approvalReady
         ? 'A proposed allocation may be approved, overridden with a reason, or rejected. The action is recorded separately from the agent proposal.'
@@ -179,7 +222,7 @@ const DealRoom = {
                             <span>✓ Attributable human decision</span>
                             <span>✓ Simulation-only settlement</span>
                         </div>
-                        ${approvalReady ? `<button class="approval-button" data-allocation-approval="${this._escape(syndication.id)}">Record allocation approval</button>` : ''}
+                        ${approvalPending ? `<button class="approval-button" data-allocation-approval="${this._escape(syndication.id)}">Approve exact proposal</button>` : ''}
                     </section>
                 </div>
 
@@ -228,6 +271,16 @@ const DealRoom = {
             .approval-card > p { font-size:.88rem; line-height:1.55; margin:0 0 1rem; }
             .approval-checks { display:grid; gap:.5rem; font-size:.8rem; color:#047857; }
             .approval-button { margin-top:1rem; width:100%; border:0; border-radius:.5rem; background:var(--primary); color:#fff; cursor:pointer; font-weight:700; padding:.65rem .8rem; }.approval-button:hover { background:var(--primary-dark); }
+            .reviewer-login-dialog { max-width:28rem; border:0; border-radius:1rem; padding:0; box-shadow:0 24px 70px rgba(15,23,42,.3); }
+            .reviewer-login-dialog::backdrop { background:rgba(15,23,42,.58); backdrop-filter:blur(3px); }
+            .reviewer-login-form { display:grid; gap:1rem; padding:1.5rem; }
+            .reviewer-login-form h2,.reviewer-login-form p { margin:0; }
+            .reviewer-login-form label { display:grid; gap:.45rem; font-size:.82rem; font-weight:700; }
+            .reviewer-login-form input { border:1px solid var(--border); border-radius:.55rem; padding:.7rem; font:inherit; }
+            .reviewer-login-form > div { display:flex; justify-content:flex-end; gap:.6rem; }
+            .reviewer-login-form button { border:0; border-radius:.5rem; padding:.6rem .85rem; cursor:pointer; }
+            .reviewer-login-form button[type="submit"] { background:var(--primary); color:#fff; font-weight:700; }
+            .reviewer-login-error { color:#b91c1c; min-height:1.2rem; font-size:.8rem; }
             .decision-replay-card { margin-top:1rem; }
             .decision-replay-intro { font-size:.85rem; margin:-.25rem 0 1rem; }
             .decision-receipt-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:.75rem; }

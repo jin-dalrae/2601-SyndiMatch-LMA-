@@ -5,7 +5,7 @@
  */
 const Router = {
     routes: {
-        '/': 'landing',
+        '/': 'deal-room',
         '/landing': 'landing',
         '/overview': 'overview',
         '/deal-room': 'deal-room',

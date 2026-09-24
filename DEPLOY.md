@@ -1,161 +1,89 @@
 # Deployment
 
-This repo ships three deployment surfaces:
+The production-shaped case-study deployment is one Cloudflare Worker plus one D1 database:
 
-- **Node API + static frontend** — `server/index.js`, Express on port 3001.
-- **Python agents service** — `agents/server.py`, FastAPI on port 8000.
-- **Cloudflare static frontend** — Vite assets served by Workers static assets (including the latest Cloudflare Pages deployment flow).
-
-Both talk to a shared MongoDB. The Node API proxies `/api/agents/*` and `/api/x402/*` to the Python service via `AGENTS_SERVICE_URL`.
-
-For local development, see [README.md → Quick start](README.md#quick-start-local-dev). This doc covers production deployment.
-
-## Cloud Run (recommended)
-
-Two services, deployed independently. Both auto-scale to zero when idle.
-
-### Agents service
-
-```bash
-gcloud run deploy syndimatch-agents \
-  --source ./agents \
-  --region us-west1 \
-  --allow-unauthenticated \
-  --memory 2Gi \
-  --cpu 2 \
-  --timeout 3600 \
-  --max-instances 10 \
-  --min-instances 0 \
-  --set-env-vars "MONGODB_URI=<atlas-uri>,DATABASE_NAME=syndimatch,ENVIRONMENT=production"
+```text
+Browser → Worker static assets + `/api/*` → D1
 ```
 
-Optional vars (omit to stay in `SIMULATION_MODE`):
+The Worker owns the authenticated governance boundary, deterministic allocation, durable workflow commands, audit events, and simulated receipts. The older Express/MongoDB and FastAPI/LangGraph services remain in the repository as research history; they are not required by, or synchronized with, the deployed application.
 
-- `ANTHROPIC_API_KEY` — enables real Claude reasoning
-- `GEMINI_API_KEY` — enables AI report generation
-- `CDP_API_KEY_NAME`, `CDP_API_KEY_PRIVATE_KEY`, `CDP_NETWORK` — enables real x402 / USDC payments
-- `ENABLE_X402_PAYMENTS=true` — flips x402 from mock to real
+Firebase Hosting is not used.
 
-For secrets, prefer Secret Manager:
+## First deployment
 
-```bash
-echo -n "<value>" | gcloud secrets create MONGODB_URI --data-file=-
-gcloud run services update syndimatch-agents \
-  --region us-west1 \
-  --update-secrets MONGODB_URI=MONGODB_URI:latest,ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest
-```
-
-Memory sizing: LangGraph + LangChain are memory-hungry. Start at 2Gi; bump to 4Gi if you see OOMs in logs.
-
-### Node API + frontend
+Requirements: Node.js 20+, an authenticated Wrangler session, and access to the Cloudflare account configured for this repository.
 
 ```bash
-gcloud run deploy syndimatch-api \
-  --source . \
-  --region us-west1 \
-  --allow-unauthenticated \
-  --memory 1Gi \
-  --timeout 300 \
-  --set-env-vars "MONGODB_URI=<atlas-uri>,DATABASE_NAME=syndimatch,AGENTS_SERVICE_URL=<agents-url-from-above>"
-```
-
-Get the agents URL after deploying that service:
-
-```bash
-gcloud run services describe syndimatch-agents \
-  --region us-west1 --format 'value(status.url)'
-```
-
-### Seeding production
-
-```bash
-# Atlas URI
-export MONGODB_URI='mongodb+srv://...'
-export DATABASE_NAME=syndimatch
-
-.venv/bin/python agents/seed_all.py
-```
-
-The seeder is idempotent — running twice replaces the seed data, doesn't duplicate.
-
-## Cloudflare Workers and Pages (frontend only)
-
-The repository uses Cloudflare's Vite plugin and static-assets Worker configuration in `wrangler.jsonc`. SPA routes, including `/deal-room`, are handled by the Worker static-assets fallback.
-
-```bash
-# Deploy the primary Worker-hosted frontend
+npm install
+npx wrangler d1 migrations apply syndimatch-governed-workflow --remote
+npx wrangler secret put REVIEWER_PASSWORD_HASH
+npm run typecheck
+npm test
 npm run deploy:worker
-
-# Deploy the equivalent Cloudflare Pages/Workers frontend service
-npm run deploy:pages
 ```
 
-These commands deploy the frontend only. The current FastAPI/LangGraph service and MongoDB-backed Node API do not run natively in Cloudflare Workers. Before presenting the interactive workflow publicly, configure a routable API origin and a Worker/Pages Function proxy; the local `AGENTS_SERVICE_URL` is not reachable from Cloudflare.
-
-## Local Docker
-
-The root `Dockerfile` builds the Node service. The agents service has its own `agents/Dockerfile`.
+`REVIEWER_PASSWORD_HASH` must be the lowercase SHA-256 digest of a password of at least 12 characters, never the plaintext password:
 
 ```bash
-# Node
-docker build -t syndimatch-api .
-docker run -p 8080:8080 -e PORT=8080 -e MONGODB_URI=<uri> syndimatch-api
-
-# Agents
-docker build -t syndimatch-agents ./agents
-docker run -p 8000:8000 -e MONGODB_URI=<uri> syndimatch-agents
+printf '%s' 'replace-with-a-long-password' | shasum -a 256
 ```
 
-For a fully self-contained demo, add a `mongo:7` container and link the three on a Docker network. No compose file ships today.
+The D1 binding, database ID, compatibility date, runtime flags, static-asset behavior, and non-secret variables are declared in `wrangler.jsonc`. Migrations are versioned in `migrations/` and should be applied before deploying code that depends on them.
 
-## Troubleshooting
-
-### `Cannot find module '...'`
-Missing npm dep. Check `package.json` lists every `require()` in `server/`.
-
-### `MongoDB connection error: EBADNAME`
-`.env` still has the `<cluster>` placeholder from the template. Set a real `MONGODB_URI`.
-
-### `MongoServerSelectionError` on Atlas
-Atlas IP allowlist doesn't include Cloud Run egress. Either allow `0.0.0.0/0` (least secure) or configure a Cloud Run egress connector with a static IP and allowlist that.
-
-### `ModuleNotFoundError: No module named 'db'` (Python agents)
-You ran `python -m uvicorn server:app` from `agents/`. Run from the repo root: `python -m uvicorn agents.server:app`. `agents/start.sh` auto-detects which form to use.
-
-### Node API returns 502 on `/api/agents/*` proxy calls
-Python agents service is down or unreachable. Check `AGENTS_SERVICE_URL` and confirm the agents service responds to `/api/health`.
-
-### Port already in use
-Node 3001, Python 8000, Mongo 27017. Find conflicts: `lsof -i :3001`. Kill: `kill $(lsof -t -i :3001)`.
-
-### 502 Bad Gateway on Cloud Run
-Server isn't listening on `0.0.0.0` or the PORT env var. Node code in `server/index.js:890` does this correctly — check that Dockerfile sets `PORT` if you're overriding.
-
-### "fetch is not defined"
-Node <18. Bump the Dockerfile to `node:20-slim`.
-
-### Cloud Run quick health check
+## Subsequent releases
 
 ```bash
-SERVICE_URL=$(gcloud run services describe syndimatch-api \
-  --region us-west1 --format 'value(status.url)')
-curl -fsS "$SERVICE_URL/api/health"      # Node
-curl -fsS "$SERVICE_URL/api/ready"       # Node + Mongo
-curl -fsS "$SERVICE_URL/api/agents/health"   # Node -> Python proxy
+npx wrangler d1 migrations apply syndimatch-governed-workflow --remote
+npm run typecheck
+npm test
+npm run deploy:worker
 ```
 
-Service logs:
+`npm run deploy:pages` is retained as a historical script name. It deploys the same Worker bundle under the `syndimatch-credit-desk` Worker name; it does not create a Cloudflare Pages project. Prefer `deploy:worker` for the canonical service.
+
+## Local Worker + D1
 
 ```bash
-gcloud run services logs tail syndimatch-api --region us-west1
-gcloud run services logs tail syndimatch-agents --region us-west1
+npm install
+npx wrangler d1 migrations apply syndimatch-governed-workflow --local
+cp .dev.vars.example .dev.vars
+npm run preview
 ```
 
-## Resource sizing reference
+Replace the placeholder in `.dev.vars` with a SHA-256 digest. Wrangler keeps the local D1 state under `.wrangler/`; both `.wrangler/` and `.dev.vars` are gitignored.
 
-| Service | Memory | CPU | Timeout | Notes |
-|---------|--------|-----|---------|-------|
-| `syndimatch-api` (Node) | 1Gi | 1 | 300s | Mostly Mongo proxy + static files |
-| `syndimatch-agents` (Python) | 2Gi | 2 | 3600s | LangGraph workflows can run minutes |
+## Production verification
 
-Both start at `min-instances=0` for cost. Bump to `1` if cold-start latency matters.
+Set the deployed origin once and verify the API and SPA route:
+
+```bash
+SYNDIMATCH_URL='https://2601-syndimatch-lma.<account-subdomain>.workers.dev'
+curl -fsS "$SYNDIMATCH_URL/api/health"
+curl -fsSI "$SYNDIMATCH_URL/deal-room"
+```
+
+Expected health fields are `status: healthy`, `database: d1`, and `mode: simulation`. Exercise authentication, allocation, approval, and continuation through the Deal Room. A continuation receipt must report `fundsMoved: false`; no payment or custody rail exists in this deployment.
+
+## Credential rotation
+
+1. Generate and store a new long password in the team's password manager.
+2. Hash it locally and update `REVIEWER_PASSWORD_HASH` with `wrangler secret put`.
+3. Delete existing rows from `reviewer_sessions` as an administrative maintenance operation so old sessions cannot outlive the rotation.
+4. Verify login with the new credential.
+
+The single reviewer credential is suitable only for this controlled case study. A real multi-user deployment requires SSO, scoped roles, maker-checker separation, audit export, rate-limit tuning, and an incident-response process.
+
+## Observability and failure behavior
+
+- Worker observability is enabled in `wrangler.jsonc`.
+- API errors return structured JSON and avoid exposing internal exception details.
+- D1 batches make bid/capacity updates and workflow transitions atomic.
+- Continuation uses a deterministic command ID, so retry returns the recorded result rather than repeating work.
+- Login attempts are limited per hashed client/window and old counters are pruned.
+
+Use Cloudflare's Worker logs and D1 query tools for operational diagnosis. Do not log reviewer passwords, session cookies, or raw secrets.
+
+## Legacy services
+
+The root `Dockerfile`, `server/`, and `agents/` represent the earlier local architecture. They are useful for examining the renovation history, but deploying them does not extend the canonical Worker workflow and risks creating split state. If revived, they need an explicit migration/integration design rather than a parallel production deployment.

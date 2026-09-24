@@ -110,6 +110,8 @@ const SyndiData = {
                 maxRounds: 5,
                 bids: s.bids || [],
                 allocations: s.allocations || [],
+                allocationVersion: s.allocation_version || null,
+                allocationStatus: s.allocation_status || null,
                 isMock: false
             }));
         }

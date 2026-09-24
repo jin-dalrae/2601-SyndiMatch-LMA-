@@ -80,7 +80,7 @@ The Deal Room is the portfolio centerpiece. It supports a single polished end-to
 - Workflow APIs must have unambiguous route definitions and return serializable documents.
 - A policy failure must prevent a bid/allocation and create an audit event.
 - Demo mode must work without an LLM key; model-backed output must fall back safely to deterministic rules.
-- Authentication/authorization is out of scope for the local demo but required before any multi-user or production deployment.
+- Reviewer approval must require an authenticated server-derived identity. The demo may use one reviewer role; a multi-user deployment requires enterprise SSO, granular authorization, and maker-checker separation.
 
 ## 7. Non-goals
 
@@ -91,14 +91,14 @@ The Deal Room is the portfolio centerpiece. It supports a single polished end-to
 
 ## 8. Architecture direction
 
-The Python agent service owns workflow state and writes canonical documents to MongoDB. The Node service is a browser-facing API/BFF and must not introduce a competing data model. The frontend consumes versioned API responses and live domain events; display-only simulation may never overwrite workflow data.
+The deployed vertical slice uses one Cloudflare Worker for the browser-facing API and static Deal Room, with D1 as the canonical workflow store. Deterministic TypeScript policy code owns eligibility and allocation. A future model adapter may propose rationale or recommendations, but it may not write around policy, approval, or audit controls. The earlier Node/MongoDB and Python/LangGraph services remain research code and are not a second deployed source of truth.
 
 ```text
-Deal Room UI → Node API/BFF → FastAPI orchestration → MongoDB canonical state
-                                 ↓
-                      policy checks + agent recommendations
-                                 ↓
-                       event log / Decision Replay
+Deal Room UI → Cloudflare Worker API → D1 canonical state
+                       ↓                    ↓
+            deterministic policy     events / receipts
+                       ↓
+             authenticated approval → idempotent simulated continuation
 ```
 
 ## 9. Delivery plan
@@ -134,30 +134,33 @@ A reviewer can run one demo deal and, without reading source code, explain:
 
 ## 11. Current prototype disclosure
 
-This repository is a local demonstration prototype. Its payment adapter is locked to simulation mode regardless of configured credentials, and its x402 routes do not execute or verify on-chain transfers. It must be described as a high-fidelity workflow prototype—not as a production financial platform.
+This repository is a deployed demonstration prototype. Its current Worker continuation path is locked to simulation mode and records `fundsMoved: false`; the legacy x402 routes do not execute or verify on-chain transfers. It must be described as a high-fidelity workflow prototype—not as a production financial platform.
 
 ## 12. Implementation status
 
 Implemented in the governed vertical slice:
 
+- The same Cloudflare Worker serves the Deal Room and API, with D1 as the canonical deployed store.
+- Reviewer login uses a dedicated password digest, HttpOnly/Secure/SameSite session cookies, server-derived actor identity, and per-client login throttling.
 - Allocation proposals receive monotonically increasing versions and a stable
   SHA-256 fingerprint over decision-bearing fields.
 - Approval, override, and rejection requests must reference the current version
   and fingerprint. Rejected, stale, edited, and unapproved allocations cannot
   authorize settlement.
-- Settlement checks approval itself in addition to the workflow router.
+- Post-approval continuation checks the exact approval itself, persists a durable
+  command and simulated receipt, and returns the same result on retry.
 - Model-proposed bid amounts are checked against minimum ticket, maximum single
   ticket, and current available capacity immediately before persistence.
-- Capacity reservation is a conditional atomic update keyed by a deterministic
-  bid identifier, preventing concurrent requests from overdrawing capacity.
+- Bid insertion and capacity reservation execute in one atomic D1 batch,
+  preventing concurrent requests from overdrawing capacity.
+- Allocation applies the clearing spread, per-participant concentration cap,
+  minimum allocations, deterministic largest-remainder rounding, and explicit residuals.
 - Missing policy evidence is represented as `unknown`, never inferred as passed.
 - Browser-side random subscription changes have been removed.
 
-Still required before the workflow is presented as end-to-end complete:
+The governed demo slice is end-to-end complete and deployed. Remaining productization work is deliberately broader than this case-study boundary:
 
-- Authenticated approver identities and role authorization.
-- A durable post-approval continuation command with crash/retry verification.
-- Transactional reconciliation between capacity reservations and bid records.
-- Correct residual redistribution and full auction/adverse-scenario coverage.
-- Deployment of the API, workflow service, and database connectivity behind the
-  existing Cloudflare frontend.
+- Enterprise SSO, granular roles, maker-checker separation, credential rotation, and centralized security monitoring.
+- A deployed model-inference adapter with prompt/version capture, offline evaluations, and fallback telemetry.
+- Additional adverse scenarios, scenario comparison, portfolio analytics, and formal recovery testing.
+- Integration with authoritative loan systems, document execution, and regulated payment/custody providers; none are part of this simulation.
