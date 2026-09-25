@@ -404,6 +404,65 @@ async function createAllocation(request: Request, env: Env, syndicationId: strin
   return json({ syndicationId, version, fingerprint, ...result, status: "pending_approval" }, 201);
 }
 
+async function restartDemoScenario(request: Request, env: Env, syndicationId: string): Promise<Response> {
+  const reviewer = await requireReviewer(request, env);
+  if (isResponse(reviewer)) return reviewer;
+  if (syndicationId !== env.DEMO_SYNDICATION_ID) {
+    return apiError(403, "demo_reset_forbidden", "Only the configured demonstration syndication can be restarted");
+  }
+  const proposal = await env.DB.prepare("SELECT * FROM allocation_proposals WHERE syndication_id = ?")
+    .bind(syndicationId).first<ProposalRow>();
+  if (!proposal) return apiError(409, "proposal_required", "A recorded allocation proposal is required before restart");
+  const allocations = parseAllocations(proposal.allocations_json);
+  const currentFingerprint = await fingerprintAllocation(syndicationId, proposal.version, allocations);
+  if (!safeEqual(currentFingerprint, proposal.fingerprint)) {
+    return apiError(409, "integrity_failure", "The current allocation failed its integrity check");
+  }
+
+  const version = proposal.version + 1;
+  const fingerprint = await fingerprintAllocation(syndicationId, version, allocations);
+  const now = new Date().toISOString();
+  const historyStatements = allocations.map((allocation) => env.DB.prepare(
+    `INSERT INTO allocation_history
+     SELECT ?,?,?,?,?,?
+     WHERE EXISTS (SELECT 1 FROM allocation_proposals WHERE syndication_id=? AND version=? AND fingerprint=? AND status='pending_approval')`
+  ).bind(syndicationId, version, allocation.participantId, allocation.bidId, allocation.finalAllocation,
+    allocation.finalSpread, syndicationId, version, fingerprint));
+  try {
+    const results = await env.DB.batch([
+      env.DB.prepare(
+        `UPDATE allocation_proposals
+         SET version=?, fingerprint=?, status='pending_approval', updated_at=?
+         WHERE syndication_id=? AND version=? AND fingerprint=?`
+      ).bind(version, fingerprint, now, syndicationId, proposal.version, proposal.fingerprint),
+      ...historyStatements,
+      env.DB.prepare("UPDATE syndications SET status='awaiting_approval', updated_at=? WHERE id=?")
+        .bind(now, syndicationId),
+      env.DB.prepare(
+        `INSERT INTO workflow_events
+         SELECT ?,?,'DEMO_SCENARIO_RESTARTED',?,?,?
+         WHERE EXISTS (SELECT 1 FROM allocation_proposals WHERE syndication_id=? AND version=? AND fingerprint=? AND status='pending_approval')`
+      ).bind(crypto.randomUUID(), syndicationId, reviewer.actor,
+        JSON.stringify({ previousVersion: proposal.version, version, fingerprint, simulation: true }), now,
+        syndicationId, version, fingerprint),
+    ]);
+    if ((results[0]?.meta.changes ?? 0) !== 1) {
+      return apiError(409, "restart_conflict", "The scenario changed during restart; refresh and retry");
+    }
+  } catch (error: unknown) {
+    console.warn(JSON.stringify({ event: "demo_restart_conflict", syndicationId, version, error: String(error) }));
+    return apiError(409, "restart_conflict", "The scenario changed during restart; refresh and retry");
+  }
+  return json({
+    syndicationId,
+    allocationVersion: version,
+    allocationFingerprint: fingerprint,
+    allocationStatus: "pending_approval",
+    simulation: true,
+    historyPreserved: true,
+  }, 201);
+}
+
 async function approveAllocation(request: Request, env: Env, syndicationId: string): Promise<Response> {
   const reviewer = await requireReviewer(request, env);
   if (isResponse(reviewer)) return reviewer;
@@ -543,6 +602,8 @@ async function routeApi(request: Request, env: Env): Promise<Response> {
   if (method === "POST" && bidMatch?.[1]) return submitBid(request, env, decodeURIComponent(bidMatch[1]));
   const allocateMatch = path.match(/^\/api\/syndications\/([^/]+)\/allocate$/);
   if (method === "POST" && allocateMatch?.[1]) return createAllocation(request, env, decodeURIComponent(allocateMatch[1]));
+  const restartMatch = path.match(/^\/api\/syndications\/([^/]+)\/demo-restart$/);
+  if (method === "POST" && restartMatch?.[1]) return restartDemoScenario(request, env, decodeURIComponent(restartMatch[1]));
   const approvalMatch = path.match(/^\/api\/syndications\/([^/]+)\/allocation-approval$/);
   if (method === "POST" && approvalMatch?.[1]) return approveAllocation(request, env, decodeURIComponent(approvalMatch[1]));
   const continueMatch = path.match(/^\/api\/syndications\/([^/]+)\/continue$/);

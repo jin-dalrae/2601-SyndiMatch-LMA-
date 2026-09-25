@@ -10,6 +10,7 @@
   },
   "vars": {
     "REVIEWER_ID": "credit-committee-reviewer",
+    "DEMO_SYNDICATION_ID": "SYND-DEMO-001",
     "SESSION_TTL_SECONDS": "28800"
   },
   "d1_databases": [

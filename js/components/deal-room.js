@@ -18,6 +18,8 @@ const DealRoom = {
         document.addEventListener('click', (event) => {
             const button = event.target.closest('[data-allocation-decision]');
             if (button) this.recordDecision(button.dataset.allocationDecision);
+            const resetButton = event.target.closest('[data-simulation-reset]');
+            if (resetButton) this.restartSimulation(resetButton.dataset.simulationReset);
         });
     },
 
@@ -85,12 +87,7 @@ const DealRoom = {
 
     async recordDecision(syndicationId) {
         if (!syndicationId || !window.API) return;
-        let session = await API.get('server', '/auth/me');
-        if (!session?.actor) {
-            const authenticated = await this._requestReviewerLogin();
-            if (!authenticated) return;
-            session = await API.get('server', '/auth/me');
-        }
+        if (!await this._ensureReviewerSession()) return;
         const proposal = await API.get('server', `/syndications/${encodeURIComponent(syndicationId)}/allocation-proposal`);
         if (!proposal?.allocationFingerprint || !Number.isInteger(proposal?.allocationVersion)) {
             window.App?.showToast('The allocation proposal could not be integrity-checked.', 'error');
@@ -124,6 +121,53 @@ const DealRoom = {
         } else {
             window.App?.showToast('No proposed allocation is ready for approval.', 'error');
         }
+    },
+
+    async _ensureReviewerSession() {
+        const session = await API.get('server', '/auth/me');
+        if (session?.actor) return true;
+        if (!await this._requestReviewerLogin()) return false;
+        const authenticated = await API.get('server', '/auth/me');
+        return Boolean(authenticated?.actor);
+    },
+
+    async restartSimulation(syndicationId) {
+        if (!syndicationId || !window.API) return;
+        if (!await this._ensureReviewerSession()) return;
+        if (!await this._confirmScenarioRestart()) return;
+        const result = await API.post('server', `/syndications/${encodeURIComponent(syndicationId)}/demo-restart`, {});
+        if (!result?.allocationVersion) {
+            window.App?.showToast('The governed scenario could not be restarted.', 'error');
+            return;
+        }
+        API.invalidateCache('/all-data');
+        API.invalidateCache('/syndications');
+        delete this.receiptState[syndicationId];
+        await window.SyndiData?.refresh();
+        this.render();
+        window.App?.showToast(`Simulation restarted at proposal version ${result.allocationVersion}. Prior audit history was preserved.`, 'success');
+    },
+
+    _confirmScenarioRestart() {
+        return new Promise(resolve => {
+            document.getElementById('scenario-restart-dialog')?.remove();
+            const dialog = document.createElement('dialog');
+            dialog.id = 'scenario-restart-dialog';
+            dialog.className = 'scenario-restart-dialog';
+            dialog.innerHTML = `
+                <form method="dialog" class="scenario-restart-form">
+                    <span class="deal-room-eyebrow">Governed simulator</span>
+                    <h2>Restart the review scenario?</h2>
+                    <p>This creates a new fingerprinted proposal version and returns the deal to human review. Earlier approvals, receipts, and events remain in the audit history.</p>
+                    <div><button type="button" data-cancel>Cancel</button><button type="submit">Restart scenario</button></div>
+                </form>`;
+            document.body.appendChild(dialog);
+            const finish = value => { dialog.close(); dialog.remove(); resolve(value); };
+            dialog.querySelector('[data-cancel]').addEventListener('click', () => finish(false));
+            dialog.addEventListener('cancel', event => { event.preventDefault(); finish(false); });
+            dialog.querySelector('form').addEventListener('submit', event => { event.preventDefault(); finish(true); });
+            dialog.showModal();
+        });
     },
 
     _requestAllocationDecision(proposal) {
@@ -282,6 +326,7 @@ const DealRoom = {
                     <div class="deal-room-disclosure">
                         <strong>Controlled simulation</strong>
                         <span>Canonical D1 records · no funds move</span>
+                        <button type="button" data-simulation-reset="${this._escape(syndication.id)}">Restart scenario</button>
                     </div>
                 </header>
 
@@ -355,6 +400,8 @@ const DealRoom = {
             .deal-room-disclosure { border-left:2px solid #f59e0b; padding:.15rem 0 .15rem .85rem; display:grid; gap:.12rem; text-align:right; }
             .deal-room-disclosure strong { color:#92400e; font-size:.77rem; text-transform:uppercase; letter-spacing:.055em; }
             .deal-room-disclosure span { color:var(--text-muted); font-size:.75rem; }
+            .deal-room-disclosure button { justify-self:end; margin-top:.25rem; padding:0; border:0; color:var(--primary); background:transparent; cursor:pointer; font-size:.73rem; font-weight:700; }
+            .deal-room-disclosure button:hover { text-decoration:underline; }
             .record-badge, .approval-icon { border-radius:999px; padding:.32rem .65rem; font-size:.72rem; font-weight:700; }
             .record-badge { background:#eff6ff; color:var(--primary-dark); }
             .approval-icon { background:#f1f5f9; color:var(--text-secondary); white-space:nowrap; }
@@ -434,6 +481,14 @@ const DealRoom = {
             .allocation-review-actions { display:flex; justify-content:flex-end; gap:.6rem; }
             .allocation-review-actions button { border:0; border-radius:.5rem; padding:.65rem .9rem; cursor:pointer; }
             .allocation-review-actions button[type="submit"] { color:#fff; background:var(--primary); font-weight:700; }
+            .scenario-restart-dialog { width:min(92vw,30rem); border:0; border-radius:1rem; padding:0; box-shadow:0 24px 70px rgba(15,23,42,.3); }
+            .scenario-restart-dialog::backdrop { background:rgba(15,23,42,.58); backdrop-filter:blur(3px); }
+            .scenario-restart-form { display:grid; gap:1rem; padding:1.5rem; }
+            .scenario-restart-form h2,.scenario-restart-form p { margin:0; }
+            .scenario-restart-form p { color:var(--text-secondary); font-size:.84rem; line-height:1.6; }
+            .scenario-restart-form > div { display:flex; justify-content:flex-end; gap:.6rem; }
+            .scenario-restart-form button { border:0; border-radius:.5rem; padding:.65rem .9rem; cursor:pointer; }
+            .scenario-restart-form button[type="submit"] { color:#fff; background:var(--primary); font-weight:700; }
             .decision-replay-card { margin-top:1rem; }
             .decision-replay-intro { font-size:.85rem; margin:-.25rem 0 1rem; }
             .decision-receipt-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:.75rem; }
@@ -456,7 +511,7 @@ const DealRoom = {
             .deal-room-empty-state { min-height:50vh; display:flex; flex-direction:column; justify-content:center; max-width:640px; }.deal-room-empty-state h1 { margin:.5rem 0; }.deal-room-empty-state p { color:var(--text-secondary); margin-bottom:1rem; }.deal-room-button { align-self:flex-start; border:0; border-radius:.5rem; background:var(--primary); color:white; padding:.7rem 1rem; font-weight:700; cursor:pointer; }
             .deal-room-empty { color:var(--text-secondary); font-size:.88rem; padding:1rem 0; }
             @media (max-width: 900px) { .workflow-progress, .deal-kpis { grid-template-columns:repeat(2,1fr); }.credit-workflow-step:nth-child(3), .deal-kpis > div:nth-child(3) { border-left:0; border-top:1px solid var(--border-light); } }
-            @media (max-width: 760px) { .deal-room { padding:1rem; }.deal-room-header, .deal-room-card-heading { flex-direction:column; }.deal-room-disclosure { text-align:left; }.deal-room-grid { grid-template-columns:1fr; }.book-metrics { grid-template-columns:1fr; }.book-metrics div + div { border-left:0; border-top:1px solid var(--border-light); padding-left:0; }.workflow-audit { grid-template-columns:1fr; } }
+            @media (max-width: 760px) { .deal-room { padding:1rem; }.deal-room-header, .deal-room-card-heading { flex-direction:column; }.deal-room-disclosure { text-align:left; }.deal-room-disclosure button { justify-self:start; }.deal-room-grid { grid-template-columns:1fr; }.book-metrics { grid-template-columns:1fr; }.book-metrics div + div { border-left:0; border-top:1px solid var(--border-light); padding-left:0; }.workflow-audit { grid-template-columns:1fr; } }
             @media (max-width: 520px) { .workflow-progress, .deal-kpis { grid-template-columns:1fr; }.credit-workflow-step + .credit-workflow-step, .credit-workflow-step:nth-child(3), .deal-kpis > div + div, .deal-kpis > div:nth-child(3) { border-left:0; border-top:1px solid var(--border-light); } }
         `;
         document.head.appendChild(style);
